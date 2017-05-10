@@ -1,0 +1,30 @@
+Kaby Lake CJAG Parameters:
+
+* 2 native terminals: cjag -d 2
+* 2 terminals after bareflank "make start": cjag -d 2
+
+* 2 VMs:
+    - Enable hugepages on the host.  The number of hugepages
+      should be equal to the total number of hugepages
+      required to back all cjag guests.
+
+    - Ensure KVM_HUGEPAGES=1 in /etc/default/qemu-kvm
+
+    - Use virsh edit <guestname> to insert
+          <memoryBacking>
+          <hugepages/>
+          </memoryBacking>
+      for each cjag guest.
+
+    - In each VM, set vm.nr_hugepages = 32 in /etc/sysctl.conf
+
+    - Reboot
+
+    - Run cachespeed on host to get -w -s and -t parameters
+
+    - Pass -c 4194304 (size of guest memory in bytes)
+           -w <ways>
+           -s <slices>
+           -t <threshold>
+           -d 10
+           -r (if receiving)

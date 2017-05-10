@@ -23,10 +23,7 @@
 # Subdirs
 ################################################################################
 
-PARENT_SUBDIRS += basic_c
-PARENT_SUBDIRS += basic_cxx
-PARENT_SUBDIRS += basic_driver
-# PARENT_SUBDIRS += bfcjag
+SUBDIRS += src
 
 ################################################################################
 # Common
