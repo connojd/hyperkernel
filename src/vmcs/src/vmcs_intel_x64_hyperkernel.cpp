@@ -47,9 +47,11 @@ vmcs_intel_x64_hyperkernel::write_fields(
     vmcs_intel_x64_eapis::write_fields(host_state, guest_state);
 
     this->enable_vpid();
+    bfwarning << "vmcs_hyperkernel: vpid enabled\n";
 
     if (guest_state->is_guest())
     {
+        bfwarning << "vmcs_hyperkernel: guest_state is guest\n";
         primary_processor_based_vm_execution_controls::hlt_exiting::enable();
 
         // TODO:
@@ -58,6 +60,8 @@ vmcs_intel_x64_hyperkernel::write_fields(
         //
 
         this->enable_ept();
+        bfwarning << "vmcs_hyperkernel: EPT enabled\n";
         this->set_eptp(m_state_save->user1);
+        bfwarning << "    eptp = " << view_as_pointer(m_state_save->user1) << '\n';
     }
 }

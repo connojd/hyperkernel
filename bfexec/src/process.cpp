@@ -98,6 +98,7 @@ process::process(const std::string &filename, processlistid::type procltid) :
     m_basename(basename(filename)),
     m_loader{}
 {
+    std::cout << "called vmcall__create_foreign_process\n";
     auto ret = 0L;
 
     auto g_ld_library_path =
@@ -167,6 +168,7 @@ process::process(const std::string &filename, processlistid::type procltid) :
             STACK_SIZE,
             0))
         throw std::runtime_error("vmcall__vm_map_foreign_lookup failed");
+    std::cout << "called vmcall__vm_map_foreign_lookup: stack\n";
 
     if (!vmcall__vm_map_foreign_lookup(
             m_procltid,
@@ -176,6 +178,7 @@ process::process(const std::string &filename, processlistid::type procltid) :
             0x1000,
             0))
         throw std::runtime_error("vmcall__vm_map_foreign_lookup failed");
+    std::cout << "called vmcall__vm_map_foreign_lookup: crt\n";
 
     auto &&entry = 0UL;
     auto &&stack = 0x00600000UL - 0x1000;
@@ -193,12 +196,14 @@ process::process(const std::string &filename, processlistid::type procltid) :
             m_info_addr,
             0))
         throw std::runtime_error("vmcall__set_thread_foreign_info failed");
+    std::cout << "called vmcall__set_thread_foreign_info\n";
 }
 
 process::~process()
 {
     if (!vmcall__delete_foreign_process(m_procltid, m_id))
         bfwarning << "vmcall__delete_process failed\n";
+    std::cout << "called vmcall__delete_foreign_process\n";
 }
 
 gsl::not_null<bfelf_file_t *>
@@ -248,6 +253,11 @@ process::load_elf(const std::string &filename)
                           addr_int,
                           instr->memsz,
                           perm_int);
+        std::cout << "called vmcall__vm_map_foreign_lookup\n"
+                  << "    virt_int = " << virt_int << '\n'
+                  << "    addr_int = " << addr_int << '\n'
+                  << "    procltid = " << m_procltid << '\n'
+                  << "    id = " << m_id << '\n';
 
         if (!result)
             throw std::runtime_error("vmcall__vm_map_foreign_lookup failed");

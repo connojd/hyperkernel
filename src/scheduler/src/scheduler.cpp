@@ -21,6 +21,7 @@
 
 #include <algorithm>
 #include <scheduler/scheduler.h>
+#include <debug.h>
 
 scheduler::scheduler(schedulerid::type id) :
     m_id(id)
@@ -65,10 +66,12 @@ scheduler::yield()
 
     if (m_tasks.size() > 1 && m_tasks.front()->num_jobs() == 0)
     {
+        bfwarning << "scheduler::yield - m_tasks.size = " << m_tasks.size() << ", num_jobs == 0\n";
         m_tasks.push_back(m_tasks.front());
         m_tasks.pop_front();
     }
 
+    bfwarning << "scheduler::yield calling task::schedule\n";
     m_tasks.front()->schedule();
 }
 

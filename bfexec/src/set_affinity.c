@@ -37,13 +37,20 @@ set_affinity(void)
 
 #define _GNU_SOURCE
 #include <sched.h>
+#include <sys/sysinfo.h>
 
 int
 set_affinity(void)
 {
     cpu_set_t  mask;
+    struct sysinfo info;
+    sysinfo(&info);
 
     CPU_ZERO(&mask);
+//    if (info.procs & 1)
+//        CPU_SET(1, &mask);
+//    else
+//        CPU_SET(0, &mask);
     CPU_SET(0, &mask);
 
     if (sched_setaffinity(0, sizeof(mask), &mask) != 0)

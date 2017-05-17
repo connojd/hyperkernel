@@ -24,10 +24,12 @@
 #include <debug.h>
 #include <process_list.h>
 #include <vmcall_hyperkernel_interface.h>
+#include <iostream>
 
 process_list::process_list() :
     m_id(vmcall__create_process_list())
 {
+    std::cout << "called vmcall__create_process_list\n";
     if (m_id == processlistid::invalid)
         throw std::runtime_error("vmcall__create_process_list failed");
 }

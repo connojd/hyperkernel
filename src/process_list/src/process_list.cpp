@@ -24,6 +24,7 @@
 
 #include <vcpu/vcpu_manager.h>
 #include <process_list/process_list.h>
+#include <process/process_intel_x64.h>
 
 process_list::process_list(
     processlistid::type id,
@@ -139,12 +140,18 @@ process_list::next_job()
     auto && proc = m_processes.at(m_process_list.front()).get();
     auto && thrd = proc->get_thread(0);
 
+    auto && intelproc = dynamic_cast<process_intel_x64 *>(proc);
+    if (proc != nullptr && intelproc == nullptr)
+        bfwarning << "next_job: intelproc is NULL\n";
+
     if (m_process_list.size() > 1)
     {
         m_process_list.push_back(m_process_list.front());
         m_process_list.pop_front();
+        bfwarning << "next_job: process_list.size = " << m_process_list.size() << '\n';
     }
 
+    bfwarning << "next_job: thrd = " << thrd << ", proc = " << proc << '\n';
     return {thrd, proc};
 }
 

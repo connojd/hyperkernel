@@ -20,9 +20,11 @@
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 #include <gsl/gsl>
+#include <unistd.h>
 
 #include <vector>
 #include <memory>
+#include <iostream>
 
 #include <vcpu.h>
 #include <process.h>
@@ -49,6 +51,7 @@ protected_main(const arg_list_type &args)
 
     if (set_affinity() != 0)
         throw std::runtime_error("failed to set cpu affinity");
+    std::cout << "affinity: " << sched_getcpu() << "\n";
 
     g_proclt = std::make_unique<process_list>();
 
@@ -61,6 +64,7 @@ protected_main(const arg_list_type &args)
     if (!vmcall__sched_yield())
         throw std::runtime_error("vmcall__sched_yield failed");
 
+    std::cout << "called vmcall__sched_yield\n";
     return EXIT_SUCCESS;
 }
 

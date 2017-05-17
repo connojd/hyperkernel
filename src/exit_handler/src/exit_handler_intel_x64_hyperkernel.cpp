@@ -24,6 +24,7 @@
 #include <vmcs/vmcs_intel_x64_32bit_guest_state_fields.h>
 #include <vmcs/vmcs_intel_x64_32bit_read_only_data_fields.h>
 #include <vmcs/vmcs_intel_x64_64bit_guest_state_fields.h>
+#include <vmcs/vmcs_intel_x64_64bit_control_fields.h>
 #include <vmcs/vmcs_intel_x64_64bit_read_only_data_fields.h>
 #include <vmcs/vmcs_intel_x64_natural_width_guest_state_fields.h>
 #include <vmcs/vmcs_intel_x64_natural_width_read_only_data_fields.h>
@@ -80,6 +81,10 @@ exit_handler_intel_x64_hyperkernel::handle_exit(vmcs::value_type reason)
         case exit_reason::basic_exit_reason::triple_fault:
         {
             bferror << "guest exited: failure\n";
+            bferror << "guest info:\n";
+            std::cout << "    coreid " << m_coreid << '\n'
+                      << "    vcpuid " << m_vcpuid << '\n'
+                      << "    domain " << m_domain << '\n';
             bferror << "----------------------------------------------------" << bfendl;
             bferror << "- rip: "
                     << view_as_pointer(m_state_save->rip) << bfendl;
@@ -101,6 +106,8 @@ exit_handler_intel_x64_hyperkernel::handle_exit(vmcs::value_type reason)
                     << view_as_pointer(vmcs::guest_linear_address::get()) << bfendl;
             bferror << "- guest physical address: "
                     << view_as_pointer(vmcs::guest_physical_address::get()) << bfendl;
+            bferror << "- guest ept pointer: "
+                    << view_as_pointer(vmcs::ept_pointer::get()) << bfendl;
 
             g_shm->get_scheduler(m_coreid)->yield();
             break;
@@ -288,6 +295,13 @@ exit_handler_intel_x64_hyperkernel::sched_yield(vmcall_registers_t &regs)
 
     if (m_thread != nullptr)
         m_thread->m_state_save = *m_state_save;
+
+    if (g_shm == nullptr)
+        bfwarning << "sched_yield: g_shm is null\n";
+    else
+        bfwarning << "sched_yield: g_shm is NOT null\n";
+
+    bfwarning << "sched_yield: m_coreid = " << m_coreid << '\n';
 
     g_shm->get_scheduler(m_coreid)->yield();
 }

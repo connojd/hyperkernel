@@ -92,6 +92,7 @@ vcpu_intel_x64_hyperkernel::hlt(user_data *data)
 void
 vcpu_intel_x64_hyperkernel::schedule()
 {
+    bfwarning << "vcpu_hyperkernel::schedule\n";
     auto &&pair = m_proclt->next_job();
 
     auto &&thrd = dynamic_cast<thread_intel_x64 *>(std::get<0>(pair));
@@ -124,6 +125,12 @@ vcpu_intel_x64_hyperkernel::schedule(process_intel_x64 *proc, thread_intel_x64 *
     // In v1.2, we need to break up the state save so that we are only copying
     // the bits that we need to.
     //
+    if (!proc)
+        bfwarning << "proc is null\n";
+    if (!thrd)
+        bfwarning << "thrd is null\n";
+    if (!state_save)
+        bfwarning << "state_save is null\n";
 
     if (thrd != nullptr)
     {
@@ -139,13 +146,21 @@ vcpu_intel_x64_hyperkernel::schedule(process_intel_x64 *proc, thread_intel_x64 *
         m_state_save->vmcs_ptr = old_vmcs_ptr;
         m_state_save->exit_handler_ptr = old_exit_handler_ptr;
 
-        if (this->is_running())
+        if (this->is_running()) {
+            bfwarning << "vcpu " << m_state_save->vcpuid << " is running:\n";
             m_vmcs_hyperkernel->set_eptp(proc->eptp());
-        else
+            bfwarning << "    eptp = " << view_as_pointer(proc->eptp()) << "\n";
+        } else {
+            bfwarning << "vcpu " << m_state_save->vcpuid << " is not running:\n";
             m_state_save->user1 = proc->eptp();
+            bfwarning << "    eptp = " << view_as_pointer(proc->eptp()) << "\n";
+        }
     }
 
     m_exit_handler_hyperkernel->set_current_thread(thrd);
+    bfwarning << "exit_hyperkernel rip = " << view_as_pointer(m_exit_handler_hyperkernel->m_state_save->rip) << '\n';
+    bfwarning << "vcpu_hyperkernel rip = " << view_as_pointer(m_state_save->rip) << '\n';
+    bfwarning << "calling run...\n";
     run();
 }
 
