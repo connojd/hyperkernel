@@ -23,11 +23,12 @@
 #ifdef OS_WINDOWS
 
 #include <windows.h>
+#include <
 
 int
-set_affinity(void)
+set_affinity(long int core)
 {
-    if (SetProcessAffinityMask(GetCurrentProcess(), 1) == 0)
+    if (SetProcessAffinityMask(GetCurrentProcess(), 1ull << core) == 0)
         return -1;
 
     return 0;
@@ -40,18 +41,14 @@ set_affinity(void)
 #include <sys/sysinfo.h>
 
 int
-set_affinity(void)
+set_affinity(long int core)
 {
     cpu_set_t  mask;
     struct sysinfo info;
     sysinfo(&info);
 
     CPU_ZERO(&mask);
-//    if (info.procs & 1)
-//        CPU_SET(1, &mask);
-//    else
-//        CPU_SET(0, &mask);
-    CPU_SET(0, &mask);
+    CPU_SET(core, &mask);
 
     if (sched_setaffinity(0, sizeof(mask), &mask) != 0)
         return -1;
