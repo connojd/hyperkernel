@@ -80,9 +80,20 @@ public:
                        uintptr_t size,
                        uintptr_t perm) override;
 
+    void vm_map_lookup_2m(uintptr_t virt,
+                       uintptr_t rtpt,
+                       uintptr_t addr,
+                       uintptr_t size,
+                       uintptr_t perm) override;
+
     void vm_map_page(uintptr_t virt,
                      uintptr_t phys,
                      uintptr_t perm);
+
+    void vm_map_page_2m(uintptr_t virt,
+                     uintptr_t phys,
+                     uintptr_t perm);
+
 
     auto eptp() const
     { return m_root_ept->eptp(); }

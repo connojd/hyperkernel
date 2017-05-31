@@ -86,6 +86,12 @@ public:
                                uintptr_t size,
                                uintptr_t perm);
 
+    virtual void vm_map_lookup_2m(uintptr_t virt,
+                               uintptr_t rtpt,
+                               uintptr_t addr,
+                               uintptr_t size,
+                               uintptr_t perm);
+
     /// Process Id
     ///
     /// @expects none

@@ -49,8 +49,22 @@ process_intel_x64::init(user_data *data)
     m_root_ept->map_4k(m_domain->idt_base_virt(), m_domain->idt_base_phys(), ept::memory_attr::ro_wb);
 
     auto &&list = m_domain->cr3_mdl();
-    for (auto md : list)
+
+//    bfdebug << "process init: cr3_mdl size = " << list.size() << bfendl;
+    for (auto md : list) {
+//        bfdebug << "    md.phys = 0x" << std::hex << md.phys << bfendl;
+//        bfdebug << "    md.virt = 0x" << std::hex << md.virt << bfendl;
+//        bfdebug << "    md.type = " << md.type << bfendl;
         m_root_ept->map_4k(md.phys, md.phys, ept::memory_attr::rw_wb);
+    }
+
+ //   auto ept_list = m_root_ept->ept_to_mdl();
+ //   bfdebug << "process init: ept_mdl size = " << ept_list.size() << bfendl;
+ //   for (auto md : ept_list) {
+ //       bfdebug << "    md.phys = 0x" << std::hex << md.phys << bfendl;
+ //       bfdebug << "    md.virt = 0x" << std::hex << md.virt << bfendl;
+ //       bfdebug << "    md.type = " << md.type << bfendl;
+ //   }
 
     process::init(data);
 }
@@ -112,6 +126,58 @@ process_intel_x64::vm_map_lookup(
         auto &&phys = bfn::virt_to_phys_with_cr3(addr + page, rtpt);
         this->vm_map_page(virt + page, phys, perm);
     }
+}
+
+void
+process_intel_x64::vm_map_lookup_2m(
+    uintptr_t virt,
+    uintptr_t rtpt,
+    uintptr_t addr,
+    uintptr_t size,
+    uintptr_t perm)
+{
+    // TODO: Should enforce page alignement, and a multiple of a page.
+    //       This is a safety measure to ensure that no memory is ever
+    //       leaked.
+
+    // bfdebug << "[process #" << id() << "]: mapping virtual memory\n";
+    // bfdebug << "  - rtpt: " << view_as_pointer(rtpt) << '\n';
+    // bfdebug << "  - virt: " << view_as_pointer(virt) << '\n';
+    // bfdebug << "  - addr: " << view_as_pointer(addr) << '\n';
+    // bfdebug << "  - size: " << view_as_pointer(size) << '\n';
+    // bfdebug << "  - perm: " << view_as_pointer(perm) << '\n';
+
+    // TODO: Remove me
+    //
+    size += bfn::lower(virt);
+
+    for (auto page = 0UL; page < size; page += ept::pd::size_bytes)
+    {
+        auto &&phys = bfn::virt_to_phys_with_cr3(addr + page, rtpt);
+        this->vm_map_page_2m(virt + page, phys, perm);
+        bfdebug << "Mapped 2MB page @ "
+                << " virt: " << view_as_pointer(virt + page)
+                << " phys: " << view_as_pointer(phys) << bfendl;
+    }
+
+//    auto ept_list = m_root_ept->ept_to_mdl();
+//    bfdebug << "process: ept_mdl size = " << ept_list.size() << bfendl;
+//    for (auto md : ept_list) {
+//        bfdebug << "    md.phys = 0x" << std::hex << md.phys << bfendl;
+//        bfdebug << "    md.virt = 0x" << std::hex << md.virt << bfendl;
+//        bfdebug << "    md.type = " << md.type << bfendl;
+//    }
+}
+
+void
+process_intel_x64::vm_map_page_2m(
+    uintptr_t virt,
+    uintptr_t phys,
+    uintptr_t perm)
+{
+    (void) perm;
+
+    m_root_ept->map_2m(virt, phys, ept::memory_attr::pt_wb);
 }
 
 void

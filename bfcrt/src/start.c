@@ -21,6 +21,7 @@
  */
 
 #include <stdlib.h>
+#include <stdio.h>
 
 #include <crt.h>
 #include <crt_info.h>
@@ -41,10 +42,6 @@ _start(struct crt_info *info)
 
     for (i = 0; i < info->info_num; i++)
         local_init(&info->info[i]);
-
-    // TODO: We need to pass argument information. Do to this, we will need
-    // place the arguments into some allocated memory, and pass the string
-    // information as well as the number of args.
 
     int ret = main(info->argc, info->argv);
 

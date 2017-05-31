@@ -68,6 +68,7 @@ enum hyperkernel_vmcall_functions
 
     hyperkernel_vmcall__vm_map = 0x401,
     hyperkernel_vmcall__vm_map_lookup = 0x402,
+    hyperkernel_vmcall__vm_map_lookup_2m = 0x403,
 
     hyperkernel_vmcall__set_thread_info = 0x501,
 
@@ -261,6 +262,32 @@ vmcall__vm_map_foreign(
     regs.r04 = processid;                                       // process id
     regs.r05 = virt;                                            // virtual address for the map
     regs.r06 = phys;                                            // physical address for the map
+    regs.r07 = size;                                            // size of the map
+    regs.r08 = perm;                                            // permissions
+
+    vmcall(&regs);
+
+    return regs.r01 == 0;
+}
+
+inline bool
+vmcall__vm_map_foreign_lookup_2m(
+    uint64_t procltid,
+    uint64_t processid,
+    uint64_t virt,
+    uint64_t addr,
+    uint64_t size,
+    uint64_t perm)
+{
+    struct vmcall_registers_t regs = struct_init;
+
+    regs.r00 = VMCALL_REGISTERS;
+    regs.r01 = VMCALL_MAGIC_NUMBER;
+    regs.r02 = hyperkernel_vmcall__vm_map_lookup_2m;            // vmcall index
+    regs.r03 = procltid;                                        // process list id
+    regs.r04 = processid;                                       // process id
+    regs.r05 = virt;                                            // virtual address for the map
+    regs.r06 = addr;                                            // virtual address to lookup the physical addresses from
     regs.r07 = size;                                            // size of the map
     regs.r08 = perm;                                            // permissions
 

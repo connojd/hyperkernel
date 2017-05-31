@@ -631,3 +631,17 @@ getpwnam(const char *name)
 
     return nullptr;
 }
+
+extern "C" void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
+{
+    UNHANDLED();
+
+    return nullptr;
+}
+
+extern "C" int munmap(void *addr, size_t length)
+{
+    UNHANDLED();
+
+    return 0;
+}

@@ -78,8 +78,25 @@ process::vm_map_lookup(uintptr_t virt,
     (void) size;
     (void) perm;
 
-    throw std::logic_error("vm_map not implemented!!!");
+    throw std::logic_error("vm_map_lookup not implemented!!!");
 }
+
+void
+process::vm_map_lookup_2m(uintptr_t virt,
+                       uintptr_t rtpt,
+                       uintptr_t addr,
+                       uintptr_t size,
+                       uintptr_t perm)
+{
+    (void) virt;
+    (void) rtpt;
+    (void) addr;
+    (void) size;
+    (void) perm;
+
+    throw std::logic_error("vm_map_lookup_2m not implemented!!!");
+}
+
 
 threadid::type
 process::create_thread(user_data *data)

@@ -54,6 +54,10 @@ private:
     std::size_t m_argv_size;
     std::unique_ptr<char> m_argv;
 
+    int64_t m_tsz;
+    uint64_t m_jagsz;
+    char *m_jagmem;
+
     bfelf_loader_t m_loader;
 
     std::unique_ptr<char> m_stack;

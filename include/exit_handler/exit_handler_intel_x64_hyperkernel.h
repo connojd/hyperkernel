@@ -125,6 +125,7 @@ protected:
 
     void vm_map(vmcall_registers_t &regs);
     void vm_map_lookup(vmcall_registers_t &regs);
+    void vm_map_lookup_2m(vmcall_registers_t &regs);
 
     void set_thread_info(vmcall_registers_t &regs);
 

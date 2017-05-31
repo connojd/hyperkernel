@@ -256,6 +256,32 @@ exit_handler_intel_x64_hyperkernel::vm_map_lookup(vmcall_registers_t &regs)
 }
 
 void
+exit_handler_intel_x64_hyperkernel::vm_map_lookup_2m(vmcall_registers_t &regs)
+{
+    process_list *proclt;
+
+    // FUTURE:
+    //
+    // When implementing mmap, we will need a way to identify a range that
+    // is allowed to be mapped. Would also be nice to find a way to lookup
+    // the current process for this exit handler to know if REG_CURRENT was
+    // used. If so, this would still be a foreign vm_map (the memory doesn't
+    // belong to the VM to a map is always a foreign call), but we would be
+    // able to assert better protections
+    //
+
+    if (regs.r03 == processlistid::current)
+        proclt = m_proclt;
+    else
+        proclt = g_plm->get_process_list(regs.r03).get();
+
+    auto &&cr3 = vmcs::guest_cr3::get();
+    auto &&proc = proclt->get_process(regs.r04);
+
+    proc->vm_map_lookup_2m(regs.r05, cr3, regs.r06, regs.r07, regs.r08);
+}
+
+void
 exit_handler_intel_x64_hyperkernel::set_thread_info(vmcall_registers_t &regs)
 {
     process_list *proclt;
@@ -404,6 +430,10 @@ exit_handler_intel_x64_hyperkernel::handle_vmcall_registers(vmcall_registers_t &
 
         case hyperkernel_vmcall__vm_map_lookup:
             vm_map_lookup(regs);
+            break;
+
+        case hyperkernel_vmcall__vm_map_lookup_2m:
+            vm_map_lookup_2m(regs);
             break;
 
         case hyperkernel_vmcall__set_thread_info:

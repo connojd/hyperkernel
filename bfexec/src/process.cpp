@@ -31,6 +31,7 @@
 #include <fstream>
 #include <algorithm>
 
+#include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <cstdlib>
@@ -132,6 +133,9 @@ process::process(int argc, const char **argv, processlistid::type procltid) :
     m_basename(basename(m_filename)),
     m_argv_size(0x0UL),
     m_argv(nullptr),
+    m_tsz(0x0L),
+    m_jagsz(0x0L),
+    m_jagmem(nullptr),
     m_loader{}
 {
     auto ret = 0L;
@@ -182,9 +186,30 @@ process::process(int argc, const char **argv, processlistid::type procltid) :
     m_crt_info = std::unique_ptr<crt_info>(malloc_aligned<crt_info>(0x1000));
     auto &&crt_info_int = reinterpret_cast<uintptr_t>(m_crt_info.get());
 
-    uintptr_t argv_vm_virt = 0x100000UL;
+    uintptr_t argv_vm_virt = 0x00100000UL;
     init_argv(argc, argv, argv_vm_virt, 0x1000);
     auto &&argv_int = reinterpret_cast<uintptr_t>(m_argv.get());
+
+    uint64_t npgs = 3;
+    m_jagsz = 2 * 1024 * 1024;
+    m_jagmem = (char *)mmap(NULL, npgs * m_jagsz, PROT_READ | PROT_WRITE,
+        MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGETLB, 0, 0);
+
+//    printf("elf range: %p-%p\n", m_virt_addr, m_virt_addr + m_tsz - 1);
+    uintptr_t hugestart = 0x40000000UL;
+
+    // map in pages to vmapp
+    for (int i = 0; i < npgs; i++) {
+        uintptr_t virt = (uintptr_t)m_jagmem + i * m_jagsz;
+        uintptr_t gpa = hugestart + i * m_jagsz;
+
+        // force the kernel to map the pages
+        char tmp = *(char *)virt;
+
+        printf("mapping hugepage:  virt = %p, gpa = %p\n", virt, gpa);
+        if (!vmcall__vm_map_foreign_lookup_2m(m_procltid, m_id, gpa, virt, m_jagsz, 0))
+            throw std::runtime_error("vmcall__vm_map_foreign_lookup_2m failed");
+    }
 
     for (const auto &ef : m_elfs)
     {
@@ -248,6 +273,8 @@ process::process(int argc, const char **argv, processlistid::type procltid) :
 
 process::~process()
 {
+    munmap(m_jagmem, m_jagsz);
+
     if (!vmcall__delete_foreign_process(m_procltid, m_id))
         bfwarning << "vmcall__delete_process failed\n";
 }
@@ -265,15 +292,15 @@ process::load_elf(const std::string &filename)
     if (ret != BFELF_SUCCESS)
         throw std::runtime_error("bfelf_file_init failed");
 
-    auto &&tsz = bfelf_file_get_total_size(elf_ptr);
-    if (tsz < BFELF_SUCCESS)
+    m_tsz = bfelf_file_get_total_size(elf_ptr);
+    if (m_tsz < BFELF_SUCCESS)
         throw std::runtime_error("bfelf_file_get_total_size failed");
 
-    if (bfn::lower(static_cast<uintptr_t>(tsz)) != 0)
-        tsz = static_cast<std::ptrdiff_t>(bfn::upper(static_cast<uintptr_t>(tsz)) + 0x1000);
+    if (bfn::lower(static_cast<uintptr_t>(m_tsz)) != 0)
+        m_tsz = static_cast<std::ptrdiff_t>(bfn::upper(static_cast<uintptr_t>(m_tsz)) + 0x1000);
 
     auto &&pic = bfelf_file_get_pic_pie(elf_ptr);
-    auto &&mem = malloc_aligned<char>(static_cast<std::size_t>(tsz));
+    auto &&mem = malloc_aligned<char>(static_cast<std::size_t>(m_tsz));
 
     for (auto i = 0; i < bfelf_file_get_num_load_instrs(elf_ptr); i++)
     {
@@ -284,7 +311,7 @@ process::load_elf(const std::string &filename)
             throw std::runtime_error("bfelf_file_get_load_instr failed");
 
         auto &&bin_view = gsl::span<char>(bin.data(), gsl::narrow_cast<std::ptrdiff_t>(bin.size()));
-        auto &&mem_view = gsl::span<char>(mem, tsz);
+        auto &&mem_view = gsl::span<char>(mem, m_tsz);
 
         memcpy(&mem_view.at(instr->mem_offset), &bin_view.at(instr->file_offset), instr->filesz);
 
@@ -313,7 +340,7 @@ process::load_elf(const std::string &filename)
     m_elfs.push_back(std::move(elf));
     m_segments.push_back(std::unique_ptr<char>(mem));
 
-    m_virt_addr += static_cast<uintptr_t>(tsz);
+    m_virt_addr += static_cast<uintptr_t>(m_tsz);
     if (bfn::lower(m_virt_addr) != 0)
         m_virt_addr = bfn::upper(m_virt_addr + 0x1000);
 
