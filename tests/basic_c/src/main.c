@@ -31,15 +31,15 @@ main(int argc, const char *argv[])
         printf("    argv[%d] = %s\n", i, argv[i]);
     }
 
-    char *ptr = 0x40000000UL;
-    *ptr = 'y';
-    *(ptr + 0x200000UL) = 'u';
-    *(ptr + 0x400000UL) = 'g';
-    *(ptr + 0x600000UL) = 'e';
-    printf("    huge[0] = %c\n", *ptr);
-    printf("    huge[1] = %c\n", *(ptr + 0x200000UL));
-    printf("    huge[2] = %c\n", *(ptr + 0x400000UL));
-    printf("    huge[3] = %c\n", *(ptr + 0x600000UL));
+//    char *ptr = 0x40000000UL;
+//    *ptr = 'y';
+//    *(ptr + 0x200000UL) = 'u';
+//    *(ptr + 0x400000UL) = 'g';
+//    *(ptr + 0x600000UL) = 'e';
+//    printf("    huge[0] = %c\n", *ptr);
+//    printf("    huge[1] = %c\n", *(ptr + 0x200000UL));
+//    printf("    huge[2] = %c\n", *(ptr + 0x400000UL));
+//    printf("    huge[3] = %c\n", *(ptr + 0x600000UL));
 
     return 0;
 }

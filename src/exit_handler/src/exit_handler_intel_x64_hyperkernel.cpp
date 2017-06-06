@@ -53,6 +53,10 @@
 
 #include <intrinsics/crs_intel_x64.h>
 
+#include <mutex>
+
+std::mutex g_ttys0_mutex;
+
 using namespace x64;
 using namespace intel_x64;
 using namespace vmcs;
@@ -376,6 +380,8 @@ exit_handler_intel_x64_hyperkernel::decrease_program_break(vmcall_registers_t &r
 void
 exit_handler_intel_x64_hyperkernel::handle_ttys0(vmcall_registers_t &regs)
 {
+    std::lock_guard<std::mutex> lock(g_ttys0_mutex);
+
     if (m_ttys0.m_thread == nullptr)
         return handle_ttys1(regs);
 
