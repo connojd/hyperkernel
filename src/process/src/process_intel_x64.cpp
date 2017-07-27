@@ -156,8 +156,8 @@ process_intel_x64::vm_map_lookup_2m(
         auto &&phys = bfn::virt_to_phys_with_cr3(addr + page, rtpt);
         this->vm_map_page_2m(virt + page, phys, perm);
         bfdebug << "Mapped 2MB page @ "
-                << " virt: " << view_as_pointer(virt + page)
-                << " phys: " << view_as_pointer(phys) << bfendl;
+                << "virt: " << view_as_pointer(virt + page)
+                << "phys: " << view_as_pointer(phys) << bfendl;
     }
 
 //    auto ept_list = m_root_ept->ept_to_mdl();

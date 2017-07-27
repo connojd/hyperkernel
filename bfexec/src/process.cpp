@@ -195,7 +195,12 @@ process::process(int argc, const char **argv, processlistid::type procltid) :
     m_jagmem = (char *)mmap(NULL, npgs * m_jagsz, PROT_READ | PROT_WRITE,
         MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGETLB, 0, 0);
 
-//    printf("elf range: %p-%p\n", m_virt_addr, m_virt_addr + m_tsz - 1);
+    if (m_jagmem == MAP_FAILED) {
+        printf("failed to mmap hugepages\n");
+        exit(1);
+    }
+
+    printf("elf range: %p-%p\n", m_virt_addr, m_virt_addr + m_tsz - 1);
     uintptr_t hugestart = 0x40000000UL;
 
     // map in pages to vmapp
