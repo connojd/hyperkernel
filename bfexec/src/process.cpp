@@ -129,7 +129,7 @@ process::process(int argc, const char **argv, processlistid::type procltid) :
     m_procltid(procltid),
     m_info_addr(0x00200000UL),
     m_virt_addr(0x00600000UL),
-    m_filename(std::string(argv[0])),
+    m_filename(std::string(argv[1])),
     m_basename(basename(m_filename)),
     m_argv_size(0x0UL),
     m_argv(nullptr),
@@ -187,10 +187,10 @@ process::process(int argc, const char **argv, processlistid::type procltid) :
     auto &&crt_info_int = reinterpret_cast<uintptr_t>(m_crt_info.get());
 
     uintptr_t argv_vm_virt = 0x00100000UL;
-    init_argv(argc, argv, argv_vm_virt, 0x1000);
+    init_argv(--argc, &argv[1], argv_vm_virt, 0x1000);
     auto &&argv_int = reinterpret_cast<uintptr_t>(m_argv.get());
 
-    uint64_t npgs = 3;
+    long int npgs = strtol(argv[0], NULL, 0);
     m_jagsz = 2 * 1024 * 1024;
     m_jagmem = (char *)mmap(NULL, npgs * m_jagsz, PROT_READ | PROT_WRITE,
         MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGETLB, 0, 0);
@@ -211,7 +211,7 @@ process::process(int argc, const char **argv, processlistid::type procltid) :
         // force the kernel to map the pages
         char tmp = *(char *)virt;
 
-        printf("mapping hugepage:  virt = %p, gpa = %p\n", virt, gpa);
+        printf("hugepage: virt = %p, gpa = %p\n", virt, gpa);
         if (!vmcall__vm_map_foreign_lookup_2m(m_procltid, m_id, gpa, virt, m_jagsz, 0))
             throw std::runtime_error("vmcall__vm_map_foreign_lookup_2m failed");
     }
@@ -239,6 +239,7 @@ process::process(int argc, const char **argv, processlistid::type procltid) :
             0x1000,
             0))
         throw std::runtime_error("vmcall__vm_map_foreign_lookup failed");
+    printf("argv: %p-%p\n", argv_vm_virt, argv_vm_virt + 0x1000 - 1);
 
     if (!vmcall__vm_map_foreign_lookup(
             m_procltid,
@@ -248,6 +249,7 @@ process::process(int argc, const char **argv, processlistid::type procltid) :
             STACK_SIZE,
             0))
         throw std::runtime_error("vmcall__vm_map_foreign_lookup failed");
+    printf("stack: %p-%p\n", 0x00600000 - STACK_SIZE, 0x00600000 - 1);
 
     if (!vmcall__vm_map_foreign_lookup(
             m_procltid,
@@ -257,6 +259,7 @@ process::process(int argc, const char **argv, processlistid::type procltid) :
             0x1000,
             0))
         throw std::runtime_error("vmcall__vm_map_foreign_lookup failed");
+    printf("info: %p-%p\n", m_info_addr, m_info_addr + 0x1000 - 1);
 
     auto &&entry = 0UL;
     auto &&stack = 0x00600000UL - 0x1000;
