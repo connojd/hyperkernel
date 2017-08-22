@@ -129,7 +129,7 @@ process::process(int argc, const char **argv, processlistid::type procltid) :
     m_procltid(procltid),
     m_info_addr(0x00200000UL),
     m_virt_addr(0x00600000UL),
-    m_filename(std::string(argv[1])),
+    m_filename(std::string(argv[3])),
     m_basename(basename(m_filename)),
     m_argv_size(0x0UL),
     m_argv(nullptr),
@@ -187,10 +187,14 @@ process::process(int argc, const char **argv, processlistid::type procltid) :
     auto &&crt_info_int = reinterpret_cast<uintptr_t>(m_crt_info.get());
 
     uintptr_t argv_vm_virt = 0x00100000UL;
-    init_argv(--argc, &argv[1], argv_vm_virt, 0x1000);
+    argc -= 3;
+    init_argv(argc, &argv[3], argv_vm_virt, 0x1000);
     auto &&argv_int = reinterpret_cast<uintptr_t>(m_argv.get());
 
+    long int phys_mapping = strtol(argv[2], NULL, 0);
+    long int need_hugepages = strtol(argv[1], NULL, 0);
     long int npgs = strtol(argv[0], NULL, 0);
+
     m_jagsz = 2 * 1024 * 1024;
     m_jagmem = (char *)mmap(NULL, npgs * m_jagsz, PROT_READ | PROT_WRITE,
         MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGETLB, 0, 0);
@@ -201,20 +205,30 @@ process::process(int argc, const char **argv, processlistid::type procltid) :
     }
 
     printf("elf range: %p-%p\n", m_virt_addr, m_virt_addr + m_tsz - 1);
-    uintptr_t hugestart = 0x40000000UL;
+    uintptr_t gpa = 0x40000000UL;
 
-    // map in pages to vmapp
+    // force the kernel to map the pages
     for (int i = 0; i < npgs; i++) {
-        uintptr_t virt = (uintptr_t)m_jagmem + i * m_jagsz;
-        uintptr_t gpa = hugestart + i * m_jagsz;
-
-        // force the kernel to map the pages
-        char tmp = *(char *)virt;
-
-        printf("hugepage: virt = %p, gpa = %p\n", virt, gpa);
-        if (!vmcall__vm_map_foreign_lookup_2m(m_procltid, m_id, gpa, virt, m_jagsz, 0))
-            throw std::runtime_error("vmcall__vm_map_foreign_lookup_2m failed");
+        char tmp = *(char *)((uintptr_t)m_jagmem + i * m_jagsz);
     }
+
+    if (need_hugepages != 0 && need_hugepages != 1) {
+        printf("ERROR: supply 0 or 1 for need_hugepages\n");
+        exit(22);
+    }
+
+    printf("cjag gpa range: %p-%p\n", gpa, gpa + (npgs * m_jagsz) - 1);
+    printf("using hugepages: %s\n", (need_hugepages) ? "yes" : "no");
+    printf("gpa mapping: %s\n", (phys_mapping)? "shuffle" : "direct");
+    if (!vmcall__vm_map_foreign_lookup_2m(
+        m_procltid,
+        m_id,
+        gpa | (phys_mapping << 1U) | need_hugepages,
+        (uintptr_t)m_jagmem,
+        npgs * m_jagsz,
+        0)
+    )
+        throw std::runtime_error("vmcall__vm_map_foreign_lookup_2m failed");
 
     for (const auto &ef : m_elfs)
     {

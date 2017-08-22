@@ -21,6 +21,8 @@
 
 #include <debug.h>
 #include <upper_lower.h>
+#include <vector>
+#include <algorithm>
 
 #include <domain/domain_intel_x64.h>
 #include <process/process_intel_x64.h>
@@ -30,6 +32,32 @@
 
 using namespace x64;
 using namespace intel_x64;
+
+void map_phys__direct(std::vector<uintptr_t>& addr)
+{
+    (void) addr;
+    return;
+}
+
+//void map_phys__alternate(std::vector<uintptr_t>& addr)
+//{
+//    auto nr_hugepages = addr.size() / 512;
+//
+//    for (int i = 0; i < 512; i++) {
+//        uintptr_t tmp = addr[i];
+//        addr[i] = addr[i % nr_hugepages * 512];
+//        addr[i * 512] = tmp;
+//    }
+//
+//
+//
+//
+//}
+
+void map_phys__shuffle(std::vector<uintptr_t>& addr)
+{
+    std::random_shuffle(addr.begin(), addr.end());
+}
 
 process_intel_x64::process_intel_x64(
     processid::type id,
@@ -130,43 +158,34 @@ process_intel_x64::vm_map_lookup(
 
 void
 process_intel_x64::vm_map_lookup_2m(
-    uintptr_t virt,
+    uintptr_t gpa,
     uintptr_t rtpt,
     uintptr_t addr,
     uintptr_t size,
     uintptr_t perm)
 {
-    // TODO: Should enforce page alignement, and a multiple of a page.
-    //       This is a safety measure to ensure that no memory is ever
-    //       leaked.
+    bool use_hugepages = gpa & 0x1;
+    uint64_t phys_mapping = (gpa & 0xe) >> 1;
+    gpa &= ~0xfULL;
+    size_t page_sz = (use_hugepages) ? ept::pd::size_bytes : ept::pt::size_bytes;
+    size_t npages = size / page_sz;
 
-    // bfdebug << "[process #" << id() << "]: mapping virtual memory\n";
-    // bfdebug << "  - rtpt: " << view_as_pointer(rtpt) << '\n';
-    // bfdebug << "  - virt: " << view_as_pointer(virt) << '\n';
-    // bfdebug << "  - addr: " << view_as_pointer(addr) << '\n';
-    // bfdebug << "  - size: " << view_as_pointer(size) << '\n';
-    // bfdebug << "  - perm: " << view_as_pointer(perm) << '\n';
-
-    // TODO: Remove me
-    //
-    size += bfn::lower(virt);
-
-    for (auto page = 0UL; page < size; page += ept::pd::size_bytes)
-    {
-        auto &&phys = bfn::virt_to_phys_with_cr3(addr + page, rtpt);
-        this->vm_map_page_2m(virt + page, phys, perm);
-        bfdebug << "Mapped 2MB page @ "
-                << "virt: " << view_as_pointer(virt + page)
-                << "phys: " << view_as_pointer(phys) << bfendl;
+    std::vector<uintptr_t> phys_addrs;
+    for (auto i = 0UL; i < npages; i++) {
+        phys_addrs.push_back(bfn::virt_to_phys_with_cr3(addr + i * page_sz, rtpt));
     }
 
-//    auto ept_list = m_root_ept->ept_to_mdl();
-//    bfdebug << "process: ept_mdl size = " << ept_list.size() << bfendl;
-//    for (auto md : ept_list) {
-//        bfdebug << "    md.phys = 0x" << std::hex << md.phys << bfendl;
-//        bfdebug << "    md.virt = 0x" << std::hex << md.virt << bfendl;
-//        bfdebug << "    md.type = " << md.type << bfendl;
-//    }
+    if (!use_hugepages) {
+        switch (phys_mapping) {
+            case 0: map_phys__direct(phys_addrs); break;
+            case 1: map_phys__shuffle(phys_addrs); break;
+            default: throw std::invalid_argument("invalid phys_mapping\n");
+        }
+    }
+
+    for (auto i = 0UL; i < npages; i++) {
+        this->vm_map_page_2m(gpa + i * page_sz, phys_addrs[i], perm);
+    }
 }
 
 void

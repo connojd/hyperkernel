@@ -29,7 +29,6 @@ vcpu::vcpu(processlistid::type procltid) :
     m_id(vmcall__create_foreign_vcpu(procltid)),
     m_procltid(procltid)
 {
-    std::cout << "called vmcall__create_foreign_vcpu\n";
     if (m_id == vcpuid::invalid)
         throw std::runtime_error("vmcall__create_foreign_vcpu failed");
 }
@@ -38,5 +37,4 @@ vcpu::~vcpu()
 {
     if (!vmcall__delete_vcpu(m_id))
         bfwarning << "vmcall__delete_vcpu failed\n";
-    std::cout << "called vmcall__delete_vcpu\n";
 }
