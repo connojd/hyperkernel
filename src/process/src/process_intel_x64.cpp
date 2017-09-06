@@ -169,10 +169,19 @@ process_intel_x64::vm_map_lookup_2m(
     gpa &= ~0xfULL;
     size_t page_sz = (use_hugepages) ? ept::pd::size_bytes : ept::pt::size_bytes;
     size_t npages = size / page_sz;
+    size_t n2mpages = size / ept::pd::size_bytes;
+    std::vector<uintptr_t> phys_addrs(npages);
 
-    std::vector<uintptr_t> phys_addrs;
-    for (auto i = 0UL; i < npages; i++) {
-        phys_addrs.push_back(bfn::virt_to_phys_with_cr3(addr + i * page_sz, rtpt));
+    for (auto i = 0UL; i < n2mpages; i++) {
+        auto phys = bfn::virt_to_phys_with_cr3(addr + i * ept::pd::size_bytes, rtpt);
+        phys_addrs.push_back(phys);
+
+        if (page_sz == ept::pt::size_bytes) {
+            for (auto j = 1; j < 512; j++) {
+                phys += ept::pt::size_bytes;
+                phys_addrs.push_back(phys);
+            }
+        }
     }
 
     if (!use_hugepages) {
@@ -184,7 +193,11 @@ process_intel_x64::vm_map_lookup_2m(
     }
 
     for (auto i = 0UL; i < npages; i++) {
-        this->vm_map_page_2m(gpa + i * page_sz, phys_addrs[i], perm);
+        if (page_sz == ept::pt::size_bytes) {
+            this->vm_map_page(gpa + i * page_sz, phys_addrs[i], perm);
+        } else {
+            this->vm_map_page_2m(gpa + i * page_sz, phys_addrs[i], perm);
+        }
     }
 }
 

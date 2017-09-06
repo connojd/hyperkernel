@@ -22,24 +22,43 @@
 
 #include <stdio.h>
 
+
+
+
+
+
+/*
+ * argv[0] = npages
+ * argv[1] = pagesz
+ * addr = 0x40000000UL
+ */
+
 int
 main(int argc, const char *argv[])
 {
-    printf("hello world\n");
+    if (argc != 3) {
+        printf("Need args: filename, npages, pagesz\n");
+        return 22;
+    }
 
     for (int i = 0; i < argc; i++) {
         printf("    argv[%d] = %s\n", i, argv[i]);
     }
 
-    char *ptr = 0x40000000UL;
-    *ptr = 'y';
-    *(ptr + 0x200000UL) = 'u';
-    *(ptr + 0x400000UL) = 'g';
-    *(ptr + 0x600000UL) = 'e';
-    printf("    huge[0] = %c\n", *ptr);
-    printf("    huge[1] = %c\n", *(ptr + 0x200000UL));
-    printf("    huge[2] = %c\n", *(ptr + 0x400000UL));
-    printf("    huge[3] = %c\n", *(ptr + 0x600000UL));
+    long int npages = strtol(argv[1], NULL, 0);
+    long int pagesz = strtol(argv[2], NULL, 0);
+    char *addr = 0x40000000UL;
+
+    for (int i = 0; i < npages; i++) {
+        *(addr + i * pagesz) = 'h';
+    }
+//    *(ptr + 0x200000UL) = 'u';
+//    *(ptr + 0x400000UL) = 'g';
+//    *(ptr + 0x600000UL) = 'e';
+//    printf("    huge[0] = %c\n", *ptr);
+//    printf("    huge[1] = %c\n", *(ptr + 0x200000UL));
+//    printf("    huge[2] = %c\n", *(ptr + 0x400000UL));
+//    printf("    huge[3] = %c\n", *(ptr + 0x600000UL));
 
     return 0;
 }

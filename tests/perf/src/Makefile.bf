@@ -20,17 +20,61 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 ################################################################################
-# Subdirs
+# Target Information
 ################################################################################
 
-PARENT_SUBDIRS += basic_c
-PARENT_SUBDIRS += basic_cxx
-PARENT_SUBDIRS += basic_driver
-PARENT_SUBDIRS += cjag
-PARENT_SUBDIRS += perf
+TARGET_NAME:=mem
+TARGET_TYPE:=bin
+TARGET_COMPILER:=cross
+
+SYSROOT_NAME:=vmapp
+
+################################################################################
+# Compiler Flags
+################################################################################
+
+CROSS_CCFLAGS+=
+CROSS_CXXFLAGS+=
+CROSS_ASMFLAGS+=
+CROSS_LDFLAGS+=-pie
+CROSS_ARFLAGS+=
+CROSS_DEFINES+=
+
+################################################################################
+# Output
+################################################################################
+
+CROSS_OBJDIR+=%BUILD_REL%/.build
+CROSS_OUTDIR+=%BUILD_REL%/../bin
+
+################################################################################
+# Sources
+################################################################################
+
+SOURCES+=mem.c
+
+INCLUDE_PATHS+=
+
+LIBS+=
+
+LIBRARY_PATHS+=
+
+################################################################################
+# Environment Specific
+################################################################################
+
+WINDOWS_SOURCES+=
+WINDOWS_INCLUDE_PATHS+=
+WINDOWS_LIBS+=
+WINDOWS_LIBRARY_PATHS+=
+
+LINUX_SOURCES+=
+LINUX_INCLUDE_PATHS+=
+LINUX_LIBS+=
+LINUX_LIBRARY_PATHS+=
 
 ################################################################################
 # Common
 ################################################################################
 
-include %HYPER_ABS%/common/common_subdir.mk
+include %HYPER_ABS%/common/common_target.mk

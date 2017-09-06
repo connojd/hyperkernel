@@ -162,6 +162,7 @@ exit_handler_intel_x64_hyperkernel::delete_vcpu(vmcall_registers_t &regs)
     if (m_vcpuid == regs.r03)
         throw std::runtime_error("deleting current vcpu is not supported");
 
+    bfdebug << "total bytes used: " << g_mm->m_total_bytes << "\n";
     g_vcm->delete_vcpu(regs.r03);
 }
 

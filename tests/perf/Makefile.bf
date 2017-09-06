@@ -23,11 +23,7 @@
 # Subdirs
 ################################################################################
 
-PARENT_SUBDIRS += basic_c
-PARENT_SUBDIRS += basic_cxx
-PARENT_SUBDIRS += basic_driver
-PARENT_SUBDIRS += cjag
-PARENT_SUBDIRS += perf
+SUBDIRS += src
 
 ################################################################################
 # Common
