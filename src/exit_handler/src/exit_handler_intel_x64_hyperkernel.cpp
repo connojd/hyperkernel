@@ -24,6 +24,7 @@
 #include <vmcs/vmcs_intel_x64_32bit_guest_state_fields.h>
 #include <vmcs/vmcs_intel_x64_32bit_read_only_data_fields.h>
 #include <vmcs/vmcs_intel_x64_64bit_guest_state_fields.h>
+#include <vmcs/vmcs_intel_x64_64bit_control_fields.h>
 #include <vmcs/vmcs_intel_x64_64bit_read_only_data_fields.h>
 #include <vmcs/vmcs_intel_x64_natural_width_guest_state_fields.h>
 #include <vmcs/vmcs_intel_x64_natural_width_read_only_data_fields.h>
@@ -52,6 +53,8 @@
 #include <vcpu/vcpu_intel_x64_hyperkernel.h>
 
 #include <intrinsics/crs_intel_x64.h>
+#include <intrinsics/tlb_x64.h>
+#include <intrinsics/cache_x64.h>
 
 #include <mutex>
 
@@ -79,6 +82,12 @@ exit_handler_intel_x64_hyperkernel::handle_exit(vmcs::value_type reason)
 {
     switch (reason)
     {
+        case exit_reason::basic_exit_reason::invept:
+        {
+            vmx::invept_single_context(ept_pointer::get());
+            this->advance_and_resume();
+        }
+
         case exit_reason::basic_exit_reason::vm_entry_failure_invalid_guest_state:
         case exit_reason::basic_exit_reason::ept_violation:
         case exit_reason::basic_exit_reason::triple_fault:
@@ -162,7 +171,7 @@ exit_handler_intel_x64_hyperkernel::delete_vcpu(vmcall_registers_t &regs)
     if (m_vcpuid == regs.r03)
         throw std::runtime_error("deleting current vcpu is not supported");
 
-    bfdebug << "total bytes used: " << g_mm->m_total_bytes << "\n";
+    //bfdebug << "total bytes used: " << g_mm->m_total_bytes << "\n";
     g_vcm->delete_vcpu(regs.r03);
 }
 

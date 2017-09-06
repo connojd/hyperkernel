@@ -71,7 +71,7 @@ vmcs_intel_x64_guest_vm_state::vmcs_intel_x64_guest_vm_state(
 
     m_cr4 = 0;
     m_cr4 |= cr4::physical_address_extensions::mask;
-    m_cr4 |= cr4::page_global_enable::mask;
+//    m_cr4 |= cr4::page_global_enable::mask;
     m_cr4 |= cr4::vmx_enable_bit::mask;
     m_cr4 |= cr4::osfxsr::mask;
     m_cr4 |= cr4::osxsave::mask;
