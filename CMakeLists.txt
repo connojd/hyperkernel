@@ -75,19 +75,3 @@ userspace_extension(
     SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/bfexec
     DEPENDS bfintrinsics
 )
-
-# ------------------------------------------------------------------------------
-# Custom Target
-# ------------------------------------------------------------------------------
-
-add_custom_target_category("Hyperkernel Commands")
-
-add_custom_target(exec
-    COMMAND ${USERSPACE_PREFIX_PATH}/bin/exec
-    USES_TERMINAL
-)
-
-add_custom_target_info(
-    TARGET exec
-    COMMENT "Start a virtual machine"
-)

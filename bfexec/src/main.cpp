@@ -22,29 +22,18 @@
 #include <gsl/gsl>
 
 #include <vector>
-#include <memory>
 #include <iostream>
 
 #include "../../include/hypercall.h"
 
-// #include <vcpu.h>
-// #include <process.h>
-// #include <process_list.h>
-// #include <vmcall_hyperkernel_interface.h>
-
 using arg_type = std::string;
 using arg_list_type = std::vector<arg_type>;
-
-// std::unique_ptr<process_list> g_proclt;
-// std::vector<std::unique_ptr<vcpu>> g_vcpus;
-// std::vector<std::unique_ptr<process>> g_processes;
-
-// extern "C" int set_affinity(void);
 
 int
 protected_main(const arg_list_type &args)
 {
-
+    auto create_domain_arg = create_domain_arg_t{};
+    create_domain(&create_domain_arg);
 
 //     for (auto i = 0; i < 1; i++)
 //         g_vcpus.push_back(std::make_unique<vcpu>(g_proclt->id()));
@@ -55,7 +44,7 @@ protected_main(const arg_list_type &args)
 //     if (!vmcall__sched_yield())
 //         throw std::runtime_error("vmcall__sched_yield failed");
 
-//     return EXIT_SUCCESS;
+    return EXIT_SUCCESS;
 }
 
 void

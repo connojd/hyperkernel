@@ -19,19 +19,31 @@
 #ifndef HYPERCALL_H
 #define HYPERCALL_H
 
-#include <intrinsics.h>
+extern "C" uintptr_t _vmcall(uintptr_t r1, uintptr_t r2, uintptr_t r3, uintptr_t r4) noexcept;
 
-#define domain_op 0xBFC
+// -----------------------------------------------------------------------------
+// Opcodes
+// -----------------------------------------------------------------------------
 
-struct create_domain_arg {
+constexpr auto domain_op = 0xBFC0000000000100;
 
+// -----------------------------------------------------------------------------
+// Domain Operations
+// -----------------------------------------------------------------------------
+
+constexpr auto domain_op__create_domain = 0x100;
+
+struct create_domain_arg_t {
 };
 
-void
-create_domain(struct create_domain_arg *arg)
+int64_t
+create_domain(struct create_domain_arg_t *arg)
 {
-    ::intel_x64::vm::call(
-        0,
+    return _vmcall(
+        domain_op,
+        domain_op__create_domain,
+        reinterpret_cast<uintptr_t>(arg),
+        0
     );
 }
 

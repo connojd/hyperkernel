@@ -26,7 +26,7 @@ list(APPEND SOURCES
     src/main.cpp
 )
 
-add_executable(exec ${SOURCES})
-target_link_static_libraries(exec bfintrinsics)
+add_executable(bfexec ${SOURCES})
+target_link_static_libraries(bfexec bfintrinsics)
 
-install(TARGETS exec DESTINATION bin)
+install(TARGETS bfexec DESTINATION bin)

@@ -19,6 +19,7 @@
 #ifndef VCPU_INTEL_X64_HYPERKERNEL_H
 #define VCPU_INTEL_X64_HYPERKERNEL_H
 
+#include "apis.h"
 #include <eapis/hve/arch/intel_x64/vcpu.h>
 
 namespace hyperkernel
@@ -40,16 +41,20 @@ public:
     ///
     /// @param id the id of this vcpu
     ///
+    /// @cond
+    ///
     explicit vcpu(
         vcpuid::type id
     ) :
-        eapis::intel_x64::vcpu(id)
+        eapis::intel_x64::vcpu(id),
+        m_apis{
+            vmcs(),
+            exit_handler()
+        }
     {
-        exit_handler()->add_handler(
-            vmcs_n::exit_reason::basic_exit_reason::vmcall,
-            ::handler_delegate_t::create<vcpu, &vcpu::vmcall_handler>(this)
-        );
     }
+
+    /// @endcond
 
     /// Destructor
     ///
@@ -58,18 +63,19 @@ public:
     ///
     ~vcpu() = default;
 
+    /// APIs
+    ///
+    /// @expects
+    /// @ensures
+    ///
+    /// @return a pointer to the hkapis
+    ///
+    gsl::not_null<apis *> hkapis()
+    { return &m_apis; }
+
 private:
 
-    bool
-    vmcall_handler(
-        gsl::not_null<vmcs_t *> vmcs)
-    {
-        guard_exceptions([&] {
-            vmcs->save_state()->rax = 0x1;
-        });
-
-        return advance(vmcs);
-    }
+    apis m_apis;
 };
 
 }
