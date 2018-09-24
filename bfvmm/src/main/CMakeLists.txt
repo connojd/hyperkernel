@@ -1,9 +1,6 @@
 #
-# Bareflank Hyperkernel
-#
+# Bareflank Hypervisor
 # Copyright (C) 2015 Assured Information Security, Inc.
-# Author: Rian Quinn        <quinnr@ainfosec.com>
-# Author: Brendan Kerrigan  <kerriganb@ainfosec.com>
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -19,21 +16,25 @@
 # License along with this library; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-################################################################################
-# Subdirs
-################################################################################
+cmake_minimum_required(VERSION 3.6)
+project(hyperkernel_bfvmm_main C CXX)
 
-PARENT_SUBDIRS += bfc
-PARENT_SUBDIRS += bfpthread
-PARENT_SUBDIRS += bfsyscall
-PARENT_SUBDIRS += bfcrt
-PARENT_SUBDIRS += bfcxx
-PARENT_SUBDIRS += bfexec
-PARENT_SUBDIRS += src
-PARENT_SUBDIRS += tests
+include(${SOURCE_CMAKE_DIR}/project.cmake)
+init_project(
+    INCLUDES ${CMAKE_CURRENT_LIST_DIR}/../../include
+)
 
-################################################################################
-# Common
-################################################################################
+if(${BUILD_TARGET_ARCH} STREQUAL "x86_64")
+    list(APPEND SOURCES
+        arch/intel_x64/vcpu_factory.cpp
+    )
+elseif(${BUILD_TARGET_ARCH} STREQUAL "aarch64")
+    message(WARNING "Unimplemented")
+else()
+    message(FATAL_ERROR "Unsupported archiecture")
+endif()
 
-include %HYPER_ABS%/common/common_subdir.mk
+eapis_add_vmm_executable(
+    hyperkernel_bfvmm
+    SOURCES ${SOURCES}
+)

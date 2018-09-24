@@ -23,56 +23,50 @@
 
 #include <vector>
 #include <memory>
+#include <iostream>
 
-#include <vcpu.h>
-#include <process.h>
-#include <process_list.h>
-#include <vmcall_hyperkernel_interface.h>
+#include "../../include/hypercall.h"
 
-using arg_list_type = std::vector<std::string>;
+// #include <vcpu.h>
+// #include <process.h>
+// #include <process_list.h>
+// #include <vmcall_hyperkernel_interface.h>
 
-std::unique_ptr<process_list> g_proclt;
-std::vector<std::unique_ptr<vcpu>> g_vcpus;
-std::vector<std::unique_ptr<process>> g_processes;
+using arg_type = std::string;
+using arg_list_type = std::vector<arg_type>;
 
-extern "C" int set_affinity(void);
+// std::unique_ptr<process_list> g_proclt;
+// std::vector<std::unique_ptr<vcpu>> g_vcpus;
+// std::vector<std::unique_ptr<process>> g_processes;
+
+// extern "C" int set_affinity(void);
 
 int
 protected_main(const arg_list_type &args)
 {
-    auto ___ = gsl::finally([&]
-    {
-        g_processes.clear();
-        g_vcpus.clear();
-        g_proclt.reset();
-    });
 
-    if (set_affinity() != 0)
-        throw std::runtime_error("failed to set cpu affinity");
 
-    g_proclt = std::make_unique<process_list>();
+//     for (auto i = 0; i < 1; i++)
+//         g_vcpus.push_back(std::make_unique<vcpu>(g_proclt->id()));
 
-    for (auto i = 0; i < 1; i++)
-        g_vcpus.push_back(std::make_unique<vcpu>(g_proclt->id()));
+//     for (const auto &arg : args)
+//         g_processes.push_back(std::make_unique<process>(arg, g_proclt->id()));
 
-    for (const auto &arg : args)
-        g_processes.push_back(std::make_unique<process>(arg, g_proclt->id()));
+//     if (!vmcall__sched_yield())
+//         throw std::runtime_error("vmcall__sched_yield failed");
 
-    if (!vmcall__sched_yield())
-        throw std::runtime_error("vmcall__sched_yield failed");
-
-    return EXIT_SUCCESS;
+//     return EXIT_SUCCESS;
 }
 
 void
-terminate()
+bfexec_terminate()
 {
     std::cerr << "FATAL ERROR: terminate called" << '\n';
     abort();
 }
 
 void
-new_handler()
+bfexec_new_handler()
 {
     std::cerr << "FATAL ERROR: out of memory" << '\n';
     abort();
@@ -81,26 +75,24 @@ new_handler()
 int
 main(int argc, const char *argv[])
 {
-    std::set_terminate(terminate);
-    std::set_new_handler(new_handler);
+    std::set_terminate(bfexec_terminate);
+    std::set_new_handler(bfexec_new_handler);
 
-    try
-    {
+    try {
         arg_list_type args;
         auto args_span = gsl::make_span(argv, argc);
 
-        for (auto i = 1; i < argc; i++)
-            args.push_back(args_span.at(i));
+        for (auto i = 1; i < argc; i++) {
+            args.emplace_back(args_span[i]);
+        }
 
         return protected_main(args);
     }
-    catch (std::exception &e)
-    {
+    catch (std::exception &e) {
         std::cerr << "Caught unhandled exception:" << '\n';
         std::cerr << "    - what(): " << e.what() << '\n';
     }
-    catch (...)
-    {
+    catch (...) {
         std::cerr << "Caught unknown exception" << '\n';
     }
 
