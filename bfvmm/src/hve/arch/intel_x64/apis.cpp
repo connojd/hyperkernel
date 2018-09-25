@@ -18,7 +18,7 @@
 
 #include <hve/arch/intel_x64/apis.h>
 
-namespace eapis
+namespace hyperkernel
 {
 namespace intel_x64
 {

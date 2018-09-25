@@ -22,28 +22,15 @@
 
 if(ENABLE_BUILD_VMM)
     eapis_vmm_extension(
+        hyperkernel_bfvmm
+        SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/bfvmm/src
+    )
+
+    eapis_vmm_extension(
         hyperkernel_bfvmm_main
+        DEPENDS hyperkernel_bfvmm
         SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/bfvmm/src/main
     )
-#     add_subproject(
-#         eapis_bfvmm vmm
-#         DEPENDS bfvmm
-#         DEPENDS bfintrinsics
-#         DEPENDS capstone
-#         SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/bfvmm/src
-#     )
-
-#     add_subproject(
-#         eapis_bfvmm_main vmm
-#         DEPENDS eapis_bfvmm
-#         SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/bfvmm/src/main
-#     )
-
-#     add_subproject(
-#         eapis_integration vmm
-#         DEPENDS eapis_bfvmm
-#         SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/bfvmm/integration/
-#     )
 endif()
 
 # ------------------------------------------------------------------------------

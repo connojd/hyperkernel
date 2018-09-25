@@ -22,6 +22,13 @@
 #include "apis.h"
 #include <eapis/hve/arch/intel_x64/vcpu.h>
 
+bool
+yourmom(gsl::not_null<bfvmm::intel_x64::vmcs *> vmcs)
+{
+    bfignored(vmcs);
+    bffield_hex(g_rsdp);
+}
+
 namespace hyperkernel
 {
 namespace intel_x64
@@ -52,6 +59,13 @@ public:
             exit_handler()
         }
     {
+        exit_handler()->add_init_handler(
+            ::handler_delegate_t::create<yourmom>()
+        );
+
+        exit_handler()->add_fini_handler(
+            ::handler_delegate_t::create<yourmom>()
+        );
     }
 
     /// @endcond

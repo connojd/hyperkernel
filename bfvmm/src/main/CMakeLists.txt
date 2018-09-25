@@ -36,5 +36,6 @@ endif()
 
 eapis_add_vmm_executable(
     hyperkernel_bfvmm
+    LIBRARIES hyperkernel_hve
     SOURCES ${SOURCES}
 )
