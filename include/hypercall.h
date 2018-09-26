@@ -36,7 +36,7 @@ constexpr auto domain_op__create_domain = 0x100;
 struct create_domain_arg_t {
 };
 
-int64_t
+uintptr_t
 create_domain(struct create_domain_arg_t *arg)
 {
     return _vmcall(

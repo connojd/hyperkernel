@@ -58,7 +58,13 @@ endif()
 # ------------------------------------------------------------------------------
 
 userspace_extension(
-    exec
+    bfexec
     SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/bfexec
+    DEPENDS bfintrinsics
+)
+
+userspace_extension(
+    tests
+    SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/tests
     DEPENDS bfintrinsics
 )

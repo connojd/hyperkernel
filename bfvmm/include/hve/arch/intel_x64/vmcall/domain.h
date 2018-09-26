@@ -16,10 +16,10 @@
 // License along with this library; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-#ifndef VMCALL_INTEL_X64_HYPERKERNEL_H
-#define VMCALL_INTEL_X64_HYPERKERNEL_H
+#ifndef VMCALL_DOMAIN_INTEL_X64_HYPERKERNEL_H
+#define VMCALL_DOMAIN_INTEL_X64_HYPERKERNEL_H
 
-#include <eapis/hve/arch/intel_x64/base.h>
+#include <hve/arch/intel_x64/vmexit/vmcall.h>
 
 // -----------------------------------------------------------------------------
 // Exports
@@ -38,6 +38,16 @@
 #endif
 
 // -----------------------------------------------------------------------------
+// Aliases
+// -----------------------------------------------------------------------------
+
+#include <bfvmm/hve/arch/intel_x64/vmcs.h>
+#include <bfvmm/hve/arch/intel_x64/exit_handler.h>
+
+using vmcs_t = bfvmm::intel_x64::vmcs;
+using exit_handler_t = bfvmm::intel_x64::exit_handler;
+
+// -----------------------------------------------------------------------------
 // Definitions
 // -----------------------------------------------------------------------------
 
@@ -53,33 +63,9 @@ class hyperkernel_vcpu_state_t;
 ///
 /// Provides an interface for registering handlers of the interrupt-window exit.
 ///
-class EXPORT_HYPERKERNEL_HVE vmcall_handler : public eapis::intel_x64::base
+class EXPORT_HYPERKERNEL_HVE vmcall_domain_handler
 {
 public:
-
-    ///
-    /// Info
-    ///
-    /// This struct is created by vmcall_handler::handle before being
-    /// passed to each registered handler.
-    ///
-    struct info_t {
-
-        /// Ignore advance (out)
-        ///
-        /// If true, do not advance the guest's instruction pointer (i.e. because
-        /// your handler (that returns true) already did).
-        ///
-        bool ignore_advance{false};
-    };
-
-    /// Handler delegate type
-    ///
-    /// The type of delegate clients must use when registering
-    /// handlers
-    ///
-    using handler_delegate_t =
-        delegate<bool(gsl::not_null<vmcs_t *>, info_t &)>;
 
     /// Constructor
     ///
@@ -89,7 +75,7 @@ public:
     /// @param apis the apis object for this interrupt window handler
     /// @param hyperkernel_vcpu_state a pointer to the vCPUs global state
     ///
-    vmcall_handler(
+    vmcall_domain_handler(
         gsl::not_null<apis *> apis,
         gsl::not_null<hyperkernel_vcpu_state_t *> hyperkernel_vcpu_state);
 
@@ -98,55 +84,17 @@ public:
     /// @expects
     /// @ensures
     ///
-    ~vmcall_handler() final = default;
-
-public:
-
-    /// Add Handler
-    ///
-    /// @expects
-    /// @ensures
-    ///
-    /// @param d the handler to call when an exit occurs
-    ///
-    void add_handler(const handler_delegate_t &d);
-
-public:
-
-    /// Dump Log
-    ///
-    /// Example:
-    /// @code
-    /// this->dump_log();
-    /// @endcode
-    ///
-    /// @expects
-    /// @ensures
-    ///
-    void dump_log() final
-    { }
+    ~vmcall_domain_handler() = default;
 
 public:
 
     /// @cond
 
-    bool handle(gsl::not_null<vmcs_t *> vmcs);
+    vmcall_domain_handler(vmcall_domain_handler &&) = default;
+    vmcall_domain_handler &operator=(vmcall_domain_handler &&) = default;
 
-    /// @endcond
-
-private:
-
-    std::list<handler_delegate_t> m_handlers;
-
-public:
-
-    /// @cond
-
-    vmcall_handler(vmcall_handler &&) = default;
-    vmcall_handler &operator=(vmcall_handler &&) = default;
-
-    vmcall_handler(const vmcall_handler &) = delete;
-    vmcall_handler &operator=(const vmcall_handler &) = delete;
+    vmcall_domain_handler(const vmcall_domain_handler &) = delete;
+    vmcall_domain_handler &operator=(const vmcall_domain_handler &) = delete;
 
     /// @endcond
 };

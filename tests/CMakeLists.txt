@@ -1,6 +1,6 @@
 #
 # Bareflank Hypervisor
-# Copyright (C) 2018 Assured Information Security, Inc.
+# Copyright (C) 2015 Assured Information Security, Inc.
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -17,19 +17,12 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 cmake_minimum_required(VERSION 3.6)
-project(hyperkernel C CXX)
+project(hyperkernel_tests C CXX)
 
 include(${SOURCE_CMAKE_DIR}/project.cmake)
-init_project(
-    INCLUDES ${PROJECT_SOURCE_DIR}/../include
-    INCLUDES ${PROJECT_SOURCE_DIR}/../../include
-)
+init_project()
 
-add_subdirectory(domain)
-add_subdirectory(hve)
+add_executable(test_hyperkernel_basic test_hyperkernel_basic.cpp)
+target_link_static_libraries(test_hyperkernel_basic bfintrinsics)
 
-# -----------------------------------------------------------------------------
-# Install
-# -----------------------------------------------------------------------------
-
-install(DIRECTORY ../include/ DESTINATION include/hyperkernel)
+install(TARGETS test_hyperkernel_basic DESTINATION bin)

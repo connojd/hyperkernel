@@ -20,6 +20,8 @@
 #define APIS_INTEL_X64_HYPERKERNEL_H
 
 #include "vmexit/vmcall.h"
+#include "vmcall/domain.h"
+
 #include <eapis/hve/arch/intel_x64/apis.h>
 
 namespace hyperkernel
@@ -50,7 +52,7 @@ public:
 /// Default vCPU State
 ///
 inline hyperkernel_vcpu_state_t
-    g_hyperkernel_vcpu_state_t{&eapis::intel_x64::g_eapis_vcpu_global_state};
+    g_hyperkernel_vcpu_state{&eapis::intel_x64::g_eapis_vcpu_global_state};
 
 /// APIs
 ///
@@ -65,7 +67,7 @@ inline hyperkernel_vcpu_state_t
 /// these APIs from being coupled to the vCPU logic that is provided by the
 /// based hypervisor and other extensions.
 ///
-class apis
+class EXPORT_HYPERKERNEL_HVE apis
 {
 
 public:
@@ -82,7 +84,8 @@ public:
     ///
     apis(
         gsl::not_null<bfvmm::intel_x64::vmcs *> vmcs,
-        gsl::not_null<bfvmm::intel_x64::exit_handler *> exit_handler
+        gsl::not_null<bfvmm::intel_x64::exit_handler *> exit_handler,
+        gsl::not_null<hyperkernel_vcpu_state_t *> hyperkernel_vcpu_state
     );
 
     /// Destructor
@@ -93,6 +96,34 @@ public:
     VIRTUAL ~apis() = default;
 
 public:
+
+    //==========================================================================
+    // VMExit
+    //==========================================================================
+
+    //--------------------------------------------------------------------------
+    // VMCall
+    //--------------------------------------------------------------------------
+
+    /// Get VMCall Object
+    ///
+    /// @expects
+    /// @ensures
+    ///
+    /// @return Returns the VMCall handler stored in the apis if VMCall
+    ///     trapping is enabled, otherwise an exception is thrown
+    ///
+    gsl::not_null<vmcall_handler *> vmcall();
+
+    /// Add VMCall Handler
+    ///
+    /// @expects
+    /// @ensures
+    ///
+    /// @param d the delegate to call when a vmcall exit occurs
+    ///
+    VIRTUAL void add_vmcall_handler(
+        const vmcall_handler::handler_delegate_t &d);
 
     //==========================================================================
     // Resources
@@ -124,6 +155,12 @@ private:
 
     bfvmm::intel_x64::vmcs *m_vmcs;
     bfvmm::intel_x64::exit_handler *m_exit_handler;
+
+private:
+
+    vmcall_handler m_vmcall_handler;
+
+    vmcall_domain_handler m_vmcall_domain_handler;
 };
 
 }

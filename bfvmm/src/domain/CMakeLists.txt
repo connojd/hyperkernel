@@ -16,21 +16,12 @@
 # License along with this library; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-if(${BUILD_TARGET_ARCH} STREQUAL "x86_64")
-    list(APPEND SOURCES
-        arch/intel_x64/vmexit/vmcall.cpp
-        arch/intel_x64/vmcall/domain.cpp
-        arch/intel_x64/apis.cpp
-    )
-
-elseif(${BUILD_TARGET_ARCH} STREQUAL "aarch64")
-    message(WARNING "Unimplemented")
-else()
-    message(FATAL_ERROR "Unsupported architecture")
-endif()
+list(APPEND SOURCES
+    domain.cpp
+)
 
 add_shared_library(
-    hyperkernel_hve
+    hyperkernel_domain
     SOURCES ${SOURCES}
     DEFINES SHARED_HYPERKERNEL_HVE
     DEFINES SHARED_EAPIS_HVE
@@ -40,7 +31,7 @@ add_shared_library(
 )
 
 add_static_library(
-    hyperkernel_hve
+    hyperkernel_domain
     SOURCES ${SOURCES}
     DEFINES STATIC_HYPERKERNEL_HVE
     DEFINES STATIC_EAPIS_HVE

@@ -26,6 +26,7 @@ init_project(
 
 if(${BUILD_TARGET_ARCH} STREQUAL "x86_64")
     list(APPEND SOURCES
+        arch/intel_x64/domain_factory.cpp
         arch/intel_x64/vcpu_factory.cpp
     )
 elseif(${BUILD_TARGET_ARCH} STREQUAL "aarch64")
@@ -37,5 +38,6 @@ endif()
 eapis_add_vmm_executable(
     hyperkernel_bfvmm
     LIBRARIES hyperkernel_hve
+    LIBRARIES hyperkernel_domain
     SOURCES ${SOURCES}
 )

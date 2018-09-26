@@ -33,7 +33,7 @@ int
 protected_main(const arg_list_type &args)
 {
     auto create_domain_arg = create_domain_arg_t{};
-    create_domain(&create_domain_arg);
+    std::cout << create_domain(&create_domain_arg) << '\n';
 
 //     for (auto i = 0; i < 1; i++)
 //         g_vcpus.push_back(std::make_unique<vcpu>(g_proclt->id()));

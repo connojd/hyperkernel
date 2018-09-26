@@ -53,22 +53,16 @@ public:
     /// @cond
     ///
     explicit vcpu(
-        vcpuid::type id
+        vcpuid::type id,
+        hyperkernel_vcpu_state_t *hyperkernel_vcpu_state = nullptr
     ) :
         eapis::intel_x64::vcpu(id),
         m_apis{
             vmcs(),
-            exit_handler()
+            exit_handler(),
+            hyperkernel_vcpu_state == nullptr ? & g_hyperkernel_vcpu_state : hyperkernel_vcpu_state
         }
-    {
-        exit_handler()->add_init_handler(
-            ::handler_delegate_t::create<yourmom>()
-        );
-
-        exit_handler()->add_fini_handler(
-            ::handler_delegate_t::create<yourmom>()
-        );
-    }
+    { }
 
     /// @endcond
 

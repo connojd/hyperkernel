@@ -25,11 +25,33 @@ namespace intel_x64
 
 apis::apis(
     gsl::not_null<bfvmm::intel_x64::vmcs *> vmcs,
-    gsl::not_null<bfvmm::intel_x64::exit_handler *> exit_handler
+    gsl::not_null<bfvmm::intel_x64::exit_handler *> exit_handler,
+    gsl::not_null<hyperkernel_vcpu_state_t *> hyperkernel_vcpu_state
 ) :
     m_vmcs{vmcs},
-    m_exit_handler{exit_handler}
+    m_exit_handler{exit_handler},
+
+    m_vmcall_handler{this, hyperkernel_vcpu_state},
+
+    m_vmcall_domain_handler{this, hyperkernel_vcpu_state}
 { }
+
+//==========================================================================
+// VMExit
+//==========================================================================
+
+//--------------------------------------------------------------------------
+// VMCall
+//--------------------------------------------------------------------------
+
+gsl::not_null<vmcall_handler *>
+apis::vmcall()
+{ return &m_vmcall_handler; }
+
+void
+apis::add_vmcall_handler(
+    const vmcall_handler::handler_delegate_t &d)
+{ m_vmcall_handler.add_handler(std::move(d)); }
 
 //==========================================================================
 // Resources
