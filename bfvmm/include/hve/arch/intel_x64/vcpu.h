@@ -27,6 +27,8 @@ yourmom(gsl::not_null<bfvmm::intel_x64::vmcs *> vmcs)
 {
     bfignored(vmcs);
     bffield_hex(g_rsdp);
+
+    return true;
 }
 
 namespace hyperkernel
