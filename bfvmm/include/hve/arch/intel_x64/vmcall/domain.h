@@ -51,9 +51,7 @@ using exit_handler_t = bfvmm::intel_x64::exit_handler;
 // Definitions
 // -----------------------------------------------------------------------------
 
-namespace hyperkernel
-{
-namespace intel_x64
+namespace hyperkernel::intel_x64
 {
 
 class apis;
@@ -99,7 +97,6 @@ public:
     /// @endcond
 };
 
-}
 }
 
 #endif

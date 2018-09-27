@@ -21,12 +21,11 @@
 
 #include "vmexit/vmcall.h"
 #include "vmcall/domain.h"
+#include "vmcall/vcpu.h"
 
 #include <eapis/hve/arch/intel_x64/apis.h>
 
-namespace hyperkernel
-{
-namespace intel_x64
+namespace hyperkernel::intel_x64
 {
 
 /// Hyperkernel Object
@@ -161,9 +160,9 @@ private:
     vmcall_handler m_vmcall_handler;
 
     vmcall_domain_handler m_vmcall_domain_handler;
+    vmcall_vcpu_handler m_vmcall_vcpu_handler;
 };
 
-}
 }
 
 #endif

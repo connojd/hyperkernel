@@ -26,53 +26,94 @@
 
 #include <hypercall.h>
 
+#include <bffile.h>
+#include <bfelf_loader.h>
+
+// TODO:
+//
+// The arg passed to bfexec should be a json file, and not the filename
+// itself. This way, we can store settings like the total number of vCPUs,
+// memory, etc...
+//
+
 using arg_type = std::string;
 using arg_list_type = std::vector<arg_type>;
+
+#define MAX_NUM_VCPUIDS 1
+
+struct vm_t
+{
+    struct crt_info_t crt_info;
+    struct bfelf_loader_t bfelf_loader;
+    struct bfelf_binary_t bfelf_binary;
+
+    void *entry;
+    file::binary_data binary;
+
+    uint64_t domainid;
+    uint64_t vcpuids[MAX_NUM_VCPUIDS];
+};
+
+void
+read_binary(struct vm_t &vm, const std::string &filename)
+{
+    file f;
+    vm.binary = f.read_binary(filename);
+
+    vm.bfelf_binary.file = vm.binary.get();
+    vm.bfelf_binary.file_size = vm.binary.size();
+}
+
+void
+load_binary(struct vm_t &vm)
+{
+    auto ret =
+        bfelf_load(
+            &vm.bfelf_binary,
+            1,
+            &vm.entry,
+            &vm.crt_info,
+            &vm.bfelf_loader
+        );
+
+    if (ret != BF_SUCCESS) {
+        throw std::runtime_error("failed to load ELF file");
+    }
+}
 
 int
 protected_main(const arg_list_type &args)
 {
-    bfignored(args);
+    struct vm_t vm{};
+
+    if (args.empty()) {
+        throw std::runtime_error("missing name of ELF file to load");
+    }
 
     if (ack() == 0) {
         throw std::runtime_error("hypervisor not running");
     }
 
+    read_binary(vm, args.at(0));
+    load_binary(vm);
+
     auto create_domain_arg = create_domain_arg_t{};
-    std::cout << create_domain(&create_domain_arg) << '\n';
+    vm.domainid = create_domain(&create_domain_arg);
 
-//     for (auto i = 0; i < 1; i++)
-//         g_vcpus.push_back(std::make_unique<vcpu>(g_proclt->id()));
+    uint64_t vcpuid_index = 0;
 
-//     for (const auto &arg : args)
-//         g_processes.push_back(std::make_unique<process>(arg, g_proclt->id()));
+    auto create_vcpu_arg = create_vcpu_arg_t{
+        vm.domainid
+    };
 
-//     if (!vmcall__sched_yield())
-//         throw std::runtime_error("vmcall__sched_yield failed");
+    vm.vcpuids[vcpuid_index++] = create_vcpu(&create_vcpu_arg);
 
     return EXIT_SUCCESS;
-}
-
-void
-bfexec_terminate()
-{
-    std::cerr << "FATAL ERROR: terminate called" << '\n';
-    abort();
-}
-
-void
-bfexec_new_handler()
-{
-    std::cerr << "FATAL ERROR: out of memory" << '\n';
-    abort();
 }
 
 int
 main(int argc, const char *argv[])
 {
-    std::set_terminate(bfexec_terminate);
-    std::set_new_handler(bfexec_new_handler);
-
     try {
         arg_list_type args;
         auto args_span = gsl::make_span(argv, argc);

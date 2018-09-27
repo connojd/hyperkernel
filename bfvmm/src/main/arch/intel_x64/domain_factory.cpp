@@ -17,8 +17,8 @@
 // License along with this library; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-#include <domain/domain.h>
 #include <domain/domain_factory.h>
+#include <hve/arch/intel_x64/domain.h>
 
 namespace hyperkernel
 {
@@ -27,7 +27,7 @@ std::unique_ptr<domain>
 domain_factory::make(domain::domainid_type domainid, bfobject *obj)
 {
     bfignored(obj);
-    return std::make_unique<hyperkernel::domain>(domainid);
+    return std::make_unique<hyperkernel::intel_x64::domain>(domainid);
 }
 
 }

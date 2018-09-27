@@ -33,7 +33,8 @@ apis::apis(
 
     m_vmcall_handler{this, hyperkernel_vcpu_state},
 
-    m_vmcall_domain_handler{this, hyperkernel_vcpu_state}
+    m_vmcall_domain_handler{this, hyperkernel_vcpu_state},
+    m_vmcall_vcpu_handler{this, hyperkernel_vcpu_state}
 { }
 
 //==========================================================================

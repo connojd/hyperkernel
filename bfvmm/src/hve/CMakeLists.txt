@@ -20,7 +20,9 @@ if(${BUILD_TARGET_ARCH} STREQUAL "x86_64")
     list(APPEND SOURCES
         arch/intel_x64/vmexit/vmcall.cpp
         arch/intel_x64/vmcall/domain.cpp
+        arch/intel_x64/vmcall/vcpu.cpp
         arch/intel_x64/apis.cpp
+        arch/intel_x64/domain.cpp
     )
 
 elseif(${BUILD_TARGET_ARCH} STREQUAL "aarch64")

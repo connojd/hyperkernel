@@ -26,6 +26,7 @@ init_project(
 
 list(APPEND SOURCES
     src/main.cpp
+    src/platform.cpp
 )
 
 add_executable(bfexec ${SOURCES})

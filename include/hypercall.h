@@ -21,6 +21,8 @@
 
 #include <bftypes.h>
 
+#pragma pack(push, 1)
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -36,13 +38,14 @@ uintptr_t _vmcall(uintptr_t r1, uintptr_t r2, uintptr_t r3, uintptr_t r4);
 // Opcodes
 // -----------------------------------------------------------------------------
 
-#define domain_op 0xBFC0000000000100
+#define domain_op 0xBF0C000000000100
+#define vcpu_op 0xBF0C000000000200
 
 // -----------------------------------------------------------------------------
 // Ack
 // -----------------------------------------------------------------------------
 
-uintptr_t
+inline uintptr_t
 ack()
 { return _cpuid_eax(0xBF00); }
 
@@ -55,7 +58,7 @@ ack()
 struct create_domain_arg_t {
 };
 
-uintptr_t
+inline uint64_t
 create_domain(struct create_domain_arg_t *arg)
 {
     return _vmcall(
@@ -65,5 +68,28 @@ create_domain(struct create_domain_arg_t *arg)
         0
     );
 }
+
+// -----------------------------------------------------------------------------
+// vCPU Operations
+// -----------------------------------------------------------------------------
+
+#define vcpu_op__create_vcpu 0x100
+
+struct create_vcpu_arg_t {
+    uint64_t domainid;
+};
+
+inline uintptr_t
+create_vcpu(struct create_vcpu_arg_t *arg)
+{
+    return _vmcall(
+        vcpu_op,
+        vcpu_op__create_vcpu,
+        bfrcast(uintptr_t, arg),
+        0
+    );
+}
+
+#pragma pack(pop)
 
 #endif

@@ -23,5 +23,6 @@ uintptr_t _vmcall(
 
 void _start(void)
 {
-    _vmcall(42, 0, 0, 0);
+    _vmcall(0xBF86, 0x6E, 0, 0);
+    _vmcall(0xBF86, 0xF4, 0, 0);
 }

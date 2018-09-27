@@ -24,9 +24,7 @@
 #include <hypercall.h>
 #include <domain/domain_manager.h>
 
-namespace hyperkernel
-{
-namespace intel_x64
+namespace hyperkernel::intel_x64
 {
 
 static bool
@@ -78,5 +76,4 @@ vmcall_domain_handler::vmcall_domain_handler(
     );
 }
 
-}
 }
