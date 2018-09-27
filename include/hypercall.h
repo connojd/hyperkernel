@@ -19,19 +19,38 @@
 #ifndef HYPERCALL_H
 #define HYPERCALL_H
 
-extern "C" uintptr_t _vmcall(uintptr_t r1, uintptr_t r2, uintptr_t r3, uintptr_t r4) noexcept;
+#include <bftypes.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+uint32_t _cpuid_eax(uint32_t val);
+uintptr_t _vmcall(uintptr_t r1, uintptr_t r2, uintptr_t r3, uintptr_t r4);
+
+#ifdef __cplusplus
+}
+#endif
 
 // -----------------------------------------------------------------------------
 // Opcodes
 // -----------------------------------------------------------------------------
 
-constexpr auto domain_op = 0xBFC0000000000100;
+#define domain_op 0xBFC0000000000100
+
+// -----------------------------------------------------------------------------
+// Ack
+// -----------------------------------------------------------------------------
+
+uintptr_t
+ack()
+{ return _cpuid_eax(0xBF00); }
 
 // -----------------------------------------------------------------------------
 // Domain Operations
 // -----------------------------------------------------------------------------
 
-constexpr auto domain_op__create_domain = 0x100;
+#define domain_op__create_domain 0x100
 
 struct create_domain_arg_t {
 };
@@ -42,7 +61,7 @@ create_domain(struct create_domain_arg_t *arg)
     return _vmcall(
         domain_op,
         domain_op__create_domain,
-        reinterpret_cast<uintptr_t>(arg),
+        bfrcast(uintptr_t, arg),
         0
     );
 }

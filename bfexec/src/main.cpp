@@ -24,7 +24,7 @@
 #include <vector>
 #include <iostream>
 
-#include "../../include/hypercall.h"
+#include <hypercall.h>
 
 using arg_type = std::string;
 using arg_list_type = std::vector<arg_type>;
@@ -32,6 +32,12 @@ using arg_list_type = std::vector<arg_type>;
 int
 protected_main(const arg_list_type &args)
 {
+    bfignored(args);
+
+    if (ack() == 0) {
+        throw std::runtime_error("hypervisor not running");
+    }
+
     auto create_domain_arg = create_domain_arg_t{};
     std::cout << create_domain(&create_domain_arg) << '\n';
 

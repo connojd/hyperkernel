@@ -16,11 +16,12 @@
 // License along with this library; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-extern "C" uintptr_t _vmcall(uintptr_t r1, uintptr_t r2, uintptr_t r3, uintptr_t r4) noexcept;
+#include <stdint.h>
 
-int
-main(int argc, const char *argv[])
+uintptr_t _vmcall(
+    uintptr_t r1, uintptr_t r2, uintptr_t r3, uintptr_t r4);
+
+void _start(void)
 {
     _vmcall(42, 0, 0, 0);
-    return 0;
 }

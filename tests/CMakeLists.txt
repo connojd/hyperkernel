@@ -20,9 +20,13 @@ cmake_minimum_required(VERSION 3.6)
 project(hyperkernel_tests C CXX)
 
 include(${SOURCE_CMAKE_DIR}/project.cmake)
-init_project()
+init_project(
+    INCLUDES ${CMAKE_CURRENT_LIST_DIR}/../include
+)
 
-add_executable(test_hyperkernel_basic test_hyperkernel_basic.cpp)
-target_link_static_libraries(test_hyperkernel_basic bfintrinsics)
+add_executable(test_hyperkernel_basic test_hyperkernel_basic.c vmcall.asm)
+
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ffreestanding -nostartfiles -nostdlib")
+set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -ffreestanding -nostartfiles -nostdlib")
 
 install(TARGETS test_hyperkernel_basic DESTINATION bin)
