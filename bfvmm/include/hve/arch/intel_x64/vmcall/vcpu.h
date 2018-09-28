@@ -16,9 +16,10 @@
 // License along with this library; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-#ifndef VMCALL_DOMAIN_INTEL_X64_HYPERKERNEL_H
-#define VMCALL_DOMAIN_INTEL_X64_HYPERKERNEL_H
+#ifndef VMCALL_VCPU_INTEL_X64_HYPERKERNEL_H
+#define VMCALL_VCPU_INTEL_X64_HYPERKERNEL_H
 
+#include <bfvmm/hve/arch/intel_x64/vcpu.h>
 #include <hve/arch/intel_x64/vmexit/vmcall.h>
 
 // -----------------------------------------------------------------------------
@@ -55,12 +56,13 @@ namespace hyperkernel::intel_x64
 {
 
 class apis;
+class hyperkernel_vcpu_state_t;
 
 /// Interrupt window
 ///
 /// Provides an interface for registering handlers of the interrupt-window exit.
 ///
-class EXPORT_HYPERKERNEL_HVE vmcall_domain_handler
+class EXPORT_HYPERKERNEL_HVE vmcall_vcpu_handler
 {
 public:
 
@@ -72,7 +74,7 @@ public:
     /// @param apis the apis object for this interrupt window handler
     /// @param hyperkernel_vcpu_state a pointer to the vCPUs global state
     ///
-    vmcall_domain_handler(
+    vmcall_vcpu_handler(
         gsl::not_null<apis *> apis);
 
     /// Destructor
@@ -80,17 +82,17 @@ public:
     /// @expects
     /// @ensures
     ///
-    ~vmcall_domain_handler() = default;
+    ~vmcall_vcpu_handler() = default;
 
 public:
 
     /// @cond
 
-    vmcall_domain_handler(vmcall_domain_handler &&) = default;
-    vmcall_domain_handler &operator=(vmcall_domain_handler &&) = default;
+    vmcall_vcpu_handler(vmcall_vcpu_handler &&) = default;
+    vmcall_vcpu_handler &operator=(vmcall_vcpu_handler &&) = default;
 
-    vmcall_domain_handler(const vmcall_domain_handler &) = delete;
-    vmcall_domain_handler &operator=(const vmcall_domain_handler &) = delete;
+    vmcall_vcpu_handler(const vmcall_vcpu_handler &) = delete;
+    vmcall_vcpu_handler &operator=(const vmcall_vcpu_handler &) = delete;
 
     /// @endcond
 };

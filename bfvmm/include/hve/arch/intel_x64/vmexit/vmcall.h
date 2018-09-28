@@ -47,7 +47,6 @@ namespace intel_x64
 {
 
 class apis;
-class hyperkernel_vcpu_state_t;
 
 /// Interrupt window
 ///
@@ -57,29 +56,13 @@ class EXPORT_HYPERKERNEL_HVE vmcall_handler : public eapis::intel_x64::base
 {
 public:
 
-    ///
-    /// Info
-    ///
-    /// This struct is created by vmcall_handler::handle before being
-    /// passed to each registered handler.
-    ///
-    struct info_t {
-
-        /// Ignore advance (out)
-        ///
-        /// If true, do not advance the guest's instruction pointer (i.e. because
-        /// your handler (that returns true) already did).
-        ///
-        bool ignore_advance{false};
-    };
-
     /// Handler delegate type
     ///
     /// The type of delegate clients must use when registering
     /// handlers
     ///
     using handler_delegate_t =
-        delegate<bool(gsl::not_null<vmcs_t *>, info_t &)>;
+        delegate<bool(gsl::not_null<vmcs_t *>)>;
 
     /// Constructor
     ///
@@ -90,8 +73,7 @@ public:
     /// @param hyperkernel_vcpu_state a pointer to the vCPUs global state
     ///
     vmcall_handler(
-        gsl::not_null<apis *> apis,
-        gsl::not_null<hyperkernel_vcpu_state_t *> hyperkernel_vcpu_state);
+        gsl::not_null<apis *> apis);
 
     /// Destructor
     ///

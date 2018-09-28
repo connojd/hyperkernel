@@ -19,8 +19,10 @@
 #ifndef DOMAIN_INTEL_X64_HYPERKERNEL_H
 #define DOMAIN_INTEL_X64_HYPERKERNEL_H
 
-#include <domain/domain.h>
-#include <eapis/hve/arch/intel_x64/ept.h>
+#include "../../../domain/domain.h"
+
+#include <eapis/hve/arch/intel_x64/apis.h>
+#include <bfvmm/memory_manager/arch/x64/cr3.h>
 
 // -----------------------------------------------------------------------------
 // Exports
@@ -65,9 +67,79 @@ public:
     ///
     ~domain() = default;
 
+    /// Get EAPIs vCPU Global State
+    ///
+    /// Return a pointer to the global vCPU state needed by the EAPIs.
+    /// A pointer for this structure is needed for each vCPU that is
+    /// created.
+    ///
+    gsl::not_null<eapis::intel_x64::eapis_vcpu_global_state_t*>
+    eapis_vcpu_global_state()
+    { return &m_eapis_vcpu_global_state; }
+
+    /// Map 4k GPA to HPA
+    ///
+    /// Maps a 4k guest physical address to a 4k host physical address
+    /// using EPT
+    ///
+    /// @expects
+    /// @ensures
+    ///
+    /// @param virt_addr the virtual address to map from
+    /// @param phys_addr the physical address to map to
+    /// @param attr the map permissions
+    /// @param cache the memory type for the mapping
+    ///
+    void map_4k(uintptr_t virt_addr, uintptr_t phys_addr);
+
+    uintptr_t cr3()
+    { return m_cr3_map.cr3(); }
+
+    uintptr_t pat()
+    { return m_cr3_map.pat(); }
+
+    uintptr_t tss_phys() const
+    { return m_tss_phys; }
+
+    uintptr_t gdt_phys() const
+    { return m_gdt_phys; }
+
+    uintptr_t idt_phys() const
+    { return m_idt_phys; }
+
+    uintptr_t tss_virt() const
+    { return m_tss_virt; }
+
+    uintptr_t gdt_virt() const
+    { return m_gdt_virt; }
+
+    uintptr_t idt_virt() const
+    { return m_idt_virt; }
+
+    gsl::not_null<bfvmm::x64::gdt *> gdt()
+    { return &m_gdt; }
+
+    gsl::not_null<bfvmm::x64::idt *> idt()
+    { return &m_idt; }
+
 private:
 
-    eapis::intel_x64::ept::mmap m_mmap;
+    bfvmm::x64::tss m_tss{};
+    bfvmm::x64::gdt m_gdt{512};
+    bfvmm::x64::idt m_idt{256};
+
+    uintptr_t m_tss_phys;
+    uintptr_t m_gdt_phys;
+    uintptr_t m_idt_phys;
+
+    uintptr_t m_tss_virt;
+    uintptr_t m_gdt_virt;
+    uintptr_t m_idt_virt;
+
+    bfvmm::x64::cr3::mmap m_cr3_map;
+    eapis::intel_x64::ept::mmap m_ept_map;
+
+    eapis::intel_x64::eapis_vcpu_global_state_t m_eapis_vcpu_global_state;
 
 public:
 
@@ -83,5 +155,18 @@ public:
 };
 
 }
+
+/// Get Domain
+///
+/// Gets a domain from the domain manager given a domain id
+///
+/// @expects
+/// @ensures
+///
+/// @return returns a pointer to the domain being queried or throws
+///     and exception.
+///
+#define get_domain(a) \
+    g_dm->get<hyperkernel::intel_x64::domain *>(a, "invalid domainid: " __FILE__)
 
 #endif

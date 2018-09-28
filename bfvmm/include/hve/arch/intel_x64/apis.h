@@ -23,35 +23,12 @@
 #include "vmcall/domain.h"
 #include "vmcall/vcpu.h"
 
+#include "domain.h"
+
 #include <eapis/hve/arch/intel_x64/apis.h>
 
 namespace hyperkernel::intel_x64
 {
-
-/// Hyperkernel Object
-///
-/// This is a generic bfobject specific to the hyperkernel that is used for
-/// constructing a vCPU.
-///
-class hyperkernel_vcpu_state_t : public eapis::intel_x64::eapis_vcpu_state_t
-{
-public:
-
-    /// Constructor
-    ///
-    /// @param eapis_vcpu_global_state a pointer to a global state struct
-    ///
-    hyperkernel_vcpu_state_t(
-        gsl::not_null<eapis::intel_x64::eapis_vcpu_global_state_t *> eapis_vcpu_global_state
-    ) :
-        eapis::intel_x64::eapis_vcpu_state_t(eapis_vcpu_global_state)
-    { }
-};
-
-/// Default vCPU State
-///
-inline hyperkernel_vcpu_state_t
-    g_hyperkernel_vcpu_state{&eapis::intel_x64::g_eapis_vcpu_global_state};
 
 /// APIs
 ///
@@ -84,7 +61,7 @@ public:
     apis(
         gsl::not_null<bfvmm::intel_x64::vmcs *> vmcs,
         gsl::not_null<bfvmm::intel_x64::exit_handler *> exit_handler,
-        gsl::not_null<hyperkernel_vcpu_state_t *> hyperkernel_vcpu_state
+        domain *domain = nullptr
     );
 
     /// Destructor
@@ -154,6 +131,7 @@ private:
 
     bfvmm::intel_x64::vmcs *m_vmcs;
     bfvmm::intel_x64::exit_handler *m_exit_handler;
+    domain *m_domain;
 
 private:
 

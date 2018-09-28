@@ -24,6 +24,47 @@ namespace hyperkernel::intel_x64
 
 domain::domain(domainid_type domainid) :
     hyperkernel::domain{domainid}
-{ }
+{
+    using namespace ::x64::access_rights;
+
+    using namespace bfvmm::x64;
+    using namespace eapis::intel_x64;
+
+    m_gdt_phys = g_mm->virtint_to_physint(m_gdt.base());
+    m_idt_phys = g_mm->virtint_to_physint(m_idt.base());
+    m_tss_phys = g_mm->virtptr_to_physint(&m_tss);
+
+    m_gdt.set(1, nullptr, 0xFFFFFFFF, ring0_cs_descriptor);
+    m_gdt.set(2, nullptr, 0xFFFFFFFF, ring0_ss_descriptor);
+    m_gdt.set(3, nullptr, 0xFFFFFFFF, ring0_fs_descriptor);
+    m_gdt.set(4, nullptr, 0xFFFFFFFF, ring0_gs_descriptor);
+    m_gdt.set(5, &m_tss, sizeof(m_tss), ring0_tr_descriptor);
+
+    cr3::identity_map_2m(
+        m_cr3_map,
+        0,
+        MAX_PHYS_ADDR
+    );
+
+    m_gdt_virt = MAX_PHYS_ADDR + 0x1000;
+    m_idt_virt = MAX_PHYS_ADDR + 0x2000;
+    m_tss_virt = MAX_PHYS_ADDR + 0x3000;
+
+    m_cr3_map.map_4k(m_gdt_virt, m_gdt_virt, cr3::mmap::attr_type::read_write);
+    m_cr3_map.map_4k(m_idt_virt, m_idt_virt, cr3::mmap::attr_type::read_write);
+    m_cr3_map.map_4k(m_tss_virt, m_tss_virt, cr3::mmap::attr_type::read_write);
+
+    m_ept_map.map_4k(m_tss_virt, m_tss_phys, ept::mmap::attr_type::read_write);
+    m_ept_map.map_4k(m_gdt_virt, m_gdt_phys, ept::mmap::attr_type::read_only);
+    m_ept_map.map_4k(m_idt_virt, m_idt_phys, ept::mmap::attr_type::read_only);
+
+    for (auto iter = m_cr3_map.mdl().begin(); iter != m_cr3_map.mdl().end(); iter++) {
+        m_ept_map.map_4k(iter->first, iter->second, ept::mmap::attr_type::read_write);
+    }
+}
+
+void
+domain::map_4k(uintptr_t virt_addr, uintptr_t phys_addr)
+{ m_ept_map.map_4k(virt_addr, phys_addr); }
 
 }

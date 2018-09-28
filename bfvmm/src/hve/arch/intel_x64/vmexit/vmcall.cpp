@@ -25,11 +25,9 @@ namespace intel_x64
 {
 
 vmcall_handler::vmcall_handler(
-    gsl::not_null<apis *> apis,
-    gsl::not_null<hyperkernel_vcpu_state_t *> hyperkernel_vcpu_state)
+    gsl::not_null<apis *> apis)
 {
     using namespace vmcs_n;
-    bfignored(hyperkernel_vcpu_state);
 
     apis->add_handler(
         exit_reason::basic_exit_reason::vmcall,
@@ -53,22 +51,13 @@ vmcall_handler::add_handler(
 bool
 vmcall_handler::handle(gsl::not_null<vmcs_t *> vmcs)
 {
-    try {
-        struct info_t info {};
-
+    guard_exceptions([&] {
         for (const auto &d : m_handlers) {
-            if (d(vmcs, info)) {
-
-                if (!info.ignore_advance) {
-                    return advance(vmcs);
-                }
-
-                return true;
+            if (d(vmcs)) {
+                return;
             }
         }
-    }
-    catch(...)
-    { }
+    });
 
     return advance(vmcs);
 }

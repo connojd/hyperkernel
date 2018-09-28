@@ -26,16 +26,19 @@ namespace intel_x64
 apis::apis(
     gsl::not_null<bfvmm::intel_x64::vmcs *> vmcs,
     gsl::not_null<bfvmm::intel_x64::exit_handler *> exit_handler,
-    gsl::not_null<hyperkernel_vcpu_state_t *> hyperkernel_vcpu_state
+    domain *domain
 ) :
     m_vmcs{vmcs},
     m_exit_handler{exit_handler},
+    m_domain{domain},
 
-    m_vmcall_handler{this, hyperkernel_vcpu_state},
+    m_vmcall_handler{this},
 
-    m_vmcall_domain_handler{this, hyperkernel_vcpu_state},
-    m_vmcall_vcpu_handler{this, hyperkernel_vcpu_state}
-{ }
+    m_vmcall_domain_handler{this},
+    m_vmcall_vcpu_handler{this}
+{
+
+}
 
 //==========================================================================
 // VMExit

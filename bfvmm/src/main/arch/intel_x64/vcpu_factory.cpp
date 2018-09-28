@@ -28,14 +28,18 @@ namespace bfvmm
 std::unique_ptr<vcpu>
 vcpu_factory::make(vcpuid::type vcpuid, bfobject *obj)
 {
-bfline
     if (obj == nullptr) {
-bfline
-        return std::make_unique<hyperkernel::intel_x64::vcpu_host>(vcpuid);
+        return
+            std::make_unique<hyperkernel::intel_x64::vcpu_host>(
+                vcpuid
+            );
     }
     else {
-bfline
-        return std::make_unique<hyperkernel::intel_x64::vcpu_guest>(vcpuid);
+        return
+            std::make_unique<hyperkernel::intel_x64::vcpu_guest>(
+                vcpuid,
+                dynamic_cast<hyperkernel::intel_x64::vcpu_guest_state_t *>(obj)
+            );
     }
 }
 
