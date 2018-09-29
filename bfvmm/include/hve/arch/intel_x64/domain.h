@@ -77,6 +77,8 @@ public:
     eapis_vcpu_global_state()
     { return &m_eapis_vcpu_global_state; }
 
+
+
     /// Map 4k GPA to HPA
     ///
     /// Maps a 4k guest physical address to a 4k host physical address
@@ -92,23 +94,14 @@ public:
     ///
     void map_4k(uintptr_t virt_addr, uintptr_t phys_addr);
 
+    eapis::intel_x64::ept::mmap &ept()
+    { return m_ept_map; }
+
     uintptr_t cr3()
     { return m_cr3_map.cr3(); }
 
     uintptr_t pat()
     { return m_cr3_map.pat(); }
-
-    uintptr_t tss_phys() const
-    { return m_tss_phys; }
-
-    uintptr_t gdt_phys() const
-    { return m_gdt_phys; }
-
-    uintptr_t idt_phys() const
-    { return m_idt_phys; }
-
-    uintptr_t tss_virt() const
-    { return m_tss_virt; }
 
     uintptr_t gdt_virt() const
     { return m_gdt_virt; }

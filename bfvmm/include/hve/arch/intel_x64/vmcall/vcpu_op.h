@@ -58,23 +58,11 @@ namespace hyperkernel::intel_x64
 class apis;
 class hyperkernel_vcpu_state_t;
 
-/// Interrupt window
-///
-/// Provides an interface for registering handlers of the interrupt-window exit.
-///
-class EXPORT_HYPERKERNEL_HVE vmcall_vcpu_handler
+class EXPORT_HYPERKERNEL_HVE vmcall_vcpu_op_handler
 {
 public:
 
-    /// Constructor
-    ///
-    /// @expects
-    /// @ensures
-    ///
-    /// @param apis the apis object for this interrupt window handler
-    /// @param hyperkernel_vcpu_state a pointer to the vCPUs global state
-    ///
-    vmcall_vcpu_handler(
+    vmcall_vcpu_op_handler(
         gsl::not_null<apis *> apis);
 
     /// Destructor
@@ -82,17 +70,17 @@ public:
     /// @expects
     /// @ensures
     ///
-    ~vmcall_vcpu_handler() = default;
+    ~vmcall_vcpu_op_handler() = default;
 
 public:
 
     /// @cond
 
-    vmcall_vcpu_handler(vmcall_vcpu_handler &&) = default;
-    vmcall_vcpu_handler &operator=(vmcall_vcpu_handler &&) = default;
+    vmcall_vcpu_op_handler(vmcall_vcpu_op_handler &&) = default;
+    vmcall_vcpu_op_handler &operator=(vmcall_vcpu_op_handler &&) = default;
 
-    vmcall_vcpu_handler(const vmcall_vcpu_handler &) = delete;
-    vmcall_vcpu_handler &operator=(const vmcall_vcpu_handler &) = delete;
+    vmcall_vcpu_op_handler(const vmcall_vcpu_op_handler &) = delete;
+    vmcall_vcpu_op_handler &operator=(const vmcall_vcpu_op_handler &) = delete;
 
     /// @endcond
 };

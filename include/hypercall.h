@@ -56,8 +56,9 @@ uintptr_t _vmcall(uintptr_t r1, uintptr_t r2, uintptr_t r3, uintptr_t r4) NOEXCE
 // Opcodes
 // -----------------------------------------------------------------------------
 
-#define __domain_op 0xBF0C000000000100
-#define __vcpu_op 0xBF0C000000000200
+#define __domain_op 0xBF5C000000000100
+#define __vcpu_op 0xBF5C000000000200
+#define __bf86_op 0xBF86000000000100
 
 // -----------------------------------------------------------------------------
 // Ack
@@ -95,6 +96,7 @@ struct domain_op__destroy_domain_arg_t {
 struct domain_op__map_4k_arg_t {
     domainid_t domainid;
     uintptr_t virt_addr;
+    uintptr_t exec_addr;
 };
 
 inline domainid_t
@@ -198,6 +200,13 @@ vcpu_op__run_vcpu(struct vcpu_op__run_vcpu_arg_t *arg)
         0
     );
 }
+
+// -----------------------------------------------------------------------------
+// Bareflank x86 Instruction Emulation Operations
+// -----------------------------------------------------------------------------
+
+#define __bf86_op__emulate_outb 0x6E
+#define __bf86_op__emulate_hlt 0xF4
 
 #pragma pack(pop)
 

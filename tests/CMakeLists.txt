@@ -28,5 +28,6 @@ add_executable(test_hyperkernel_basic test_hyperkernel_basic.c vmcall.asm)
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ffreestanding -nostartfiles -nostdlib")
 set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -ffreestanding -nostartfiles -nostdlib")
+# set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -ffreestanding -nostartfiles -nostdlib -Wl,-z,max-page-size=4096 -Wl,-z,common-page-size=4096")
 
 install(TARGETS test_hyperkernel_basic DESTINATION bin)

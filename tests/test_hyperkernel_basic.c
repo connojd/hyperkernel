@@ -21,8 +21,10 @@
 uintptr_t _vmcall(
     uintptr_t r1, uintptr_t r2, uintptr_t r3, uintptr_t r4);
 
+const char *msg = "Hello from VM\n";
+
 void _start(void)
 {
-    _vmcall(0xBF86, 0x6E, 0, 0);
-    _vmcall(0xBF86, 0xF4, 0, 0);
+    _vmcall(0xBF86000000000100, 0x6E, (uintptr_t)msg, 14);
+    _vmcall(0xBF86000000000100, 0xF4, 0, 0);
 }

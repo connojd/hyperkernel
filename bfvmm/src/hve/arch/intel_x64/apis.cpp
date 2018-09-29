@@ -34,10 +34,11 @@ apis::apis(
 
     m_vmcall_handler{this},
 
-    m_vmcall_domain_handler{this},
-    m_vmcall_vcpu_handler{this}
+    m_vmcall_domain_op_handler{this},
+    m_vmcall_vcpu_op_handler{this},
+    m_vmcall_bf86_op_handler{this}
 {
-
+    g_domain = domain;
 }
 
 //==========================================================================

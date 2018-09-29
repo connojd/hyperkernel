@@ -66,8 +66,8 @@ read_binary(struct vm_t *vm, const char *filename)
         exit(EXIT_FAILURE);
     }
 
-    size = ftell(vm->file);
-    if (size == -1) {
+    size = (uint64_t)ftell(vm->file);
+    if (size == (uint64_t)-1) {
         fprintf(stderr, "ftell failed: %s\n", strerror(errno));
         exit(EXIT_FAILURE);
     }
@@ -90,6 +90,7 @@ read_binary(struct vm_t *vm, const char *filename)
 
     vm->bfelf_binary.file = data;
     vm->bfelf_binary.file_size = size;
+    vm->bfelf_binary.exec_virt = (char *)0x100000;
 }
 
 void
@@ -133,11 +134,12 @@ create_domain(struct vm_t *vm)
 }
 
 void
-map_4k(struct vm_t *vm, const char *page)
+map_4k(struct vm_t *vm, const char *page, uintptr_t exec)
 {
     struct domain_op__map_4k_arg_t domain_op__map_4k_arg = {
         vm->domainid,
-        (uintptr_t) page
+        (uintptr_t) page,
+        exec
     };
 
     status_t ret = domain_op__map_4k(&domain_op__map_4k_arg);
@@ -152,7 +154,7 @@ map_binary(struct vm_t *vm)
 {
     uintptr_t index;
 
-    if (mlock(vm->bfelf_binary.file, vm->bfelf_binary.file_size) != 0) {
+    if (mlock(vm->bfelf_binary.exec, vm->bfelf_binary.exec_size) != 0) {
         fprintf(stderr, "mlock failed: %s\n", strerror(errno));
         exit(EXIT_FAILURE);
     }
@@ -162,12 +164,13 @@ map_binary(struct vm_t *vm)
         exit(EXIT_FAILURE);
     }
 
-    for (index = 0; index < vm->bfelf_binary.file_size; index += 0x1000) {
-        map_4k(vm, vm->bfelf_binary.file + index);
+    for (index = 0; index < STACK_SIZE; index += 0x1000) {
+        map_4k(vm, (char *)vm->stack + index, 0x10000 + index);
     }
 
-    for (index = 0; index < STACK_SIZE; index += 0x1000) {
-        map_4k(vm, (char *)vm->stack + index);
+    for (index = 0; index < vm->bfelf_binary.exec_size; index += 0x1000) {
+        // printf("map_4k: %lx   %lx\n", (uintptr_t)(vm->bfelf_binary.exec + index), 0x100000 + index);
+        map_4k(vm, vm->bfelf_binary.exec + index, 0x100000 + index);
     }
 }
 
@@ -195,11 +198,12 @@ run_vcpu(struct vm_t *vm)
     struct vcpu_op__run_vcpu_arg_t vcpu_op__run_vcpu_arg = {
         vm->vcpuid,
         (uintptr_t)vm->entry,
-        (uintptr_t)vm->stack
+        // (uintptr_t)vm->stack
+        0x10000 + STACK_SIZE - 1
     };
 
-    vm->vcpuid = vcpu_op__run_vcpu(&vcpu_op__run_vcpu_arg);
-    if (vm->vcpuid == INVALID_VCPUID) {
+    status_t ret = vcpu_op__run_vcpu(&vcpu_op__run_vcpu_arg);
+    if (ret == FAILURE) {
         fprintf(stderr, "run_vcpu failed\n");
         exit(EXIT_FAILURE);
     }
@@ -212,6 +216,8 @@ run_vcpu(struct vm_t *vm)
 int
 main(int argc, const char *argv[])
 {
+    bfignored(argc);
+
     struct vm_t vm;
     memset(&vm, 0, sizeof(vm));
 
@@ -221,6 +227,8 @@ main(int argc, const char *argv[])
 
     read_binary(&vm, argv[1]);
     load_binary(&vm);
+
+        fprintf(stderr, "entry: %p\n", vm.entry);
 
     create_domain(&vm);
     map_binary(&vm);

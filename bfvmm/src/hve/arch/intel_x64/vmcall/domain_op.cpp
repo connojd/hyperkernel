@@ -17,77 +17,61 @@
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 #include <bfdebug.h>
+
 #include <hypercall.h>
-
-#include <bfvmm/vcpu/vcpu_manager.h>
-#include <bfvmm/memory_manager/arch/x64/unique_map.h>
-
 #include <domain/domain_manager.h>
-
 #include <hve/arch/intel_x64/apis.h>
-#include <hve/arch/intel_x64/vcpu_guest.h>
-#include <hve/arch/intel_x64/vmcall/vcpu.h>
+
+#include <bfvmm/memory_manager/arch/x64/unique_map.h>
 
 namespace hyperkernel::intel_x64
 {
 
 static bool
-create_vcpu(
+create_domain(
     gsl::not_null<vmcs_t *> vmcs)
 {
     guard_exceptions([&] {
-
-        auto map =
-            bfvmm::x64::make_unique_map<vcpu_op__create_vcpu_arg_t>(
-                vmcs->save_state()->rcx,
-                vmcs_n::guest_cr3::get(),
-                sizeof(vcpu_op__create_vcpu_arg_t)
-            );
-
-        vcpu_guest_state_t vcpu_guest_state {
-            get_domain(map->domainid)
-        };
-
-        vmcs->save_state()->rax = bfvmm::vcpu::generate_vcpuid();
-        g_vcm->create(vmcs->save_state()->rax, &vcpu_guest_state);
+        vmcs->save_state()->rax = domain::generate_domainid();
+        g_dm->create(vmcs->save_state()->rax, nullptr);
     },
     [&] {
-        vmcs->save_state()->rax = vcpuid::invalid;
+        vmcs->save_state()->rax = invalid_domainid;
     });
 
-    vmcs->load();
     return true;
 }
 
 static bool
-run_vcpu(
+map_4k(
     gsl::not_null<vmcs_t *> vmcs)
 {
-    using namespace ::intel_x64::vmcs;
-
     guard_exceptions([&] {
 
         auto map =
-            bfvmm::x64::make_unique_map<vcpu_op__run_vcpu_arg_t>(
+            bfvmm::x64::make_unique_map<domain_op__map_4k_arg_t>(
                 vmcs->save_state()->rcx,
                 vmcs_n::guest_cr3::get(),
-                sizeof(vcpu_op__run_vcpu_arg_t)
+                sizeof(domain_op__map_4k_arg_t)
             );
 
-        auto vcpu = get_guest_vcpu(map->vcpuid);
-        vcpu->load();
+        auto phys_addr =
+            bfvmm::x64::virt_to_phys_with_cr3(
+                map->virt_addr,
+                vmcs_n::guest_cr3::get()
+            );
 
-        guest_rip::set(map->rip);
-        guest_rsp::set(map->rsp);
+        if (map->exec_addr == 0x0000000000301000) {
+            get_domain(map->domainid)->map_4k(map->exec_addr, phys_addr);
+        }
 
-        vcpu->launch();
+        get_domain(map->domainid)->map_4k(map->exec_addr, phys_addr);
         vmcs->save_state()->rax = SUCCESS;
     },
     [&] {
-        vmcs->save_state()->rax = SUCCESS;
+        vmcs->save_state()->rax = FAILURE;
     });
 
-    vmcs->load();
     return true;
 }
 
@@ -95,25 +79,25 @@ static bool
 dispatch(
     gsl::not_null<vmcs_t *> vmcs)
 {
-    if (vmcs->save_state()->rax != __vcpu_op) {
+    if (vmcs->save_state()->rax != __domain_op) {
         return false;
     }
 
     switch(vmcs->save_state()->rbx) {
-        case __vcpu_op__create_vcpu:
-            return create_vcpu(vmcs);
+        case __domain_op__create_domain:
+            return create_domain(vmcs);
 
-        case __vcpu_op__run_vcpu:
-            return run_vcpu(vmcs);
+        case __domain_op__map_4k:
+            return map_4k(vmcs);
 
         default:
             break;
     };
 
-    throw std::runtime_error("unknown vcpu opcode");
+    throw std::runtime_error("unknown domain opcode");
 }
 
-vmcall_vcpu_handler::vmcall_vcpu_handler(
+vmcall_domain_op_handler::vmcall_domain_op_handler(
     gsl::not_null<apis *> apis)
 {
     using namespace vmcs_n;

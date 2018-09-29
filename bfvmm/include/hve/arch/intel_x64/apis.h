@@ -20,12 +20,17 @@
 #define APIS_INTEL_X64_HYPERKERNEL_H
 
 #include "vmexit/vmcall.h"
-#include "vmcall/domain.h"
-#include "vmcall/vcpu.h"
+
+#include "vmcall/domain_op.h"
+#include "vmcall/vcpu_op.h"
+#include "vmcall/bf86_op.h"
 
 #include "domain.h"
 
 #include <eapis/hve/arch/intel_x64/apis.h>
+
+inline vmcs_t *g_vmcs;
+inline hyperkernel::intel_x64::domain *g_domain;
 
 namespace hyperkernel::intel_x64
 {
@@ -137,8 +142,9 @@ private:
 
     vmcall_handler m_vmcall_handler;
 
-    vmcall_domain_handler m_vmcall_domain_handler;
-    vmcall_vcpu_handler m_vmcall_vcpu_handler;
+    vmcall_domain_op_handler m_vmcall_domain_op_handler;
+    vmcall_vcpu_op_handler m_vmcall_vcpu_op_handler;
+    vmcall_bf86_op_handler m_vmcall_bf86_op_handler;
 };
 
 }
