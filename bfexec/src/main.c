@@ -313,11 +313,11 @@ main(int argc, const char *argv[])
         return EXIT_FAILURE;
     }
 
-    ret = run_vcpu(&vm);
-    if (ret != SUCCESS) {
-        BFALERT("run_vcpu failed\n");
-        return EXIT_FAILURE;
-    }
+    // ret = run_vcpu(&vm);
+    // if (ret != SUCCESS) {
+    //     BFALERT("run_vcpu failed\n");
+    //     return EXIT_FAILURE;
+    // }
 
     ret = hlt_vcpu(&vm);
     if (ret != SUCCESS) {

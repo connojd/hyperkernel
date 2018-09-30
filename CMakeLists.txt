@@ -63,7 +63,7 @@ userspace_extension(
     DEPENDS bfintrinsics
 )
 
-userspace_extension(
+vmm_extension(
     tests
     SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/tests
     DEPENDS bfintrinsics

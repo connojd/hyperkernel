@@ -22,13 +22,13 @@ const char *msg = "Hello from VM\n";
 
 void _start(void)
 {
-    int i = 0;
-    char c = 0;
+    // int i = 0;
+    // char c = 0;
 
-    do {
-        __bf86_op__emulate_outb(c = msg[i++]);
-    }
-    while (c != 0);
+    // do {
+    //     __bf86_op__emulate_outb(c = msg[i++]);
+    // }
+    // while (c != 0);
 
     __bf86_op__emulate_hlt();
 }
