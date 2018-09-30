@@ -19,33 +19,7 @@
 #ifndef VMCALL_BF86_INTEL_X64_HYPERKERNEL_H
 #define VMCALL_BF86_INTEL_X64_HYPERKERNEL_H
 
-#include <hve/arch/intel_x64/vmexit/vmcall.h>
-
-// -----------------------------------------------------------------------------
-// Exports
-// -----------------------------------------------------------------------------
-
-#include <bfexports.h>
-
-#ifndef STATIC_HYPERKERNEL_HVE
-#ifdef SHARED_HYPERKERNEL_HVE
-#define EXPORT_HYPERKERNEL_HVE EXPORT_SYM
-#else
-#define EXPORT_HYPERKERNEL_HVE IMPORT_SYM
-#endif
-#else
-#define EXPORT_HYPERKERNEL_HVE
-#endif
-
-// -----------------------------------------------------------------------------
-// Aliases
-// -----------------------------------------------------------------------------
-
-#include <bfvmm/hve/arch/intel_x64/vmcs.h>
-#include <bfvmm/hve/arch/intel_x64/exit_handler.h>
-
-using vmcs_t = bfvmm::intel_x64::vmcs;
-using exit_handler_t = bfvmm::intel_x64::exit_handler;
+#include "base.h"
 
 // -----------------------------------------------------------------------------
 // Definitions
@@ -53,8 +27,6 @@ using exit_handler_t = bfvmm::intel_x64::exit_handler;
 
 namespace hyperkernel::intel_x64
 {
-
-class apis;
 
 class EXPORT_HYPERKERNEL_HVE vmcall_bf86_op_handler
 {
@@ -69,6 +41,17 @@ public:
     /// @ensures
     ///
     ~vmcall_bf86_op_handler() = default;
+
+private:
+
+    uint64_t bf86_op__emulate_outb(gsl::not_null<vmcs_t *> vmcs);
+    uint64_t bf86_op__emulate_hlt(gsl::not_null<vmcs_t *> vmcs);
+
+    bool dispatch(gsl::not_null<vmcs_t *> vmcs);
+
+private:
+
+    apis *m_apis;
 
 public:
 

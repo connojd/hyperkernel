@@ -19,6 +19,7 @@
 #ifndef APIS_INTEL_X64_HYPERKERNEL_H
 #define APIS_INTEL_X64_HYPERKERNEL_H
 
+#include "vmexit/fault.h"
 #include "vmexit/vmcall.h"
 
 #include "vmcall/domain_op.h"
@@ -28,9 +29,6 @@
 #include "domain.h"
 
 #include <eapis/hve/arch/intel_x64/apis.h>
-
-inline vmcs_t *g_vmcs;
-inline hyperkernel::intel_x64::domain *g_domain;
 
 namespace hyperkernel::intel_x64
 {
@@ -106,6 +104,14 @@ public:
     VIRTUAL void add_vmcall_handler(
         const vmcall_handler::handler_delegate_t &d);
 
+    //--------------------------------------------------------------------------
+    // Parent VMCS
+    //--------------------------------------------------------------------------
+
+    VIRTUAL void set_parent_vmcs(gsl::not_null<vmcs_t *> vmcs);
+
+    VIRTUAL void resume_parent_vmcs(uint64_t status);
+
     //==========================================================================
     // Resources
     //==========================================================================
@@ -140,6 +146,9 @@ private:
 
 private:
 
+    vmcs_t *m_parent_vmcs;
+
+    fault_handler m_fault_handler;
     vmcall_handler m_vmcall_handler;
 
     vmcall_domain_op_handler m_vmcall_domain_op_handler;

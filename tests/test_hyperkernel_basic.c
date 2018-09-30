@@ -16,15 +16,19 @@
 // License along with this library; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-#include <stdint.h>
-
-uintptr_t _vmcall(
-    uintptr_t r1, uintptr_t r2, uintptr_t r3, uintptr_t r4);
+#include <hypercall.h>
 
 const char *msg = "Hello from VM\n";
 
 void _start(void)
 {
-    _vmcall(0xBF86000000000100, 0x6E, (uintptr_t)msg, 14);
-    _vmcall(0xBF86000000000100, 0xF4, 0, 0);
+    int i = 0;
+    char c = 0;
+
+    do {
+        __bf86_op__emulate_outb(c = msg[i++]);
+    }
+    while (c != 0);
+
+    __bf86_op__emulate_hlt();
 }

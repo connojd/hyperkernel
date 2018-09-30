@@ -43,13 +43,27 @@ struct vm_t
     uint64_t vcpuid;
 
     FILE *file;
+    void *stack_buffer;
 };
+
+#define STACK_ADDR 0x200000
+#define ENTRY_ADDR 0x400000
+
+// -----------------------------------------------------------------------------
+// Ack
+// -----------------------------------------------------------------------------
+
+uint32_t _cpuid_eax(uint32_t val) NOEXCEPT;
+
+inline uint64_t
+ack()
+{ return _cpuid_eax(0xBF00); }
 
 /* -------------------------------------------------------------------------- */
 /* ELF File Functions                                                         */
 /* -------------------------------------------------------------------------- */
 
-void
+status_t
 read_binary(struct vm_t *vm, const char *filename)
 {
     char *data;
@@ -57,156 +71,205 @@ read_binary(struct vm_t *vm, const char *filename)
 
     vm->file = fopen(filename, "rb");
     if (vm->file == 0) {
-        fprintf(stderr, "failed to open: %s\n", filename);
-        exit(EXIT_FAILURE);
+        BFALERT("failed to open: %s\n", filename);
+        return FAILURE;
     }
 
     if (fseek(vm->file, 0, SEEK_END) != 0) {
-        fprintf(stderr, "fseek failed: %s\n", strerror(errno));
-        exit(EXIT_FAILURE);
+        BFALERT("fseek failed: %s\n", strerror(errno));
+        return FAILURE;
     }
 
     size = (uint64_t)ftell(vm->file);
     if (size == (uint64_t)-1) {
-        fprintf(stderr, "ftell failed: %s\n", strerror(errno));
-        exit(EXIT_FAILURE);
+        BFALERT("ftell failed: %s\n", strerror(errno));
+        return FAILURE;
     }
 
     if (fseek(vm->file, 0, SEEK_SET) != 0) {
-        fprintf(stderr, "fseek failed: %s\n", strerror(errno));
-        exit(EXIT_FAILURE);
+        BFALERT("fseek failed: %s\n", strerror(errno));
+        return FAILURE;
     }
 
     data = (char *)aligned_alloc(0x1000, size);
     if (data == 0) {
-        fprintf(stderr, "malloc failed: %s\n", strerror(errno));
-        exit(EXIT_FAILURE);
+        BFALERT("malloc failed: %s\n", strerror(errno));
+        return FAILURE;
     }
 
     if (fread(data, 1, size, vm->file) != size) {
-        fprintf(stderr, "fread failed to read entire file: %s\n", strerror(errno));
-        exit(EXIT_FAILURE);
+        BFALERT("fread failed to read entire file: %s\n", strerror(errno));
+        return FAILURE;
     }
 
     vm->bfelf_binary.file = data;
     vm->bfelf_binary.file_size = size;
-    vm->bfelf_binary.exec_virt = (char *)0x100000;
+
+    vm->stack = (void *)(STACK_ADDR + STACK_SIZE - 1);
+    vm->bfelf_binary.exec_virt = (void *)ENTRY_ADDR;
+
+    return SUCCESS;
 }
 
-void
+status_t
 load_binary(struct vm_t *vm)
 {
-    status_t ret =
-        bfelf_load(
-            &vm->bfelf_binary,
-            1,
-            &vm->entry,
-            &vm->crt_info,
-            &vm->bfelf_loader
+    status_t ret;
+    uint64_t index;
+
+    ret = bfelf_load(&vm->bfelf_binary, 1, &vm->entry, &vm->crt_info, &vm->bfelf_loader);
+    if (ret != BF_SUCCESS) {
+        BFALERT("bfelf_load: 0x%016" PRIx64 "\n", ret);
+        return FAILURE;
+    }
+
+    vm->stack_buffer = platform_alloc_rw(STACK_SIZE);
+    if (vm->stack_buffer == 0) {
+        BFALERT("malloc failed: %s\n", strerror(errno));
+        return FAILURE;
+    }
+
+    if (mlock(vm->bfelf_binary.exec, vm->bfelf_binary.exec_size) != 0) {
+        BFALERT("mlock failed: %s\n", strerror(errno));
+        return FAILURE;
+    }
+
+    if (mlock(vm->stack_buffer, STACK_SIZE) != 0) {
+        BFALERT("mlock failed: %s\n", strerror(errno));
+        return FAILURE;
+    }
+
+    for (index = 0; index < STACK_SIZE; index += 0x1000) {
+        ret = __domain_op__map_md(
+            vm->domainid, (uint64_t)vm->stack_buffer + index, STACK_ADDR + index
         );
 
-    if (ret != BF_SUCCESS) {
-        fprintf(stderr, "bfelf_load: 0x%016" PRIx64 "\n", ret);
-        exit(EXIT_FAILURE);
+        if (ret != SUCCESS) {
+            BFALERT("__domain_op__map_md failed\n");
+            return FAILURE;
+        }
     }
 
-    vm->stack = aligned_alloc(0x1000, STACK_SIZE);
-    if (vm->stack == 0) {
-        fprintf(stderr, "malloc failed: %s\n", strerror(errno));
-        exit(EXIT_FAILURE);
+    for (index = 0; index < vm->bfelf_binary.exec_size; index += 0x1000) {
+        ret = __domain_op__map_md(
+            vm->domainid, (uint64_t)vm->bfelf_binary.exec + index, ENTRY_ADDR + index
+        );
+
+        if (ret != SUCCESS) {
+            BFALERT("__domain_op__map_md failed\n");
+            return FAILURE;
+        }
     }
+
+    ret = __domain_op__map_commit(vm->domainid);
+    if (ret != SUCCESS) {
+        BFALERT("__domain_op__map_commit failed\n");
+        return FAILURE;
+    }
+
+    return SUCCESS;
 }
 
 /* -------------------------------------------------------------------------- */
 /* Domain Functions                                                           */
 /* -------------------------------------------------------------------------- */
 
-void
+status_t
 create_domain(struct vm_t *vm)
 {
-    struct domain_op__create_domain_arg_t domain_op__create_domain_arg;
-
-    vm->domainid = domain_op__create_domain(&domain_op__create_domain_arg);
+    vm->domainid = __domain_op__create_domain();
     if (vm->domainid == INVALID_DOMAINID) {
-        fprintf(stderr, "create_domain failed\n");
-        exit(EXIT_FAILURE);
+        BFALERT("__domain_op__create_domain failed\n");
+        return FAILURE;
     }
+
+    return SUCCESS;
 }
 
-void
-map_4k(struct vm_t *vm, const char *page, uintptr_t exec)
+status_t
+destroy_domain(struct vm_t *vm)
 {
-    struct domain_op__map_4k_arg_t domain_op__map_4k_arg = {
-        vm->domainid,
-        (uintptr_t) page,
-        exec
-    };
+    status_t ret;
 
-    status_t ret = domain_op__map_4k(&domain_op__map_4k_arg);
+    ret = __domain_op__destroy_domain(vm->domainid);
     if (ret != SUCCESS) {
-        fprintf(stderr, "map_4k failed\n");
-        exit(EXIT_FAILURE);
-    }
-}
-
-void
-map_binary(struct vm_t *vm)
-{
-    uintptr_t index;
-
-    if (mlock(vm->bfelf_binary.exec, vm->bfelf_binary.exec_size) != 0) {
-        fprintf(stderr, "mlock failed: %s\n", strerror(errno));
-        exit(EXIT_FAILURE);
+        BFALERT("__domain_op__destroy_domain failed\n");
+        return FAILURE;
     }
 
-    if (mlock(vm->stack, STACK_SIZE) != 0) {
-        fprintf(stderr, "mlock failed: %s\n", strerror(errno));
-        exit(EXIT_FAILURE);
-    }
-
-    for (index = 0; index < STACK_SIZE; index += 0x1000) {
-        map_4k(vm, (char *)vm->stack + index, 0x10000 + index);
-    }
-
-    for (index = 0; index < vm->bfelf_binary.exec_size; index += 0x1000) {
-        // printf("map_4k: %lx   %lx\n", (uintptr_t)(vm->bfelf_binary.exec + index), 0x100000 + index);
-        map_4k(vm, vm->bfelf_binary.exec + index, 0x100000 + index);
-    }
+    return SUCCESS;
 }
 
 /* -------------------------------------------------------------------------- */
 /* vCPU Functions                                                             */
 /* -------------------------------------------------------------------------- */
 
-void
+status_t
 create_vcpu(struct vm_t *vm)
 {
-    struct vcpu_op__create_vcpu_arg_t vcpu_op__create_vcpu_arg = {
-        vm->domainid
-    };
+    status_t ret;
 
-    vm->vcpuid = vcpu_op__create_vcpu(&vcpu_op__create_vcpu_arg);
+    vm->vcpuid = __vcpu_op__create_vcpu(vm->domainid);
     if (vm->vcpuid == INVALID_VCPUID) {
-        fprintf(stderr, "create_vcpu failed\n");
-        exit(EXIT_FAILURE);
+        BFALERT("__vcpu_op__create_vcpu failed\n");
+        return FAILURE;
     }
+
+    ret = __vcpu_op__set_entry(vm->vcpuid, (uint64_t)vm->entry);
+    if (ret == FAILURE) {
+        BFALERT("__vcpu_op__set_entry failed\n");
+        return FAILURE;
+    }
+
+    ret = __vcpu_op__set_stack(vm->vcpuid, (uint64_t)vm->stack);
+    if (ret == FAILURE) {
+        BFALERT("__vcpu_op__set_stack failed\n");
+        return FAILURE;
+    }
+
+    return SUCCESS;
 }
 
-void
+status_t
 run_vcpu(struct vm_t *vm)
 {
-    struct vcpu_op__run_vcpu_arg_t vcpu_op__run_vcpu_arg = {
-        vm->vcpuid,
-        (uintptr_t)vm->entry,
-        // (uintptr_t)vm->stack
-        0x10000 + STACK_SIZE - 1
-    };
+    status_t ret;
 
-    status_t ret = vcpu_op__run_vcpu(&vcpu_op__run_vcpu_arg);
+    ret = __vcpu_op__run_vcpu(vm->vcpuid);
     if (ret == FAILURE) {
-        fprintf(stderr, "run_vcpu failed\n");
-        exit(EXIT_FAILURE);
+        BFALERT("__vcpu_op__run_vcpu failed\n");
+        return FAILURE;
     }
+
+    return SUCCESS;
+}
+
+status_t
+hlt_vcpu(struct vm_t *vm)
+{
+    status_t ret;
+
+    ret = __vcpu_op__hlt_vcpu(vm->vcpuid);
+    if (ret == FAILURE) {
+        BFALERT("__vcpu_op__hlt_vcpu failed\n");
+        return FAILURE;
+    }
+
+    return SUCCESS;
+}
+
+status_t
+destroy_vcpu(struct vm_t *vm)
+{
+    status_t ret;
+
+    ret = __vcpu_op__destroy_vcpu(vm->vcpuid);
+    if (ret == FAILURE) {
+        BFALERT("__vcpu_op__destroy_vcpu failed\n");
+        return FAILURE;
+    }
+
+    return SUCCESS;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -216,6 +279,7 @@ run_vcpu(struct vm_t *vm)
 int
 main(int argc, const char *argv[])
 {
+    status_t ret;
     bfignored(argc);
 
     struct vm_t vm;
@@ -225,16 +289,53 @@ main(int argc, const char *argv[])
         return EXIT_FAILURE;
     }
 
-    read_binary(&vm, argv[1]);
-    load_binary(&vm);
+    ret = create_domain(&vm);
+    if (ret != SUCCESS) {
+        BFALERT("create_domain failed\n");
+        return EXIT_FAILURE;
+    }
 
-        fprintf(stderr, "entry: %p\n", vm.entry);
+    ret = read_binary(&vm, argv[1]);
+    if (ret != SUCCESS) {
+        BFALERT("read_binary failed\n");
+        return EXIT_FAILURE;
+    }
 
-    create_domain(&vm);
-    map_binary(&vm);
-    create_vcpu(&vm);
+    ret = load_binary(&vm);
+    if (ret != SUCCESS) {
+        BFALERT("load_binary failed\n");
+        return EXIT_FAILURE;
+    }
 
-    run_vcpu(&vm);
+    ret = create_vcpu(&vm);
+    if (ret != SUCCESS) {
+        BFALERT("create_vcpu failed\n");
+        return EXIT_FAILURE;
+    }
+
+    ret = run_vcpu(&vm);
+    if (ret != SUCCESS) {
+        BFALERT("run_vcpu failed\n");
+        return EXIT_FAILURE;
+    }
+
+    ret = hlt_vcpu(&vm);
+    if (ret != SUCCESS) {
+        BFALERT("hlt_vcpu failed\n");
+        return EXIT_FAILURE;
+    }
+
+    ret = destroy_vcpu(&vm);
+    if (ret != SUCCESS) {
+        BFALERT("destroy_vcpu failed\n");
+        return EXIT_FAILURE;
+    }
+
+    ret = destroy_domain(&vm);
+    if (ret != SUCCESS) {
+        BFALERT("destroy_domain failed\n");
+        return EXIT_FAILURE;
+    }
 
     return EXIT_SUCCESS;
 }

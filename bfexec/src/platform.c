@@ -25,9 +25,22 @@
 #include <bfplatform.h>
 
 void *
+platform_alloc_rw(uint64_t len)
+{
+    return aligned_alloc(0x1000, len);
+}
+
+void *
 platform_alloc_rwe(uint64_t len)
 {
     return aligned_alloc(0x1000, len);
+}
+
+void
+platform_free_rw(void *addr, uint64_t len)
+{
+    bfignored(len);
+    free(addr);
 }
 
 void

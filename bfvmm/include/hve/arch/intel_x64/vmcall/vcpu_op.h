@@ -19,34 +19,7 @@
 #ifndef VMCALL_VCPU_INTEL_X64_HYPERKERNEL_H
 #define VMCALL_VCPU_INTEL_X64_HYPERKERNEL_H
 
-#include <bfvmm/hve/arch/intel_x64/vcpu.h>
-#include <hve/arch/intel_x64/vmexit/vmcall.h>
-
-// -----------------------------------------------------------------------------
-// Exports
-// -----------------------------------------------------------------------------
-
-#include <bfexports.h>
-
-#ifndef STATIC_HYPERKERNEL_HVE
-#ifdef SHARED_HYPERKERNEL_HVE
-#define EXPORT_HYPERKERNEL_HVE EXPORT_SYM
-#else
-#define EXPORT_HYPERKERNEL_HVE IMPORT_SYM
-#endif
-#else
-#define EXPORT_HYPERKERNEL_HVE
-#endif
-
-// -----------------------------------------------------------------------------
-// Aliases
-// -----------------------------------------------------------------------------
-
-#include <bfvmm/hve/arch/intel_x64/vmcs.h>
-#include <bfvmm/hve/arch/intel_x64/exit_handler.h>
-
-using vmcs_t = bfvmm::intel_x64::vmcs;
-using exit_handler_t = bfvmm::intel_x64::exit_handler;
+#include "base.h"
 
 // -----------------------------------------------------------------------------
 // Definitions
@@ -54,9 +27,6 @@ using exit_handler_t = bfvmm::intel_x64::exit_handler;
 
 namespace hyperkernel::intel_x64
 {
-
-class apis;
-class hyperkernel_vcpu_state_t;
 
 class EXPORT_HYPERKERNEL_HVE vmcall_vcpu_op_handler
 {
@@ -71,6 +41,21 @@ public:
     /// @ensures
     ///
     ~vmcall_vcpu_op_handler() = default;
+
+private:
+
+    uint64_t vcpu_op__create_vcpu(gsl::not_null<vmcs_t *> vmcs);
+    uint64_t vcpu_op__run_vcpu(gsl::not_null<vmcs_t *> vmcs);
+    uint64_t vcpu_op__set_entry(gsl::not_null<vmcs_t *> vmcs);
+    uint64_t vcpu_op__set_stack(gsl::not_null<vmcs_t *> vmcs);
+    uint64_t vcpu_op__hlt_vcpu(gsl::not_null<vmcs_t *> vmcs);
+    uint64_t vcpu_op__destroy_vcpu(gsl::not_null<vmcs_t *> vmcs);
+
+    bool dispatch(gsl::not_null<vmcs_t *> vmcs);
+
+private:
+
+    apis *m_apis;
 
 public:
 

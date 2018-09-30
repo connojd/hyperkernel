@@ -16,90 +16,68 @@
 // License along with this library; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-#include <bfdebug.h>
 #include <iostream>
-
-#include <hypercall.h>
 #include <hve/arch/intel_x64/apis.h>
-
-#include <bfvmm/memory_manager/arch/x64/unique_map.h>
-
-
-
-
-
-extern "C" void vmcs_resume(
-    bfvmm::intel_x64::save_state_t *save_state) noexcept;
-
-
-
 
 namespace hyperkernel::intel_x64
 {
 
-static bool
-emulate_outb(
-    gsl::not_null<vmcs_t *> vmcs)
+vmcall_bf86_op_handler::vmcall_bf86_op_handler(
+    gsl::not_null<apis *> apis
+) :
+    m_apis{apis}
 {
-    guard_exceptions([&] {
+    using namespace vmcs_n;
 
-        auto phys_addr =
-            g_domain->ept().virt_to_phys(vmcs->save_state()->rcx);
-
-bffield_hex(phys_addr);
-
-        auto map =
-            bfvmm::x64::make_unique_map<char>(
-                phys_addr
-            );
-
-        char *msg = map.get() + bfn::lower(vmcs->save_state()->rcx);
-
-        std::cout << "msg: " << msg << '\n';
-
-        g_vmcs->save_state()->rax = SUCCESS;
-
-    },
-    [&] {
-        vmcs->save_state()->rax = FAILURE;
-    });
-
-    return true;
+    apis->add_vmcall_handler(
+        vmcall_handler_delegate(vmcall_bf86_op_handler, dispatch)
+    );
 }
 
-static bool
-emulate_hlt(
+uint64_t
+vmcall_bf86_op_handler::bf86_op__emulate_outb(
     gsl::not_null<vmcs_t *> vmcs)
 {
-    guard_exceptions([&] {
+    bfignored(vmcs);
 
-        g_vmcs->load();
-        advance(g_vmcs);
-        g_vmcs->save_state()->rax = SUCCESS;
-        vmcs_resume(g_vmcs->save_state());
-
-    },
-    [&] {
-        vmcs->save_state()->rax = FAILURE;
-    });
-
-    return true;
+    std::cout << gsl::narrow_cast<char>(vmcs->save_state()->rcx);
+    return SUCCESS;
 }
 
-static bool
-dispatch(
+uint64_t
+vmcall_bf86_op_handler::bf86_op__emulate_hlt(
     gsl::not_null<vmcs_t *> vmcs)
 {
-    if (vmcs->save_state()->rax != __bf86_op) {
+    bfignored(vmcs);
+
+    m_apis->resume_parent_vmcs(SUCCESS);
+    return SUCCESS;
+}
+
+bool
+vmcall_bf86_op_handler::dispatch(
+    gsl::not_null<vmcs_t *> vmcs)
+{
+    if (vmcs->save_state()->rax != __enum_bf86_op) {
         return false;
     }
 
     switch(vmcs->save_state()->rbx) {
-        case __bf86_op__emulate_outb:
-            return emulate_outb(vmcs);
+        case __enum_bf86_op__emulate_outb:
+        {
+            auto bf86_op__emulate_outb_delegate =
+                guard_vmcall_delegate(vmcall_bf86_op_handler, bf86_op__emulate_outb);
 
-        case __bf86_op__emulate_hlt:
-            return emulate_hlt(vmcs);
+            return guard_vmcall(vmcs, bf86_op__emulate_outb_delegate);
+        }
+
+        case __enum_bf86_op__emulate_hlt:
+        {
+            auto bf86_op__emulate_hlt_delegate =
+                guard_vmcall_delegate(vmcall_bf86_op_handler, bf86_op__emulate_hlt);
+
+            return guard_vmcall(vmcs, bf86_op__emulate_hlt_delegate);
+        }
 
         default:
             break;
@@ -108,14 +86,5 @@ dispatch(
     throw std::runtime_error("unknown bf86 opcode");
 }
 
-vmcall_bf86_op_handler::vmcall_bf86_op_handler(
-    gsl::not_null<apis *> apis)
-{
-    using namespace vmcs_n;
-
-    apis->add_vmcall_handler(
-        vmcall_handler::handler_delegate_t::create<dispatch>()
-    );
-}
 
 }

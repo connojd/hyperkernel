@@ -16,110 +16,162 @@
 // License along with this library; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-#include <bfdebug.h>
-
-#include <hypercall.h>
-#include <domain/domain_manager.h>
 #include <hve/arch/intel_x64/apis.h>
 #include <hve/arch/intel_x64/vcpu_guest.h>
-
-#include <bfvmm/vcpu/vcpu_manager.h>
-#include <bfvmm/memory_manager/arch/x64/unique_map.h>
 
 namespace hyperkernel::intel_x64
 {
 
-static bool
-create_vcpu(
-    gsl::not_null<vmcs_t *> vmcs)
+vmcall_vcpu_op_handler::vmcall_vcpu_op_handler(
+    gsl::not_null<apis *> apis
+) :
+    m_apis{apis}
 {
-    guard_exceptions([&] {
+    using namespace vmcs_n;
 
-        auto map =
-            bfvmm::x64::make_unique_map<vcpu_op__create_vcpu_arg_t>(
-                vmcs->save_state()->rcx,
-                vmcs_n::guest_cr3::get(),
-                sizeof(vcpu_op__create_vcpu_arg_t)
-            );
-
-        vcpu_guest_state_t vcpu_guest_state {
-            get_domain(map->domainid)
-        };
-
-        vmcs->save_state()->rax = bfvmm::vcpu::generate_vcpuid();
-        g_vcm->create(vmcs->save_state()->rax, &vcpu_guest_state);
-    },
-    [&] {
-        vmcs->save_state()->rax = vcpuid::invalid;
-    });
-
-    vmcs->load();
-    return true;
+    apis->add_vmcall_handler(
+        vmcall_handler_delegate(vmcall_vcpu_op_handler, dispatch)
+    );
 }
 
-static bool
-run_vcpu(
+uint64_t
+vmcall_vcpu_op_handler::vcpu_op__create_vcpu(
     gsl::not_null<vmcs_t *> vmcs)
 {
-    using namespace ::intel_x64::vmcs;
+    auto vcpu_op__create_vcpu_arg =
+        get_hypercall_arg<__vcpu_op__create_vcpu_arg_t>(vmcs);
 
-    guard_exceptions([&] {
+    vcpu_guest_state_t vcpu_guest_state {
+        get_domain(vcpu_op__create_vcpu_arg->domainid)
+    };
 
-        auto map =
-            bfvmm::x64::make_unique_map<vcpu_op__run_vcpu_arg_t>(
-                vmcs->save_state()->rcx,
-                vmcs_n::guest_cr3::get(),
-                sizeof(vcpu_op__run_vcpu_arg_t)
-            );
+    auto vcpuid = bfvmm::vcpu::generate_vcpuid();
+    g_vcm->create(vcpuid, &vcpu_guest_state);
 
-        g_vmcs = vmcs;
-
-        auto vcpu = get_guest_vcpu(map->vcpuid);
-        vcpu->load();
-
-        vcpu->vmcs()->save_state()->rip = map->rip;
-        vcpu->vmcs()->save_state()->rsp = map->rsp;
-
-        vcpu->launch();
-    },
-    [&] {
-        vmcs->save_state()->rax = FAILURE;
-    });
-
-    vmcs->load();
-    return true;
+    return vcpuid;
 }
 
-static bool
-dispatch(
+uint64_t
+vmcall_vcpu_op_handler::vcpu_op__run_vcpu(
     gsl::not_null<vmcs_t *> vmcs)
 {
-    if (vmcs->save_state()->rax != __vcpu_op) {
+    auto vcpu_op__run_vcpu_arg =
+        get_hypercall_arg<__vcpu_op__run_vcpu_arg_t>(vmcs);
+
+    auto vcpu = get_guest_vcpu(vcpu_op__run_vcpu_arg->vcpuid);
+    vcpu->hkapis()->set_parent_vmcs(vmcs);
+
+    vcpu->launch();
+    return SUCCESS;
+}
+
+uint64_t
+vmcall_vcpu_op_handler::vcpu_op__set_entry(
+    gsl::not_null<vmcs_t *> vmcs)
+{
+    auto vcpu_op__set_entry_arg =
+        get_hypercall_arg<__vcpu_op__set_entry_arg_t>(vmcs);
+
+    auto vcpu = get_guest_vcpu(vcpu_op__set_entry_arg->vcpuid);
+    vcpu->vmcs()->save_state()->rip = vcpu_op__set_entry_arg->entry;
+
+    return SUCCESS;
+}
+
+uint64_t
+vmcall_vcpu_op_handler::vcpu_op__set_stack(
+    gsl::not_null<vmcs_t *> vmcs)
+{
+    auto vcpu_op__set_stack_arg =
+        get_hypercall_arg<__vcpu_op__set_stack_arg_t>(vmcs);
+
+    auto vcpu = get_guest_vcpu(vcpu_op__set_stack_arg->vcpuid);
+    vcpu->vmcs()->save_state()->rsp = vcpu_op__set_stack_arg->stack;
+
+    return SUCCESS;
+}
+
+uint64_t
+vmcall_vcpu_op_handler::vcpu_op__hlt_vcpu(
+    gsl::not_null<vmcs_t *> vmcs)
+{
+    bfignored(vmcs);
+    return SUCCESS;
+}
+
+uint64_t
+vmcall_vcpu_op_handler::vcpu_op__destroy_vcpu(
+    gsl::not_null<vmcs_t *> vmcs)
+{
+    auto vcpu_op__destroy_vcpu_arg =
+        get_hypercall_arg<__vcpu_op__destroy_vcpu_arg_t>(vmcs);
+
+    g_vcm->destroy(vcpu_op__destroy_vcpu_arg->vcpuid, nullptr);
+    return SUCCESS;
+}
+
+bool
+vmcall_vcpu_op_handler::dispatch(
+    gsl::not_null<vmcs_t *> vmcs)
+{
+    if (vmcs->save_state()->rax != __enum_vcpu_op) {
         return false;
     }
 
     switch(vmcs->save_state()->rbx) {
-        case __vcpu_op__create_vcpu:
-            return create_vcpu(vmcs);
+        case __enum_vcpu_op__create_vcpu:
+        {
+            auto vcpu_op__create_vcpu_delegate =
+                guard_vmcall_delegate(vmcall_vcpu_op_handler, vcpu_op__create_vcpu);
 
-        case __vcpu_op__run_vcpu:
-            return run_vcpu(vmcs);
+            return guard_vmcall(vmcs, vcpu_op__create_vcpu_delegate);
+        }
+
+        case __enum_vcpu_op__run_vcpu:
+        {
+            auto vcpu_op__run_vcpu_delegate =
+                guard_vmcall_delegate(vmcall_vcpu_op_handler, vcpu_op__run_vcpu);
+
+            return guard_vmcall(vmcs, vcpu_op__run_vcpu_delegate);
+        }
+
+        case __enum_vcpu_op__set_entry:
+        {
+            auto vcpu_op__set_entry_delegate =
+                guard_vmcall_delegate(vmcall_vcpu_op_handler, vcpu_op__set_entry);
+
+            return guard_vmcall(vmcs, vcpu_op__set_entry_delegate);
+        }
+
+        case __enum_vcpu_op__set_stack:
+        {
+            auto vcpu_op__set_stack_delegate =
+                guard_vmcall_delegate(vmcall_vcpu_op_handler, vcpu_op__set_stack);
+
+            return guard_vmcall(vmcs, vcpu_op__set_stack_delegate);
+        }
+
+        case __enum_vcpu_op__hlt_vcpu:
+        {
+            auto vcpu_op__hlt_vcpu_delegate =
+                guard_vmcall_delegate(vmcall_vcpu_op_handler, vcpu_op__hlt_vcpu);
+
+            return guard_vmcall(vmcs, vcpu_op__hlt_vcpu_delegate);
+        }
+
+        case __enum_vcpu_op__destroy_vcpu:
+        {
+            auto vcpu_op__destroy_vcpu_delegate =
+                guard_vmcall_delegate(vmcall_vcpu_op_handler, vcpu_op__destroy_vcpu);
+
+            return guard_vmcall(vmcs, vcpu_op__destroy_vcpu_delegate);
+        }
 
         default:
             break;
     };
 
     throw std::runtime_error("unknown vcpu opcode");
-}
-
-vmcall_vcpu_op_handler::vmcall_vcpu_op_handler(
-    gsl::not_null<apis *> apis)
-{
-    using namespace vmcs_n;
-
-    apis->add_vmcall_handler(
-        vmcall_handler::handler_delegate_t::create<dispatch>()
-    );
 }
 
 }

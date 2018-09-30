@@ -22,6 +22,7 @@ project(hyperkernel_bfvmm_main C CXX)
 include(${SOURCE_CMAKE_DIR}/project.cmake)
 init_project(
     INCLUDES ${CMAKE_CURRENT_LIST_DIR}/../../include
+    INCLUDES ${CMAKE_CURRENT_LIST_DIR}/../../../include
 )
 
 if(${BUILD_TARGET_ARCH} STREQUAL "x86_64")

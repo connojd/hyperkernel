@@ -18,6 +18,9 @@
 
 #include <hve/arch/intel_x64/apis.h>
 
+extern "C" void vmcs_resume(
+    bfvmm::intel_x64::save_state_t *save_state) noexcept;
+
 namespace hyperkernel
 {
 namespace intel_x64
@@ -32,14 +35,15 @@ apis::apis(
     m_exit_handler{exit_handler},
     m_domain{domain},
 
+    m_parent_vmcs{},
+
+    m_fault_handler{this},
     m_vmcall_handler{this},
 
     m_vmcall_domain_op_handler{this},
     m_vmcall_vcpu_op_handler{this},
     m_vmcall_bf86_op_handler{this}
-{
-    g_domain = domain;
-}
+{ }
 
 //==========================================================================
 // VMExit
@@ -57,6 +61,27 @@ void
 apis::add_vmcall_handler(
     const vmcall_handler::handler_delegate_t &d)
 { m_vmcall_handler.add_handler(std::move(d)); }
+
+//--------------------------------------------------------------------------
+// Parent VMCS
+//--------------------------------------------------------------------------
+
+void
+apis::set_parent_vmcs(gsl::not_null<vmcs_t *> vmcs)
+{ m_parent_vmcs = vmcs; }
+
+void
+apis::resume_parent_vmcs(uint64_t status)
+{
+    if (m_parent_vmcs != nullptr) {
+        m_parent_vmcs->load();
+        advance(m_parent_vmcs);
+        m_parent_vmcs->save_state()->rax = status;
+        vmcs_resume(m_parent_vmcs->save_state());
+    }
+
+    throw std::runtime_error("parent vmcs never set");
+}
 
 //==========================================================================
 // Resources

@@ -18,6 +18,7 @@
 
 if(${BUILD_TARGET_ARCH} STREQUAL "x86_64")
     list(APPEND SOURCES
+        arch/intel_x64/vmexit/fault.cpp
         arch/intel_x64/vmexit/vmcall.cpp
         arch/intel_x64/vmcall/domain_op.cpp
         arch/intel_x64/vmcall/vcpu_op.cpp

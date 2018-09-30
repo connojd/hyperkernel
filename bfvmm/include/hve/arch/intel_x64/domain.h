@@ -94,6 +94,8 @@ public:
     ///
     void map_4k(uintptr_t virt_addr, uintptr_t phys_addr);
 
+    void map_commit();
+
     eapis::intel_x64::ept::mmap &ept()
     { return m_ept_map; }
 

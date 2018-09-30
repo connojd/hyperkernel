@@ -16,95 +16,123 @@
 // License along with this library; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-#include <bfdebug.h>
-
-#include <hypercall.h>
-#include <domain/domain_manager.h>
 #include <hve/arch/intel_x64/apis.h>
-
-#include <bfvmm/memory_manager/arch/x64/unique_map.h>
 
 namespace hyperkernel::intel_x64
 {
 
-static bool
-create_domain(
-    gsl::not_null<vmcs_t *> vmcs)
+vmcall_domain_op_handler::vmcall_domain_op_handler(
+    gsl::not_null<apis *> apis
+) :
+    m_apis{apis}
 {
-    guard_exceptions([&] {
-        vmcs->save_state()->rax = domain::generate_domainid();
-        g_dm->create(vmcs->save_state()->rax, nullptr);
-    },
-    [&] {
-        vmcs->save_state()->rax = invalid_domainid;
-    });
+    using namespace vmcs_n;
 
-    return true;
+    apis->add_vmcall_handler(
+        vmcall_handler_delegate(vmcall_domain_op_handler, dispatch)
+    );
 }
 
-static bool
-map_4k(
+uint64_t
+vmcall_domain_op_handler::domain_op__create_domain(
     gsl::not_null<vmcs_t *> vmcs)
 {
-    guard_exceptions([&] {
+    bfignored(vmcs);
 
-        auto map =
-            bfvmm::x64::make_unique_map<domain_op__map_4k_arg_t>(
-                vmcs->save_state()->rcx,
-                vmcs_n::guest_cr3::get(),
-                sizeof(domain_op__map_4k_arg_t)
-            );
+    auto domainid = domain::generate_domainid();
+    g_dm->create(domainid, nullptr);
 
-        auto phys_addr =
-            bfvmm::x64::virt_to_phys_with_cr3(
-                map->virt_addr,
-                vmcs_n::guest_cr3::get()
-            );
-
-        if (map->exec_addr == 0x0000000000301000) {
-            get_domain(map->domainid)->map_4k(map->exec_addr, phys_addr);
-        }
-
-        get_domain(map->domainid)->map_4k(map->exec_addr, phys_addr);
-        vmcs->save_state()->rax = SUCCESS;
-    },
-    [&] {
-        vmcs->save_state()->rax = FAILURE;
-    });
-
-    return true;
+    return domainid;
 }
 
-static bool
-dispatch(
+uint64_t
+vmcall_domain_op_handler::domain_op__map_md(
     gsl::not_null<vmcs_t *> vmcs)
 {
-    if (vmcs->save_state()->rax != __domain_op) {
+    auto domain_op__map_md_arg =
+        get_hypercall_arg<__domain_op__map_md_arg_t>(vmcs);
+
+    auto phys_addr =
+        bfvmm::x64::virt_to_phys_with_cr3(
+            domain_op__map_md_arg->virt_addr,
+            vmcs_n::guest_cr3::get()
+        );
+
+    get_domain(domain_op__map_md_arg->domainid)->map_4k(
+        domain_op__map_md_arg->exec_addr, phys_addr
+    );
+
+    return SUCCESS;
+}
+
+uint64_t
+vmcall_domain_op_handler::domain_op__map_commit(
+    gsl::not_null<vmcs_t *> vmcs)
+{
+    auto domain_op__map_commit_arg =
+        get_hypercall_arg<__domain_op__map_commit_arg_t>(vmcs);
+
+    get_domain(domain_op__map_commit_arg->domainid)->map_commit();
+    return SUCCESS;
+}
+
+uint64_t
+vmcall_domain_op_handler::domain_op__destroy_domain(
+    gsl::not_null<vmcs_t *> vmcs)
+{
+    auto domain_op__destroy_domain_arg =
+        get_hypercall_arg<__domain_op__destroy_domain_arg_t>(vmcs);
+
+    g_dm->destroy(domain_op__destroy_domain_arg->domainid, nullptr);
+    return SUCCESS;
+}
+
+bool
+vmcall_domain_op_handler::dispatch(
+    gsl::not_null<vmcs_t *> vmcs)
+{
+    if (vmcs->save_state()->rax != __enum_domain_op) {
         return false;
     }
 
     switch(vmcs->save_state()->rbx) {
-        case __domain_op__create_domain:
-            return create_domain(vmcs);
+        case __enum_domain_op__create_domain:
+        {
+            auto domain_op__create_domain_delegate =
+                guard_vmcall_delegate(vmcall_domain_op_handler, domain_op__create_domain);
 
-        case __domain_op__map_4k:
-            return map_4k(vmcs);
+            return guard_vmcall(vmcs, domain_op__create_domain_delegate);
+        }
+
+        case __enum_domain_op__map_md:
+        {
+            auto domain_op__map_md_delegate =
+                guard_vmcall_delegate(vmcall_domain_op_handler, domain_op__map_md);
+
+            return guard_vmcall(vmcs, domain_op__map_md_delegate);
+        }
+
+        case __enum_domain_op__map_commit:
+        {
+            auto domain_op__map_commit_delegate =
+                guard_vmcall_delegate(vmcall_domain_op_handler, domain_op__map_commit);
+
+            return guard_vmcall(vmcs, domain_op__map_commit_delegate);
+        }
+
+        case __enum_domain_op__destroy_domain:
+        {
+            auto domain_op__destroy_domain_delegate =
+                guard_vmcall_delegate(vmcall_domain_op_handler, domain_op__destroy_domain);
+
+            return guard_vmcall(vmcs, domain_op__destroy_domain_delegate);
+        }
 
         default:
             break;
     };
 
     throw std::runtime_error("unknown domain opcode");
-}
-
-vmcall_domain_op_handler::vmcall_domain_op_handler(
-    gsl::not_null<apis *> apis)
-{
-    using namespace vmcs_n;
-
-    apis->add_vmcall_handler(
-        vmcall_handler::handler_delegate_t::create<dispatch>()
-    );
 }
 
 }
