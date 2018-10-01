@@ -24,19 +24,6 @@ init_project(
     INCLUDES ${CMAKE_CURRENT_LIST_DIR}/../include
 )
 
-list(APPEND FLAGS
-    -ffreestanding
-    -fno-stack-protector
-    -nostartfiles
-    -nostdlib
-)
-
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${FLAGS}")
-set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${FLAGS}")
-
-string(REPLACE ";" " " CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
-string(REPLACE ";" " " CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS}")
-
 add_executable(test_hyperkernel_basic test_hyperkernel_basic.c)
 target_link_static_libraries(test_hyperkernel_basic bfintrinsics)
 
