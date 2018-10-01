@@ -58,8 +58,8 @@ vmcall_vcpu_op_handler::vcpu_op__run_vcpu(
     auto vcpu_op__run_vcpu_arg =
         get_hypercall_arg<__vcpu_op__run_vcpu_arg_t>(vmcs);
 
-    auto vcpu = get_guest_vcpu(vcpu_op__run_vcpu_arg->vcpuid);
-    vcpu->hkapis()->set_parent_vmcs(vmcs);
+    auto vcpu = get_hkguest_vcpu(vcpu_op__run_vcpu_arg->vcpuid);
+    vcpu->hkapis()->set_parent_vcpuid(vmcs->save_state()->vcpuid);
 
     vcpu->launch();
     return SUCCESS;

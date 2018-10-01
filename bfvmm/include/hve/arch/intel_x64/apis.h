@@ -19,6 +19,9 @@
 #ifndef APIS_INTEL_X64_HYPERKERNEL_H
 #define APIS_INTEL_X64_HYPERKERNEL_H
 
+#include <mutex>
+#include <unordered_map>
+
 #include "vmexit/fault.h"
 #include "vmexit/vmcall.h"
 
@@ -72,7 +75,7 @@ public:
     /// @expects
     /// @ensures
     ///
-    VIRTUAL ~apis() = default;
+    VIRTUAL ~apis();
 
 public:
 
@@ -105,12 +108,12 @@ public:
         const vmcall_handler::handler_delegate_t &d);
 
     //--------------------------------------------------------------------------
-    // Parent VMCS
+    // Resume
     //--------------------------------------------------------------------------
 
-    VIRTUAL void set_parent_vmcs(gsl::not_null<vmcs_t *> vmcs);
+    VIRTUAL void set_parent_vcpuid(vcpuid::type id);
 
-    VIRTUAL void resume_parent_vmcs(uint64_t status);
+    VIRTUAL void resume_parent();
 
     //==========================================================================
     // Resources
@@ -138,6 +141,8 @@ public:
         ::intel_x64::vmcs::value_type reason,
         const handler_delegate_t &d);
 
+    static gsl::not_null<apis *> find(vcpuid::type id);
+
 private:
 
     bfvmm::intel_x64::vmcs *m_vmcs;
@@ -146,7 +151,7 @@ private:
 
 private:
 
-    vmcs_t *m_parent_vmcs;
+    vcpuid::type m_resume_vcpuid;
 
     fault_handler m_fault_handler;
     vmcall_handler m_vmcall_handler;
@@ -154,6 +159,9 @@ private:
     vmcall_domain_op_handler m_vmcall_domain_op_handler;
     vmcall_vcpu_op_handler m_vmcall_vcpu_op_handler;
     vmcall_bf86_op_handler m_vmcall_bf86_op_handler;
+
+    static std::mutex s_mutex;
+    static std::unordered_map<vcpuid::type, apis*> s_apis;
 };
 
 }

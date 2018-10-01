@@ -174,15 +174,6 @@ public:
     gsl::not_null<apis *> hkapis()
     { return &m_apis; }
 
-    void load()
-    { vmcs()->load(); }
-
-    void launch()
-    { vmcs()->launch(); }
-
-    void resume()
-    { vmcs()->resume(); }
-
 private:
 
     apis m_apis;
@@ -200,7 +191,7 @@ private:
 /// @return returns a pointer to the vCPU being queried or throws
 ///     and exception.
 ///
-#define get_guest_vcpu(a) \
-    g_vcm->get<hyperkernel::intel_x64::vcpu_guest *>(a, "invalid vcpuid: " __FILE__)
+#define get_hkguest_vcpu(a) \
+    g_vcm->get<hyperkernel::intel_x64::vcpu_guest *>(a, "invalid vcpuid: " a)
 
 #endif

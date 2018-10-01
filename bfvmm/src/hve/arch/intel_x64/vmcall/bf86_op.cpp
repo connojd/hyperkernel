@@ -50,7 +50,7 @@ vmcall_bf86_op_handler::bf86_op__emulate_hlt(
 {
     bfignored(vmcs);
 
-    m_apis->resume_parent_vmcs(SUCCESS);
+    m_apis->resume();
     return SUCCESS;
 }
 
