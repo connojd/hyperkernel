@@ -17,19 +17,21 @@
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 #include <iostream>
-#include <hve/arch/intel_x64/apis.h>
+
+#include <hve/arch/intel_x64/vcpu.h>
+#include <hve/arch/intel_x64/vmcall/bf86_op.h>
 
 namespace hyperkernel::intel_x64
 {
 
 vmcall_bf86_op_handler::vmcall_bf86_op_handler(
-    gsl::not_null<apis *> apis
+    gsl::not_null<vcpu *> vcpu
 ) :
-    m_apis{apis}
+    m_vcpu{vcpu}
 {
     using namespace vmcs_n;
 
-    apis->add_vmcall_handler(
+    vcpu->add_vmcall_handler(
         vmcall_handler_delegate(vmcall_bf86_op_handler, dispatch)
     );
 }
@@ -50,7 +52,7 @@ vmcall_bf86_op_handler::bf86_op__emulate_hlt(
 {
     bfignored(vmcs);
 
-    m_apis->resume();
+    m_vcpu->resume_parent();
     return SUCCESS;
 }
 

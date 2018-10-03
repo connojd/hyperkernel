@@ -16,19 +16,20 @@
 // License along with this library; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-#include <hve/arch/intel_x64/apis.h>
+#include <hve/arch/intel_x64/vcpu.h>
+#include <hve/arch/intel_x64/vmcall/domain_op.h>
 
 namespace hyperkernel::intel_x64
 {
 
 vmcall_domain_op_handler::vmcall_domain_op_handler(
-    gsl::not_null<apis *> apis
+    gsl::not_null<vcpu *> vcpu
 ) :
-    m_apis{apis}
+    m_vcpu{vcpu}
 {
     using namespace vmcs_n;
 
-    apis->add_vmcall_handler(
+    vcpu->add_vmcall_handler(
         vmcall_handler_delegate(vmcall_domain_op_handler, dispatch)
     );
 }

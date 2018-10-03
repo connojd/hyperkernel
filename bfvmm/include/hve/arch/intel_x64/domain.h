@@ -21,7 +21,7 @@
 
 #include "../../../domain/domain.h"
 
-#include <eapis/hve/arch/intel_x64/apis.h>
+#include <eapis/hve/arch/intel_x64/vcpu.h>
 #include <bfvmm/memory_manager/arch/x64/cr3.h>
 
 // -----------------------------------------------------------------------------
@@ -73,11 +73,9 @@ public:
     /// A pointer for this structure is needed for each vCPU that is
     /// created.
     ///
-    gsl::not_null<eapis::intel_x64::eapis_vcpu_global_state_t*>
-    eapis_vcpu_global_state()
-    { return &m_eapis_vcpu_global_state; }
-
-
+    gsl::not_null<eapis::intel_x64::vcpu_global_state_t*>
+    global_state()
+    { return &m_vcpu_global_state; }
 
     /// Map 4k GPA to HPA
     ///
@@ -134,7 +132,7 @@ private:
     bfvmm::x64::cr3::mmap m_cr3_map;
     eapis::intel_x64::ept::mmap m_ept_map;
 
-    eapis::intel_x64::eapis_vcpu_global_state_t m_eapis_vcpu_global_state;
+    eapis::intel_x64::vcpu_global_state_t m_vcpu_global_state;
 
 public:
 

@@ -47,7 +47,7 @@ namespace hyperkernel
 
 /// Domain
 ///
-class EXPORT_HYPERKERNEL_DOMAIN domain
+class EXPORT_HYPERKERNEL_DOMAIN domain : public bfobject
 {
 public:
 

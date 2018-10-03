@@ -16,13 +16,15 @@
 // License along with this library; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-#ifndef FAULT_INTEL_X64_HYPERKERNEL_H
-#define FAULT_INTEL_X64_HYPERKERNEL_H
+#ifndef EXTERNAL_INTERRUPT_INTEL_X64_HYPERKERNEL_H
+#define EXTERNAL_INTERRUPT_INTEL_X64_HYPERKERNEL_H
 
 #include "../base.h"
 
 #include <bfvmm/hve/arch/intel_x64/vmcs.h>
 #include <bfvmm/hve/arch/intel_x64/exit_handler.h>
+
+#include <eapis/hve/arch/intel_x64/vmexit/external_interrupt.h>
 
 // -----------------------------------------------------------------------------
 // Exports
@@ -49,7 +51,7 @@ namespace hyperkernel::intel_x64
 
 class vcpu;
 
-class EXPORT_HYPERKERNEL_HVE fault_handler
+class EXPORT_HYPERKERNEL_HVE external_interrupt_handler
 {
 public:
 
@@ -60,7 +62,7 @@ public:
     ///
     /// @param vcpu the vcpu object for this interrupt window handler
     ///
-    fault_handler(
+    external_interrupt_handler(
         gsl::not_null<vcpu *> vcpu);
 
     /// Destructor
@@ -68,13 +70,15 @@ public:
     /// @expects
     /// @ensures
     ///
-    ~fault_handler() = default;
+    ~external_interrupt_handler() = default;
 
 public:
 
     /// @cond
 
-    bool handle(gsl::not_null<vmcs_t *> vmcs);
+    bool handle(
+        gsl::not_null<vmcs_t *> vmcs,
+        ::eapis::intel_x64::external_interrupt_handler::info_t &info);
 
     /// @endcond
 
@@ -86,11 +90,11 @@ public:
 
     /// @cond
 
-    fault_handler(fault_handler &&) = default;
-    fault_handler &operator=(fault_handler &&) = default;
+    external_interrupt_handler(external_interrupt_handler &&) = default;
+    external_interrupt_handler &operator=(external_interrupt_handler &&) = default;
 
-    fault_handler(const fault_handler &) = delete;
-    fault_handler &operator=(const fault_handler &) = delete;
+    external_interrupt_handler(const external_interrupt_handler &) = delete;
+    external_interrupt_handler &operator=(const external_interrupt_handler &) = delete;
 
     /// @endcond
 };

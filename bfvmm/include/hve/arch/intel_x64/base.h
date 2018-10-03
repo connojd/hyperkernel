@@ -16,52 +16,22 @@
 // License along with this library; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-#ifndef VMCALL_BASE_INTEL_X64_HYPERKERNEL_H
-#define VMCALL_BASE_INTEL_X64_HYPERKERNEL_H
+#ifndef BASE_INTEL_X64_HYPERKERNEL_H
+#define BASE_INTEL_X64_HYPERKERNEL_H
 
 #include <bfdebug.h>
 #include <hypercall.h>
 
 #include <domain/domain_manager.h>
-#include <hve/arch/intel_x64/vmexit/vmcall.h>
 
 #include <bfvmm/vcpu/vcpu_manager.h>
-#include <bfvmm/memory_manager/arch/x64/unique_map.h>
-
-// -----------------------------------------------------------------------------
-// Exports
-// -----------------------------------------------------------------------------
-
-#include <bfexports.h>
-
-#ifndef STATIC_HYPERKERNEL_HVE
-#ifdef SHARED_HYPERKERNEL_HVE
-#define EXPORT_HYPERKERNEL_HVE EXPORT_SYM
-#else
-#define EXPORT_HYPERKERNEL_HVE IMPORT_SYM
-#endif
-#else
-#define EXPORT_HYPERKERNEL_HVE
-#endif
-
-// -----------------------------------------------------------------------------
-// Aliases
-// -----------------------------------------------------------------------------
-
 #include <bfvmm/hve/arch/intel_x64/vmcs.h>
 #include <bfvmm/hve/arch/intel_x64/exit_handler.h>
-
-using vmcs_t = bfvmm::intel_x64::vmcs;
-using exit_handler_t = bfvmm::intel_x64::exit_handler;
+#include <bfvmm/memory_manager/arch/x64/unique_map.h>
 
 // -----------------------------------------------------------------------------
 // Helpers
 // -----------------------------------------------------------------------------
-
-namespace hyperkernel::intel_x64
-{
-class apis;
-}
 
 using guard_vmcall_delegate_t =
     delegate<uint64_t(gsl::not_null<vmcs_t *>)>;

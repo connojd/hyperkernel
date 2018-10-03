@@ -19,7 +19,10 @@
 #ifndef VMCALL_INTEL_X64_HYPERKERNEL_H
 #define VMCALL_INTEL_X64_HYPERKERNEL_H
 
-#include <eapis/hve/arch/intel_x64/base.h>
+#include "../base.h"
+
+#include <bfvmm/hve/arch/intel_x64/vmcs.h>
+#include <bfvmm/hve/arch/intel_x64/exit_handler.h>
 
 // -----------------------------------------------------------------------------
 // Exports
@@ -41,18 +44,12 @@
 // Definitions
 // -----------------------------------------------------------------------------
 
-namespace hyperkernel
-{
-namespace intel_x64
+namespace hyperkernel::intel_x64
 {
 
-class apis;
+class vcpu;
 
-/// Interrupt window
-///
-/// Provides an interface for registering handlers of the interrupt-window exit.
-///
-class EXPORT_HYPERKERNEL_HVE vmcall_handler : public eapis::intel_x64::base
+class EXPORT_HYPERKERNEL_HVE vmcall_handler
 {
 public:
 
@@ -72,18 +69,17 @@ public:
     /// @expects
     /// @ensures
     ///
-    /// @param apis the apis object for this interrupt window handler
-    /// @param hyperkernel_vcpu_state a pointer to the vCPUs global state
+    /// @param vcpu the vcpu object for this interrupt window handler
     ///
     vmcall_handler(
-        gsl::not_null<apis *> apis);
+        gsl::not_null<vcpu *> vcpu);
 
     /// Destructor
     ///
     /// @expects
     /// @ensures
     ///
-    ~vmcall_handler() final = default;
+    ~vmcall_handler() = default;
 
 public:
 
@@ -98,21 +94,6 @@ public:
 
 public:
 
-    /// Dump Log
-    ///
-    /// Example:
-    /// @code
-    /// this->dump_log();
-    /// @endcode
-    ///
-    /// @expects
-    /// @ensures
-    ///
-    void dump_log() final
-    { }
-
-public:
-
     /// @cond
 
     bool handle(gsl::not_null<vmcs_t *> vmcs);
@@ -121,6 +102,7 @@ public:
 
 private:
 
+    vcpu *m_vcpu;
     std::list<handler_delegate_t> m_handlers;
 
 public:
@@ -136,7 +118,6 @@ public:
     /// @endcond
 };
 
-}
 }
 
 #endif

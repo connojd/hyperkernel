@@ -16,20 +16,20 @@
 // License along with this library; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-#include <bfdebug.h>
-#include <hve/arch/intel_x64/apis.h>
+#include <hve/arch/intel_x64/vcpu.h>
+#include <hve/arch/intel_x64/vmexit/vmcall.h>
 
-namespace hyperkernel
-{
-namespace intel_x64
+namespace hyperkernel::intel_x64
 {
 
 vmcall_handler::vmcall_handler(
-    gsl::not_null<apis *> apis)
+    gsl::not_null<vcpu *> vcpu
+) :
+    m_vcpu{vcpu}
 {
     using namespace vmcs_n;
 
-    apis->add_handler(
+    vcpu->add_handler(
         exit_reason::basic_exit_reason::vmcall,
         ::handler_delegate_t::create<vmcall_handler, &vmcall_handler::handle>(this)
     );
@@ -59,8 +59,7 @@ vmcall_handler::handle(gsl::not_null<vmcs_t *> vmcs)
         }
     });
 
-    return advance(vmcs);
+    return m_vcpu->advance();
 }
 
-}
 }

@@ -16,8 +16,7 @@
 // License along with this library; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-#include <hve/arch/intel_x64/apis.h>
-#include <bfvmm/vcpu/vcpu_manager.h>
+#include <hve/arch/intel_x64/vcpu.h>
 
 extern "C" void vmcs_resume(
     bfvmm::intel_x64::save_state_t *save_state) noexcept;
@@ -27,20 +26,19 @@ namespace hyperkernel
 namespace intel_x64
 {
 
-std::mutex s_mutex;
-std::unordered_map<vcpuid::type, apis*> apis::s_apis;
-
-apis::apis(
-    gsl::not_null<bfvmm::intel_x64::vmcs *> vmcs,
-    gsl::not_null<bfvmm::intel_x64::exit_handler *> exit_handler,
-    domain *domain
+vcpu::vcpu(
+    vcpuid::type id,
+    hyperkernel::intel_x64::domain *domain
 ) :
-    m_vmcs{vmcs},
-    m_exit_handler{exit_handler},
-    m_domain{domain},
+    eapis::intel_x64::vcpu{
+        id,
+        domain != nullptr ? domain->global_state() : nullptr
+    },
 
+    m_domain{domain},
     m_parent_vcpuid{},
 
+    m_external_interrupt_handler{this},
     m_fault_handler{this},
     m_vmcall_handler{this},
 
@@ -48,15 +46,10 @@ apis::apis(
     m_vmcall_vcpu_op_handler{this},
     m_vmcall_bf86_op_handler{this}
 {
-    std::lock_guard lock(s_mutex);
-    s_apis[m_vmcs->save_state()->vcpuid] = this;
+    if (this->is_guest_vm_vcpu()) {
+        this->write_guest_state(domain);
+    }
 }
-
- ~apis()
- {
-    std::lock_guard lock(s_mutex);
-    s_apis.erase(m_vmcs->save_state()->vcpuid);
- }
 
 //==========================================================================
 // VMExit
@@ -67,11 +60,11 @@ apis::apis(
 //--------------------------------------------------------------------------
 
 gsl::not_null<vmcall_handler *>
-apis::vmcall()
+vcpu::vmcall()
 { return &m_vmcall_handler; }
 
 void
-apis::add_vmcall_handler(
+vcpu::add_vmcall_handler(
     const vmcall_handler::handler_delegate_t &d)
 { m_vmcall_handler.add_handler(std::move(d)); }
 
@@ -79,39 +72,22 @@ apis::add_vmcall_handler(
 // Parent VMCS
 //--------------------------------------------------------------------------
 
-void set_parent_vcpuid(vcpuid::type id)
+void
+vcpu::set_parent_vcpuid(vcpuid::type id)
 { m_parent_vcpuid = id; }
 
-void resume()
+vcpuid::type
+vcpu::parent_vcpuid() const
+{ return m_parent_vcpuid; }
+
+void
+vcpu::resume_parent()
 {
     auto vcpu = get_vcpu(m_parent_vcpuid);
 
     vcpu->load();
     vcpu->advance_and_resume();
 }
-
-//==========================================================================
-// Resources
-//==========================================================================
-
-void
-apis::add_handler(
-    ::intel_x64::vmcs::value_type reason,
-    const handler_delegate_t &d)
-{ m_exit_handler->add_handler(reason, d); }
-
-gsl::not_null<apis *>
-apis::find(vcpuid::type id)
-{
-    std::lock_guard lock(s_mutex);
-
-    if (auto iter = s_apis.find(id); iter != s_apis.end()) {
-        return s_apis->second;
-    }
-
-    throw std::runtime_error("unknown apis");
-}
-
 
 }
 }

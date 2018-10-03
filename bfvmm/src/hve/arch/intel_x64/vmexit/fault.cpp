@@ -16,27 +16,25 @@
 // License along with this library; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-#include <bfdebug.h>
-#include <hve/arch/intel_x64/apis.h>
+#include <hve/arch/intel_x64/vcpu.h>
+#include <hve/arch/intel_x64/vmexit/fault.h>
 
-namespace hyperkernel
-{
-namespace intel_x64
+namespace hyperkernel::intel_x64
 {
 
 fault_handler::fault_handler(
-    gsl::not_null<apis *> apis
+    gsl::not_null<vcpu *> vcpu
 ) :
-    m_apis{apis}
+    m_vcpu{vcpu}
 {
     using namespace vmcs_n;
 
-    apis->add_handler(
+    vcpu->add_handler(
         exit_reason::basic_exit_reason::triple_fault,
         ::handler_delegate_t::create<fault_handler, &fault_handler::handle>(this)
     );
 
-    apis->add_handler(
+    vcpu->add_handler(
         exit_reason::basic_exit_reason::ept_violation,
         ::handler_delegate_t::create<fault_handler, &fault_handler::handle>(this)
     );
@@ -84,9 +82,8 @@ fault_handler::handle(gsl::not_null<vmcs_t *> vmcs)
     bferror_subnhex(0, "exit reason", exit_reason::get());
     bferror_subnhex(0, "exit qualification", exit_qualification::get());
 
-    m_apis->resume_parent_vmcs(FAILURE);
+    m_vcpu->resume_parent();
     return true;
 }
 
-}
 }

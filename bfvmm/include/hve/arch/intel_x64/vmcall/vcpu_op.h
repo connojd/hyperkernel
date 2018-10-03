@@ -19,7 +19,26 @@
 #ifndef VMCALL_VCPU_INTEL_X64_HYPERKERNEL_H
 #define VMCALL_VCPU_INTEL_X64_HYPERKERNEL_H
 
-#include "base.h"
+#include "../base.h"
+
+#include <bfvmm/hve/arch/intel_x64/vmcs.h>
+#include <bfvmm/hve/arch/intel_x64/exit_handler.h>
+
+// -----------------------------------------------------------------------------
+// Exports
+// -----------------------------------------------------------------------------
+
+#include <bfexports.h>
+
+#ifndef STATIC_HYPERKERNEL_HVE
+#ifdef SHARED_HYPERKERNEL_HVE
+#define EXPORT_HYPERKERNEL_HVE EXPORT_SYM
+#else
+#define EXPORT_HYPERKERNEL_HVE IMPORT_SYM
+#endif
+#else
+#define EXPORT_HYPERKERNEL_HVE
+#endif
 
 // -----------------------------------------------------------------------------
 // Definitions
@@ -28,12 +47,14 @@
 namespace hyperkernel::intel_x64
 {
 
+class vcpu;
+
 class EXPORT_HYPERKERNEL_HVE vmcall_vcpu_op_handler
 {
 public:
 
     vmcall_vcpu_op_handler(
-        gsl::not_null<apis *> apis);
+        gsl::not_null<vcpu *> vcpu);
 
     /// Destructor
     ///
@@ -55,7 +76,7 @@ private:
 
 private:
 
-    apis *m_apis;
+    vcpu *m_vcpu;
 
 public:
 

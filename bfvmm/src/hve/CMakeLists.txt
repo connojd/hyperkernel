@@ -18,13 +18,14 @@
 
 if(${BUILD_TARGET_ARCH} STREQUAL "x86_64")
     list(APPEND SOURCES
+        arch/intel_x64/vmexit/external_interrupt.cpp
         arch/intel_x64/vmexit/fault.cpp
         arch/intel_x64/vmexit/vmcall.cpp
         arch/intel_x64/vmcall/domain_op.cpp
         arch/intel_x64/vmcall/vcpu_op.cpp
         arch/intel_x64/vmcall/bf86_op.cpp
-        arch/intel_x64/apis.cpp
         arch/intel_x64/domain.cpp
+        arch/intel_x64/vcpu.cpp
     )
 
 elseif(${BUILD_TARGET_ARCH} STREQUAL "aarch64")

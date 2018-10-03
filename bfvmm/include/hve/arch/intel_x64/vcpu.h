@@ -16,35 +16,27 @@
 // License along with this library; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-#ifndef VCPU_GUEST_INTEL_X64_HYPERKERNEL_H
-#define VCPU_GUEST_INTEL_X64_HYPERKERNEL_H
+#ifndef VCPU_INTEL_X64_HYPERKERNEL_H
+#define VCPU_INTEL_X64_HYPERKERNEL_H
 
-#include "apis.h"
+#include "vmexit/external_interrupt.h"
+#include "vmexit/fault.h"
+#include "vmexit/vmcall.h"
+
+#include "vmcall/domain_op.h"
+#include "vmcall/vcpu_op.h"
+#include "vmcall/bf86_op.h"
+
+#include "domain.h"
+
+#include <bfvmm/vcpu/vcpu_manager.h>
 #include <eapis/hve/arch/intel_x64/vcpu.h>
 
 namespace hyperkernel::intel_x64
 {
 
-class vcpu_guest_state_t : public bfobject
+class vcpu : public eapis::intel_x64::vcpu
 {
-    domain *m_domain;
-
-public:
-
-    vcpu_guest_state_t(
-        gsl::not_null<domain *> domain
-    ) :
-        m_domain{domain}
-    { }
-
-    gsl::not_null<domain *> domain()
-    { return m_domain; }
-};
-
-class vcpu_guest : public eapis::intel_x64::vcpu
-{
-    domain *m_domain;
-
 public:
 
     /// Constructor
@@ -56,20 +48,25 @@ public:
     ///
     /// @cond
     ///
-    explicit vcpu_guest(
+    explicit vcpu(
         vcpuid::type id,
-        gsl::not_null<vcpu_guest_state_t *> vcpu_guest_state
-    ) :
-        eapis::intel_x64::vcpu{
-            id,
-            vcpu_guest_state->domain()->eapis_vcpu_global_state()
-        },
-        m_apis{
-            vmcs(),
-            exit_handler(),
-            vcpu_guest_state->domain().get()
-        },
-        m_domain(vcpu_guest_state->domain())
+        hyperkernel::intel_x64::domain *domain = nullptr);
+
+    /// @endcond
+
+    /// Destructor
+    ///
+    /// @expects
+    /// @ensures
+    ///
+    ~vcpu() = default;
+
+    /// Write Guest State
+    ///
+    /// If this is a guest vCPU, set up the vCPU state as such
+    ///
+    ///
+    void write_guest_state(hyperkernel::intel_x64::domain *domain)
     {
         using namespace ::intel_x64;
         using namespace ::intel_x64::vmcs;
@@ -77,8 +74,6 @@ public:
 
         using namespace ::x64::access_rights;
         using namespace ::x64::segment_register;
-
-        auto domain = vcpu_guest_state->domain();
 
         uint64_t cr0 = 0;
         cr0 |= cr0::protection_enable::mask;
@@ -152,31 +147,93 @@ public:
         guest_rflags::set(2);
         cr4_read_shadow::set(cr4);
 
-        eapis()->set_eptp(domain->ept());
+        this->set_eptp(domain->ept());
     }
 
-    /// @endcond
+public:
 
-    /// Destructor
+    //==========================================================================
+    // VMExit
+    //==========================================================================
+
+    //--------------------------------------------------------------------------
+    // VMCall
+    //--------------------------------------------------------------------------
+
+    /// Get VMCall Object
     ///
     /// @expects
     /// @ensures
     ///
-    ~vcpu_guest() = default;
+    /// @return Returns the VMCall handler stored in the apis if VMCall
+    ///     trapping is enabled, otherwise an exception is thrown
+    ///
+    gsl::not_null<vmcall_handler *> vmcall();
 
-    /// APIs
+    /// Add VMCall Handler
     ///
     /// @expects
     /// @ensures
     ///
-    /// @return a pointer to the hkapis
+    /// @param d the delegate to call when a vmcall exit occurs
     ///
-    gsl::not_null<apis *> hkapis()
-    { return &m_apis; }
+    VIRTUAL void add_vmcall_handler(
+        const vmcall_handler::handler_delegate_t &d);
 
-private:
+    //--------------------------------------------------------------------------
+    // Parent
+    //--------------------------------------------------------------------------
 
-    apis m_apis;
+    /// Set Parent vCPU
+    ///
+    /// Each vCPU that is executing (not created) must have a parent. The
+    /// only exception to this is the host vCPUs. If a vCPU can no longer
+    /// execute (e.g., from a crash, interrupt, hlt, etc...), the parent
+    /// vCPU is the parent that will be resumed.
+    ///
+    /// @expects
+    /// @ensures
+    ///
+    /// @param id the id of the vCPU to resume
+    ///
+    VIRTUAL void set_parent_vcpuid(vcpuid::type id);
+
+    /// Get Parent vCPU ID
+    ///
+    /// Returns the vCPU ID for this vCPU's parent. Note that this ID could
+    /// change on every exit. Specifically when the Host OS moves the
+    /// userspace application associated with a guest vCPU. For this reason,
+    /// don't cache this value. It always needs to be looked up.
+    ///
+    /// @expects
+    /// @ensures
+    ///
+    /// @return returns the vcpuid for this vCPU's parent vCPU.
+    ///
+    VIRTUAL vcpuid::type parent_vcpuid() const;
+
+    /// Resume Parent
+    ///
+    /// Resume the parent vCPU. Unless there is an error, this fucntion
+    /// does not return.
+    ///
+    /// @expects
+    /// @ensures
+    ///
+    VIRTUAL void resume_parent();
+
+public:
+
+    domain *m_domain;
+    vcpuid::type m_parent_vcpuid;
+
+    external_interrupt_handler m_external_interrupt_handler;
+    fault_handler m_fault_handler;
+    vmcall_handler m_vmcall_handler;
+
+    vmcall_domain_op_handler m_vmcall_domain_op_handler;
+    vmcall_vcpu_op_handler m_vmcall_vcpu_op_handler;
+    vmcall_bf86_op_handler m_vmcall_bf86_op_handler;
 };
 
 }
@@ -191,7 +248,7 @@ private:
 /// @return returns a pointer to the vCPU being queried or throws
 ///     and exception.
 ///
-#define get_hkguest_vcpu(a) \
-    g_vcm->get<hyperkernel::intel_x64::vcpu_guest *>(a, "invalid vcpuid: " a)
+#define get_hk_vcpu(a) \
+    g_vcm->get<hyperkernel::intel_x64::vcpu *>(a, __FILE__ ": invalid hk vcpuid")
 
 #endif

@@ -18,9 +18,7 @@
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 #include <bfvmm/vcpu/vcpu_factory.h>
-
-#include <hve/arch/intel_x64/vcpu_host.h>
-#include <hve/arch/intel_x64/vcpu_guest.h>
+#include <hve/arch/intel_x64/vcpu.h>
 
 namespace bfvmm
 {
@@ -30,15 +28,15 @@ vcpu_factory::make(vcpuid::type vcpuid, bfobject *obj)
 {
     if (obj == nullptr) {
         return
-            std::make_unique<hyperkernel::intel_x64::vcpu_host>(
+            std::make_unique<hyperkernel::intel_x64::vcpu>(
                 vcpuid
             );
     }
     else {
         return
-            std::make_unique<hyperkernel::intel_x64::vcpu_guest>(
+            std::make_unique<hyperkernel::intel_x64::vcpu>(
                 vcpuid,
-                dynamic_cast<hyperkernel::intel_x64::vcpu_guest_state_t *>(obj)
+                dynamic_cast<hyperkernel::intel_x64::domain *>(obj)
             );
     }
 }

@@ -16,20 +16,20 @@
 // License along with this library; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-#include <hve/arch/intel_x64/apis.h>
-#include <hve/arch/intel_x64/vcpu_guest.h>
+#include <hve/arch/intel_x64/vcpu.h>
+#include <hve/arch/intel_x64/vmcall/vcpu_op.h>
 
 namespace hyperkernel::intel_x64
 {
 
 vmcall_vcpu_op_handler::vmcall_vcpu_op_handler(
-    gsl::not_null<apis *> apis
+    gsl::not_null<vcpu *> vcpu
 ) :
-    m_apis{apis}
+    m_vcpu{vcpu}
 {
     using namespace vmcs_n;
 
-    apis->add_vmcall_handler(
+    vcpu->add_vmcall_handler(
         vmcall_handler_delegate(vmcall_vcpu_op_handler, dispatch)
     );
 }
@@ -41,12 +41,8 @@ vmcall_vcpu_op_handler::vcpu_op__create_vcpu(
     auto vcpu_op__create_vcpu_arg =
         get_hypercall_arg<__vcpu_op__create_vcpu_arg_t>(vmcs);
 
-    vcpu_guest_state_t vcpu_guest_state {
-        get_domain(vcpu_op__create_vcpu_arg->domainid)
-    };
-
     auto vcpuid = bfvmm::vcpu::generate_vcpuid();
-    g_vcm->create(vcpuid, &vcpu_guest_state);
+    g_vcm->create(vcpuid, get_domain(vcpu_op__create_vcpu_arg->domainid));
 
     return vcpuid;
 }
@@ -58,8 +54,8 @@ vmcall_vcpu_op_handler::vcpu_op__run_vcpu(
     auto vcpu_op__run_vcpu_arg =
         get_hypercall_arg<__vcpu_op__run_vcpu_arg_t>(vmcs);
 
-    auto vcpu = get_hkguest_vcpu(vcpu_op__run_vcpu_arg->vcpuid);
-    vcpu->hkapis()->set_parent_vcpuid(vmcs->save_state()->vcpuid);
+    auto vcpu = get_hk_vcpu(vcpu_op__run_vcpu_arg->vcpuid);
+    vcpu->set_parent_vcpuid(vmcs->vcpuid());
 
     vcpu->launch();
     return SUCCESS;
@@ -72,8 +68,8 @@ vmcall_vcpu_op_handler::vcpu_op__set_entry(
     auto vcpu_op__set_entry_arg =
         get_hypercall_arg<__vcpu_op__set_entry_arg_t>(vmcs);
 
-    auto vcpu = get_guest_vcpu(vcpu_op__set_entry_arg->vcpuid);
-    vcpu->vmcs()->save_state()->rip = vcpu_op__set_entry_arg->entry;
+    auto vcpu = get_hk_vcpu(vcpu_op__set_entry_arg->vcpuid);
+    vcpu->set_rip(vcpu_op__set_entry_arg->entry);
 
     return SUCCESS;
 }
@@ -85,8 +81,8 @@ vmcall_vcpu_op_handler::vcpu_op__set_stack(
     auto vcpu_op__set_stack_arg =
         get_hypercall_arg<__vcpu_op__set_stack_arg_t>(vmcs);
 
-    auto vcpu = get_guest_vcpu(vcpu_op__set_stack_arg->vcpuid);
-    vcpu->vmcs()->save_state()->rsp = vcpu_op__set_stack_arg->stack;
+    auto vcpu = get_hk_vcpu(vcpu_op__set_stack_arg->vcpuid);
+    vcpu->set_rsp(vcpu_op__set_stack_arg->stack);
 
     return SUCCESS;
 }
