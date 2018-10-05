@@ -35,6 +35,7 @@
 extern "C" {
 #endif
 
+void _pause(void) NOEXCEPT;
 uint64_t _vmcall(uint64_t r1, uint64_t r2, uint64_t r3, uint64_t r4) NOEXCEPT;
 
 #ifdef __cplusplus
@@ -162,14 +163,6 @@ typedef struct {
 
 typedef struct {
     vcpuid_t vcpuid;
-} __vcpu_op__run_vcpu_arg_t;
-
-typedef struct {
-    vcpuid_t vcpuid;
-} __vcpu_op__hlt_vcpu_arg_t;
-
-typedef struct {
-    vcpuid_t vcpuid;
 } __vcpu_op__destroy_vcpu_arg_t;
 
 typedef struct {
@@ -200,29 +193,10 @@ __vcpu_op__create_vcpu(domainid_t domainid)
 inline status_t
 __vcpu_op__run_vcpu(vcpuid_t vcpuid)
 {
-    __vcpu_op__run_vcpu_arg_t arg = {
-        vcpuid
-    };
-
     return _vmcall(
         __enum_vcpu_op,
         __enum_vcpu_op__run_vcpu,
-        bfrcast(uint64_t, &arg),
-        0
-    );
-}
-
-inline status_t
-__vcpu_op__hlt_vcpu(vcpuid_t vcpuid)
-{
-    __vcpu_op__hlt_vcpu_arg_t arg = {
-        vcpuid
-    };
-
-    return _vmcall(
-        __enum_vcpu_op,
-        __enum_vcpu_op__hlt_vcpu,
-        bfrcast(uint64_t, &arg),
+        vcpuid,
         0
     );
 }

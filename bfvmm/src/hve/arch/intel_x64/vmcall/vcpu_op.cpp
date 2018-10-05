@@ -51,10 +51,14 @@ uint64_t
 vmcall_vcpu_op_handler::vcpu_op__run_vcpu(
     gsl::not_null<vmcs_t *> vmcs)
 {
-    auto vcpu_op__run_vcpu_arg =
-        get_hypercall_arg<__vcpu_op__run_vcpu_arg_t>(vmcs);
+    // Note:
+    //
+    // This code is executed on every interrupt, so keep this code as small
+    // as possible. For this reason, we don't use an arg structure, preventing
+    // the need to map in memory on every interrupt.
+    //
 
-    auto vcpu = get_hk_vcpu(vcpu_op__run_vcpu_arg->vcpuid);
+    auto vcpu = get_hk_vcpu(vmcs->save_state()->rcx);
     vcpu->set_parent_vcpu(m_vcpu);
 
     vcpu->load();

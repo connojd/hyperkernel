@@ -19,6 +19,8 @@
 // License along with this library; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+#include <bfaffinity.h>
+
 #include <stdio.h>
 #include <errno.h>
 #include <stdlib.h>
@@ -245,20 +247,6 @@ run_vcpu(struct vm_t *vm)
 }
 
 status_t
-hlt_vcpu(struct vm_t *vm)
-{
-    status_t ret;
-
-    ret = __vcpu_op__hlt_vcpu(vm->vcpuid);
-    if (ret != SUCCESS) {
-        BFALERT("__vcpu_op__hlt_vcpu failed\n");
-        return FAILURE;
-    }
-
-    return SUCCESS;
-}
-
-status_t
 destroy_vcpu(struct vm_t *vm)
 {
     status_t ret;
@@ -289,6 +277,13 @@ main(int argc, const char *argv[])
         return EXIT_FAILURE;
     }
 
+    // TODO:
+    //
+    // Remove the need for affinity. This will require the implementation of
+    // VMCS migration.
+    //
+    set_affinity(0);
+
     ret = create_domain(&vm);
     if (ret != SUCCESS) {
         BFALERT("create_domain failed\n");
@@ -316,12 +311,6 @@ main(int argc, const char *argv[])
     ret = run_vcpu(&vm);
     if (ret != SUCCESS) {
         BFALERT("run_vcpu failed\n");
-        return EXIT_FAILURE;
-    }
-
-    ret = hlt_vcpu(&vm);
-    if (ret != SUCCESS) {
-        BFALERT("hlt_vcpu failed\n");
         return EXIT_FAILURE;
     }
 

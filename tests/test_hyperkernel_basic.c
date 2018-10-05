@@ -27,8 +27,8 @@ void _start(void)
         int i = 0;
         char c = 0;
 
-        for (loop = 0; loop < 1000000000; loop++) {
-
+        for (loop = 0; loop < 50000000; loop++) {
+            _pause();
         }
 
         do {
