@@ -55,12 +55,8 @@ inline bool
 guard_vmcall(
     gsl::not_null<vmcs_t *> vmcs, guard_vmcall_delegate_t &d)
 {
-    vmcs->save_state()->rax = 0xFFFFFFFFFFFFFFFF;
-
     try {
         vmcs->save_state()->rax = d(vmcs);
-        vmcs->load();
-
         return true;
     }
     catch (std::bad_alloc &) {
@@ -84,8 +80,6 @@ guard_vmcall(
     }
 
     vmcs->save_state()->rax = 0xFFFFFFFFFFFFFFFF;
-    vmcs->load();
-
     return false;
 }
 

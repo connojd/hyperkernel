@@ -196,7 +196,7 @@ public:
     ///
     /// @param id the id of the vCPU to resume
     ///
-    VIRTUAL void set_parent_vcpuid(vcpuid::type id);
+    VIRTUAL void set_parent_vcpu(gsl::not_null<vcpu *> vcpu);
 
     /// Get Parent vCPU ID
     ///
@@ -210,22 +210,43 @@ public:
     ///
     /// @return returns the vcpuid for this vCPU's parent vCPU.
     ///
-    VIRTUAL vcpuid::type parent_vcpuid() const;
+    VIRTUAL vcpu *parent_vcpu() const;
 
-    /// Resume Parent
+    /// Return Success
     ///
-    /// Resume the parent vCPU. Unless there is an error, this fucntion
-    /// does not return.
+    /// Return to the parent vCPU (i.e. resume the parent), and tell the parent
+    /// to stop the guest vCPU and report success
     ///
     /// @expects
     /// @ensures
     ///
-    VIRTUAL void resume_parent();
+    VIRTUAL void return_success();
+
+    /// Return Failure
+    ///
+    /// Return to the parent vCPU (i.e. resume the parent), and tell the parent
+    /// to stop the guest and report failure
+    ///
+    /// @expects
+    /// @ensures
+    ///
+    VIRTUAL void return_failure();
+
+    /// Return and Continue
+    ///
+    /// Return to the parent vCPU (i.e. resume the parent), and tell the parent
+    /// to resume the guest as fast as possible. This is used to hand control
+    /// back to the parent, even though the guest is not finished yet.
+    ///
+    /// @expects
+    /// @ensures
+    ///
+    VIRTUAL void return_and_continue();
 
 public:
 
-    domain *m_domain;
-    vcpuid::type m_parent_vcpuid;
+    domain *m_domain{};
+    vcpu *m_parent_vcpu{};
 
     external_interrupt_handler m_external_interrupt_handler;
     fault_handler m_fault_handler;

@@ -51,8 +51,12 @@ vmcall_bf86_op_handler::bf86_op__emulate_hlt(
     gsl::not_null<vmcs_t *> vmcs)
 {
     bfignored(vmcs);
+    auto parent_vcpu = m_vcpu->parent_vcpu();
 
-    m_vcpu->resume_parent();
+    parent_vcpu->load();
+    parent_vcpu->return_success();
+
+    // Unreachable
     return SUCCESS;
 }
 

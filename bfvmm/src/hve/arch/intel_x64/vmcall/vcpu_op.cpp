@@ -55,9 +55,12 @@ vmcall_vcpu_op_handler::vcpu_op__run_vcpu(
         get_hypercall_arg<__vcpu_op__run_vcpu_arg_t>(vmcs);
 
     auto vcpu = get_hk_vcpu(vcpu_op__run_vcpu_arg->vcpuid);
-    vcpu->set_parent_vcpuid(vmcs->vcpuid());
+    vcpu->set_parent_vcpu(m_vcpu);
 
-    vcpu->launch();
+    vcpu->load();
+    vcpu->run();
+
+    // Unreachable
     return SUCCESS;
 }
 
@@ -69,7 +72,7 @@ vmcall_vcpu_op_handler::vcpu_op__set_entry(
         get_hypercall_arg<__vcpu_op__set_entry_arg_t>(vmcs);
 
     auto vcpu = get_hk_vcpu(vcpu_op__set_entry_arg->vcpuid);
-    vcpu->set_rip(vcpu_op__set_entry_arg->entry);
+    vcpu->set_entry(vcpu_op__set_entry_arg->entry);
 
     return SUCCESS;
 }
@@ -82,7 +85,7 @@ vmcall_vcpu_op_handler::vcpu_op__set_stack(
         get_hypercall_arg<__vcpu_op__set_stack_arg_t>(vmcs);
 
     auto vcpu = get_hk_vcpu(vcpu_op__set_stack_arg->vcpuid);
-    vcpu->set_rsp(vcpu_op__set_stack_arg->stack);
+    vcpu->set_stack(vcpu_op__set_stack_arg->stack);
 
     return SUCCESS;
 }

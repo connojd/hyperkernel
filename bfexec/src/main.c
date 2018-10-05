@@ -216,13 +216,13 @@ create_vcpu(struct vm_t *vm)
     }
 
     ret = __vcpu_op__set_entry(vm->vcpuid, (uint64_t)vm->entry);
-    if (ret == FAILURE) {
+    if (ret != SUCCESS) {
         BFALERT("__vcpu_op__set_entry failed\n");
         return FAILURE;
     }
 
     ret = __vcpu_op__set_stack(vm->vcpuid, (uint64_t)vm->stack);
-    if (ret == FAILURE) {
+    if (ret != SUCCESS) {
         BFALERT("__vcpu_op__set_stack failed\n");
         return FAILURE;
     }
@@ -236,7 +236,7 @@ run_vcpu(struct vm_t *vm)
     status_t ret;
 
     ret = __vcpu_op__run_vcpu(vm->vcpuid);
-    if (ret == FAILURE) {
+    if (ret != SUCCESS) {
         BFALERT("__vcpu_op__run_vcpu failed\n");
         return FAILURE;
     }
@@ -250,7 +250,7 @@ hlt_vcpu(struct vm_t *vm)
     status_t ret;
 
     ret = __vcpu_op__hlt_vcpu(vm->vcpuid);
-    if (ret == FAILURE) {
+    if (ret != SUCCESS) {
         BFALERT("__vcpu_op__hlt_vcpu failed\n");
         return FAILURE;
     }
@@ -264,7 +264,7 @@ destroy_vcpu(struct vm_t *vm)
     status_t ret;
 
     ret = __vcpu_op__destroy_vcpu(vm->vcpuid);
-    if (ret == FAILURE) {
+    if (ret != SUCCESS) {
         BFALERT("__vcpu_op__destroy_vcpu failed\n");
         return FAILURE;
     }

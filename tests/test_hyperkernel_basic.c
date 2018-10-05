@@ -18,17 +18,24 @@
 
 #include <hypercall.h>
 
+volatile uint64_t loop = 0;
 const char *msg = "Hello from VM\n";
 
 void _start(void)
 {
-    int i = 0;
-    char c = 0;
+    while(1) {
+        int i = 0;
+        char c = 0;
 
-    do {
-        __bf86_op__emulate_outb(c = msg[i++]);
+        for (loop = 0; loop < 1000000000; loop++) {
+
+        }
+
+        do {
+            __bf86_op__emulate_outb(c = msg[i++]);
+        }
+        while (c != 0);
     }
-    while (c != 0);
 
     __bf86_op__emulate_hlt();
 }

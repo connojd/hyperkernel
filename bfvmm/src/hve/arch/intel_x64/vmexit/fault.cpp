@@ -82,7 +82,12 @@ fault_handler::handle(gsl::not_null<vmcs_t *> vmcs)
     bferror_subnhex(0, "exit reason", exit_reason::get());
     bferror_subnhex(0, "exit qualification", exit_qualification::get());
 
-    m_vcpu->resume_parent();
+    auto parent_vcpu = m_vcpu->parent_vcpu();
+
+    parent_vcpu->load();
+    parent_vcpu->return_failure();
+
+    // Unreachable
     return true;
 }
 

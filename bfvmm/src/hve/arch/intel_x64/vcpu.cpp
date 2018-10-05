@@ -16,6 +16,7 @@
 // License along with this library; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+#include <intrinsics.h>
 #include <hve/arch/intel_x64/vcpu.h>
 
 extern "C" void vmcs_resume(
@@ -36,7 +37,6 @@ vcpu::vcpu(
     },
 
     m_domain{domain},
-    m_parent_vcpuid{},
 
     m_external_interrupt_handler{this},
     m_fault_handler{this},
@@ -69,24 +69,42 @@ vcpu::add_vmcall_handler(
 { m_vmcall_handler.add_handler(std::move(d)); }
 
 //--------------------------------------------------------------------------
-// Parent VMCS
+// Parent vCPU
 //--------------------------------------------------------------------------
 
 void
-vcpu::set_parent_vcpuid(vcpuid::type id)
-{ m_parent_vcpuid = id; }
+vcpu::set_parent_vcpu(gsl::not_null<vcpu *> vcpu)
+{ m_parent_vcpu = vcpu; }
 
-vcpuid::type
-vcpu::parent_vcpuid() const
-{ return m_parent_vcpuid; }
+vcpu *
+vcpu::parent_vcpu() const
+{ return m_parent_vcpu; }
 
 void
-vcpu::resume_parent()
+vcpu::return_success()
 {
-    auto vcpu = get_vcpu(m_parent_vcpuid);
+    vmcs()->save_state()->rax = SUCCESS;
 
-    vcpu->load();
-    vcpu->advance_and_resume();
+    this->advance();
+    this->run();
+}
+
+void
+vcpu::return_failure()
+{
+    vmcs()->save_state()->rax = FAILURE;
+
+    this->advance();
+    this->run();
+}
+
+void
+vcpu::return_and_continue()
+{
+    vmcs_n::guest_rflags::carry_flag::enable();
+
+    this->advance();
+    this->run();
 }
 
 }

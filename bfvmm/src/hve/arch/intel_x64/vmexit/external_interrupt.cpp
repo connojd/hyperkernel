@@ -29,12 +29,12 @@ external_interrupt_handler::external_interrupt_handler(
 {
     using namespace vmcs_n;
 
-    // if (vcpuid::is_guest_vm_vcpu(m_apis->m_vmcs->vcpuid())) {
-    //     m_vcpu->add_external_interrupt_handler(
-    //         eapis::intel_x64::external_interrupt_handler::handler_delegate_t::create<
-    //             external_interrupt_handler, &external_interrupt_handler::handle>(this)
-    //     );
-    // }
+    if (vcpuid::is_guest_vm_vcpu(vcpu->id())) {
+        m_vcpu->add_external_interrupt_handler(
+            eapis::intel_x64::external_interrupt_handler::handler_delegate_t::create<
+                external_interrupt_handler, &external_interrupt_handler::handle>(this)
+        );
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -47,25 +47,13 @@ external_interrupt_handler::handle(
     eapis::intel_x64::external_interrupt_handler::info_t &info)
 {
     bfignored(vmcs);
+    auto parent_vcpu = m_vcpu->parent_vcpu();
 
-bfline
-    auto vcpu = get_hk_vcpu(m_vcpu->parent_vcpuid());
+    parent_vcpu->load();
+    parent_vcpu->queue_external_interrupt(info.vector);
+    parent_vcpu->return_and_continue();
 
-
-// AHAHAHAHAH
-//
-//
-// Need to load the vCPU first, before making mods. We need to talk to Connor
-// about this tomrrow.
-//
-//
-
-
-
-
-    vcpu->queue_external_interrupt(info.vector);
-    m_vcpu->resume_parent();
-
+    // Unreachable
     return true;
 }
 

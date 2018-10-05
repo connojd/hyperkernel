@@ -59,7 +59,10 @@ vmcall_handler::handle(gsl::not_null<vmcs_t *> vmcs)
         }
     });
 
-    return m_vcpu->advance();
+    m_vcpu->load();
+    m_vcpu->advance();
+
+    return true;
 }
 
 }
