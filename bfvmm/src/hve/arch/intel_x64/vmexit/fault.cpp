@@ -38,6 +38,28 @@ fault_handler::fault_handler(
         exit_reason::basic_exit_reason::ept_violation,
         ::handler_delegate_t::create<fault_handler, &fault_handler::handle>(this)
     );
+
+    vcpu->add_handler(
+        exit_reason::basic_exit_reason::ept_misconfiguration,
+        ::handler_delegate_t::create<fault_handler, &fault_handler::handle>(this)
+    );
+
+    vcpu->add_handler(
+        exit_reason::basic_exit_reason::vm_entry_failure_invalid_guest_state,
+        ::handler_delegate_t::create<fault_handler, &fault_handler::handle>(this)
+    );
+
+    vcpu->add_handler(
+        exit_reason::basic_exit_reason::vm_entry_failure_msr_loading,
+        ::handler_delegate_t::create<fault_handler, &fault_handler::handle>(this)
+    );
+
+    vcpu->add_handler(
+        exit_reason::basic_exit_reason::vm_entry_failure_machine_check_event,
+        ::handler_delegate_t::create<fault_handler, &fault_handler::handle>(this)
+    );
+
+
 }
 
 // -----------------------------------------------------------------------------

@@ -83,7 +83,7 @@ typedef struct {
     domainid_t domainid;
 } __domain_op__map_commit_arg_t;
 
-inline domainid_t
+static inline domainid_t
 __domain_op__create_domain()
 {
     return _vmcall(
@@ -94,7 +94,7 @@ __domain_op__create_domain()
     );
 }
 
-inline status_t
+static inline status_t
 __domain_op__destroy_domain(domainid_t domainid)
 {
     __domain_op__destroy_domain_arg_t arg = {
@@ -111,7 +111,7 @@ __domain_op__destroy_domain(domainid_t domainid)
     return ret == 0 ? SUCCESS : FAILURE;
 }
 
-inline status_t
+static inline status_t
 __domain_op__map_md(
     domainid_t domainid, uint64_t virt_addr, uint64_t exec_addr)
 {
@@ -129,7 +129,7 @@ __domain_op__map_md(
     return ret == 0 ? SUCCESS : FAILURE;
 }
 
-inline status_t
+static inline status_t
 __domain_op__map_commit(domainid_t domainid)
 {
     __domain_op__map_commit_arg_t arg = {
@@ -175,7 +175,7 @@ typedef struct {
     uint64_t stack;
 } __vcpu_op__set_stack_arg_t;
 
-inline vcpuid_t
+static inline vcpuid_t
 __vcpu_op__create_vcpu(domainid_t domainid)
 {
     __vcpu_op__create_vcpu_arg_t arg = {
@@ -190,7 +190,7 @@ __vcpu_op__create_vcpu(domainid_t domainid)
     );
 }
 
-inline status_t
+static inline status_t
 __vcpu_op__run_vcpu(vcpuid_t vcpuid)
 {
     return _vmcall(
@@ -201,7 +201,18 @@ __vcpu_op__run_vcpu(vcpuid_t vcpuid)
     );
 }
 
-inline status_t
+static inline status_t
+__vcpu_op__hlt_vcpu(vcpuid_t vcpuid)
+{
+    return _vmcall(
+        __enum_vcpu_op,
+        __enum_vcpu_op__hlt_vcpu,
+        vcpuid,
+        0
+    );
+}
+
+static inline status_t
 __vcpu_op__destroy_vcpu(vcpuid_t vcpuid)
 {
     __vcpu_op__destroy_vcpu_arg_t arg = {
@@ -216,7 +227,7 @@ __vcpu_op__destroy_vcpu(vcpuid_t vcpuid)
     );
 }
 
-inline status_t
+static inline status_t
 __vcpu_op__set_entry(vcpuid_t vcpuid, uint64_t entry)
 {
     __vcpu_op__set_entry_arg_t arg = {
@@ -231,7 +242,7 @@ __vcpu_op__set_entry(vcpuid_t vcpuid, uint64_t entry)
     );
 }
 
-inline status_t
+static inline status_t
 __vcpu_op__set_stack(vcpuid_t vcpuid, uint64_t stack)
 {
     __vcpu_op__set_stack_arg_t arg = {
@@ -253,7 +264,7 @@ __vcpu_op__set_stack(vcpuid_t vcpuid, uint64_t stack)
 #define __enum_bf86_op__emulate_outb 0x6E
 #define __enum_bf86_op__emulate_hlt 0xF4
 
-inline status_t
+static inline status_t
 __bf86_op__emulate_outb(char byte)
 {
     return _vmcall(
@@ -264,7 +275,7 @@ __bf86_op__emulate_outb(char byte)
     );
 }
 
-inline status_t
+static inline status_t
 __bf86_op__emulate_hlt()
 {
     return _vmcall(

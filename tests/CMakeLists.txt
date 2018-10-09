@@ -17,14 +17,14 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 cmake_minimum_required(VERSION 3.6)
-project(hyperkernel_tests C CXX)
+project(hyperkernel_tests ASM C)
 
-include(${SOURCE_CMAKE_DIR}/project.cmake)
-init_project(
-    INCLUDES ${CMAKE_CURRENT_LIST_DIR}/../include
-)
+include_directories(${SOURCE_BFSDK_DIR}/include/)
+include_directories(${CMAKE_CURRENT_LIST_DIR}/../include/)
 
-add_executable(test_hyperkernel_basic test_hyperkernel_basic.c)
-target_link_static_libraries(test_hyperkernel_basic bfintrinsics)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-install(TARGETS test_hyperkernel_basic DESTINATION bin)
+add_executable(test_hyperkernel_basic_${TYPE} test_hyperkernel_basic.c start.s)
+target_link_libraries(test_hyperkernel_basic_${TYPE} bfintrinsics_static)
+
+install(TARGETS test_hyperkernel_basic_${TYPE} DESTINATION bin)

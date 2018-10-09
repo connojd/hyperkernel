@@ -31,5 +31,6 @@ list(APPEND SOURCES
 
 add_executable(bfexec ${SOURCES})
 target_link_static_libraries(bfexec bfintrinsics)
+target_link_libraries(bfexec pthread)
 
 install(TARGETS bfexec DESTINATION bin)

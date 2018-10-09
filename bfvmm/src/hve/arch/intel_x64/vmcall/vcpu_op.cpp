@@ -61,10 +61,13 @@ vmcall_vcpu_op_handler::vcpu_op__run_vcpu(
     auto vcpu = get_hk_vcpu(vmcs->save_state()->rcx);
     vcpu->set_parent_vcpu(m_vcpu);
 
-    vcpu->load();
-    vcpu->run();
+::intel_x64::cr2::set(0);
 
-    // Unreachable
+    if (!vcpu->is_killed()) {
+        vcpu->load();
+        vcpu->run();
+    }
+
     return SUCCESS;
 }
 
@@ -98,7 +101,9 @@ uint64_t
 vmcall_vcpu_op_handler::vcpu_op__hlt_vcpu(
     gsl::not_null<vmcs_t *> vmcs)
 {
-    bfignored(vmcs);
+    auto vcpu = get_hk_vcpu(vmcs->save_state()->rcx);
+    vcpu->kill();
+
     return SUCCESS;
 }
 

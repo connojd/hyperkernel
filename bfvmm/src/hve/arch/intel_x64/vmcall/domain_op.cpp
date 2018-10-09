@@ -16,6 +16,8 @@
 // License along with this library; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+#include <iostream>
+
 #include <hve/arch/intel_x64/vcpu.h>
 #include <hve/arch/intel_x64/vmcall/domain_op.h>
 
@@ -58,6 +60,8 @@ vmcall_domain_op_handler::domain_op__map_md(
             domain_op__map_md_arg->virt_addr,
             vmcs_n::guest_cr3::get()
         );
+
+std::cout << std::hex << std::showbase << domain_op__map_md_arg->exec_addr << " - " << phys_addr << '\n';
 
     get_domain(domain_op__map_md_arg->domainid)->map_4k(
         domain_op__map_md_arg->exec_addr, phys_addr

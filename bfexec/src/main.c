@@ -1,23 +1,21 @@
-//
-// Bareflank Hyperkernel
-//
-// Copyright (C) 2015 Assured Information Security, Inc.
-// Author: Rian Quinn        <quinnr@ainfosec.com>
-// Author: Brendan Kerrigan  <kerriganb@ainfosec.com>
-//
-// This library is free software; you can redistribute it and/or
-// modify it under the terms of the GNU Lesser General Public
-// License as published by the Free Software Foundation; either
-// version 2.1 of the License, or (at your option) any later version.
-//
-// This library is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
-// Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public
-// License along with this library; if not, write to the Free Software
-// Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+/**
+ * Bareflank Hyperkernel
+ * Copyright (C) 2018 Assured Information Security, Inc.
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2.1 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this library; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+ */
 
 #include <bfaffinity.h>
 
@@ -32,6 +30,30 @@
 
 #include <sys/mman.h>
 
+// Notes:
+//
+// - Currently on one vCPU is supported. This code is written using threading
+//   so adding support for more than one vCPU should be simple once the
+//   hyperkernel supports this. Just create more vCPU threads
+//
+// - Currently this code doesn't handle when the VM wishes to go to sleep
+//   by calling "hlt". Once the hyperkernel supports this, we will need to
+//   add support for this application to wait on a kernel event. The only
+//   way to wake up from "hlt" is to interrupt the CPU. Such and interrupt
+//   will either have to come from an external interrupt, or it will have to
+//   come from a timer interrupt. Either way, execution doesn't need to
+//   continue until an event occurs, which we will have to add support for.
+//
+// - Currently, we do not support VMCS migration, which means we have to
+//   set the affinity of bfexec. At some point, we need to implement
+//   VMCS migration so that we can support executing from any core, at any
+//   time.
+//
+
+/* -------------------------------------------------------------------------- */
+/* VM                                                                         */
+/* -------------------------------------------------------------------------- */
+
 struct vm_t
 {
     struct crt_info_t crt_info;
@@ -39,27 +61,71 @@ struct vm_t
     struct bfelf_binary_t bfelf_binary;
 
     void *entry;
-    void *stack;
 
     uint64_t domainid;
     uint64_t vcpuid;
 
     FILE *file;
-    void *stack_buffer;
+    pthread_t run_thread;
 };
 
-#define STACK_ADDR 0x200000
-#define ENTRY_ADDR 0x400000
+struct vm_t vm;
 
-// -----------------------------------------------------------------------------
-// Ack
-// -----------------------------------------------------------------------------
+/* -------------------------------------------------------------------------- */
+/* Start Address                                                              */
+/* -------------------------------------------------------------------------- */
+
+#define START_ADDR 0x200000
+
+/* -------------------------------------------------------------------------- */
+/* Ack                                                                        */
+/* -------------------------------------------------------------------------- */
 
 uint32_t _cpuid_eax(uint32_t val) NOEXCEPT;
 
 inline uint64_t
 ack()
 { return _cpuid_eax(0xBF00); }
+
+/* -------------------------------------------------------------------------- */
+/* Signal Handling                                                            */
+/* -------------------------------------------------------------------------- */
+
+#include <signal.h>
+
+void
+kill_signal_handler(void)
+{
+    status_t ret;
+
+    BFINFO("\n");
+    BFINFO("\n");
+    BFINFO("killing VM: %" PRId64 "\n", vm.domainid);
+
+    ret = __vcpu_op__hlt_vcpu(vm.vcpuid);
+    if (ret != SUCCESS) {
+        BFALERT("__vcpu_op__hlt_vcpu failed\n");
+        return;
+    }
+
+    return;
+}
+
+void
+sig_handler(int sig)
+{
+    bfignored(sig);
+    kill_signal_handler();
+    return;
+}
+
+void
+setup_kill_signal_handler(void)
+{
+    signal(SIGINT, sig_handler);
+    signal(SIGQUIT, sig_handler);
+    signal(SIGTERM, sig_handler);
+}
 
 /* -------------------------------------------------------------------------- */
 /* ELF File Functions                                                         */
@@ -93,7 +159,7 @@ read_binary(struct vm_t *vm, const char *filename)
         return FAILURE;
     }
 
-    data = (char *)aligned_alloc(0x1000, size);
+    data = (char *)platform_alloc_rwe(size);
     if (data == 0) {
         BFALERT("malloc failed: %s\n", strerror(errno));
         return FAILURE;
@@ -107,9 +173,6 @@ read_binary(struct vm_t *vm, const char *filename)
     vm->bfelf_binary.file = data;
     vm->bfelf_binary.file_size = size;
 
-    vm->stack = (void *)(STACK_ADDR + STACK_SIZE - 1);
-    vm->bfelf_binary.exec_virt = (void *)ENTRY_ADDR;
-
     return SUCCESS;
 }
 
@@ -119,42 +182,27 @@ load_binary(struct vm_t *vm)
     status_t ret;
     uint64_t index;
 
+    vm->bfelf_binary.start_addr = (void *)START_ADDR;
+
     ret = bfelf_load(&vm->bfelf_binary, 1, &vm->entry, &vm->crt_info, &vm->bfelf_loader);
     if (ret != BF_SUCCESS) {
         BFALERT("bfelf_load: 0x%016" PRIx64 "\n", ret);
         return FAILURE;
     }
 
-    vm->stack_buffer = platform_alloc_rw(STACK_SIZE);
-    if (vm->stack_buffer == 0) {
-        BFALERT("malloc failed: %s\n", strerror(errno));
-        return FAILURE;
-    }
+BFALERT("vm->bfelf_binary.exec: 0x%016" PRIx64 "\n", vm->bfelf_binary.exec);
+BFALERT("vm->bfelf_binary.exec_size: 0x%016" PRIx64 "\n", vm->bfelf_binary.exec_size);
 
-    if (mlock(vm->bfelf_binary.exec, vm->bfelf_binary.exec_size) != 0) {
-        BFALERT("mlock failed: %s\n", strerror(errno));
-        return FAILURE;
-    }
-
-    if (mlock(vm->stack_buffer, STACK_SIZE) != 0) {
-        BFALERT("mlock failed: %s\n", strerror(errno));
-        return FAILURE;
-    }
-
-    for (index = 0; index < STACK_SIZE; index += 0x1000) {
-        ret = __domain_op__map_md(
-            vm->domainid, (uint64_t)vm->stack_buffer + index, STACK_ADDR + index
-        );
-
-        if (ret != SUCCESS) {
-            BFALERT("__domain_op__map_md failed\n");
-            return FAILURE;
-        }
-    }
+    // if (mlock(vm->bfelf_binary.exec, vm->bfelf_binary.exec_size) != 0) {
+    //     BFALERT("mlock failed: %s\n", strerror(errno));
+    //     return FAILURE;
+    // }
 
     for (index = 0; index < vm->bfelf_binary.exec_size; index += 0x1000) {
         ret = __domain_op__map_md(
-            vm->domainid, (uint64_t)vm->bfelf_binary.exec + index, ENTRY_ADDR + index
+            vm->domainid,
+            (uint64_t)vm->bfelf_binary.exec + index,
+            (uint64_t)vm->bfelf_binary.start_addr + index
         );
 
         if (ret != SUCCESS) {
@@ -217,33 +265,29 @@ create_vcpu(struct vm_t *vm)
         return FAILURE;
     }
 
+vm->entry = (void *)0x1000370;
+
     ret = __vcpu_op__set_entry(vm->vcpuid, (uint64_t)vm->entry);
     if (ret != SUCCESS) {
         BFALERT("__vcpu_op__set_entry failed\n");
         return FAILURE;
     }
 
-    ret = __vcpu_op__set_stack(vm->vcpuid, (uint64_t)vm->stack);
-    if (ret != SUCCESS) {
-        BFALERT("__vcpu_op__set_stack failed\n");
-        return FAILURE;
-    }
-
     return SUCCESS;
 }
 
-status_t
-run_vcpu(struct vm_t *vm)
+void *
+run_vcpu(void *vm)
 {
     status_t ret;
 
-    ret = __vcpu_op__run_vcpu(vm->vcpuid);
+    ret = __vcpu_op__run_vcpu(((struct vm_t *)vm)->vcpuid);
     if (ret != SUCCESS) {
         BFALERT("__vcpu_op__run_vcpu failed\n");
-        return FAILURE;
+        return 0;
     }
 
-    return SUCCESS;
+    return 0;
 }
 
 status_t
@@ -261,6 +305,16 @@ destroy_vcpu(struct vm_t *vm)
 }
 
 /* -------------------------------------------------------------------------- */
+/* Threading                                                                  */
+/* -------------------------------------------------------------------------- */
+
+#include <pthread.h>
+
+void
+start_run_thread(struct vm_t *vm)
+{ pthread_create(&vm->run_thread, nullptr, run_vcpu, vm); }
+
+/* -------------------------------------------------------------------------- */
 /* Main                                                                       */
 /* -------------------------------------------------------------------------- */
 
@@ -268,21 +322,19 @@ int
 main(int argc, const char *argv[])
 {
     status_t ret;
-    bfignored(argc);
-
-    struct vm_t vm;
     memset(&vm, 0, sizeof(vm));
+
+    if (argc != 2) {
+        BFALERT("invalid number of arguments\n");
+        return EXIT_FAILURE;
+    }
 
     if (ack() == 0) {
         return EXIT_FAILURE;
     }
 
-    // TODO:
-    //
-    // Remove the need for affinity. This will require the implementation of
-    // VMCS migration.
-    //
     set_affinity(0);
+    setup_kill_signal_handler();
 
     ret = create_domain(&vm);
     if (ret != SUCCESS) {
@@ -293,38 +345,46 @@ main(int argc, const char *argv[])
     ret = read_binary(&vm, argv[1]);
     if (ret != SUCCESS) {
         BFALERT("read_binary failed\n");
-        return EXIT_FAILURE;
+        goto FAILED;
     }
 
     ret = load_binary(&vm);
     if (ret != SUCCESS) {
         BFALERT("load_binary failed\n");
-        return EXIT_FAILURE;
+        goto FAILED;
     }
 
     ret = create_vcpu(&vm);
     if (ret != SUCCESS) {
         BFALERT("create_vcpu failed\n");
-        return EXIT_FAILURE;
+        goto FAILED;
     }
 
-    ret = run_vcpu(&vm);
-    if (ret != SUCCESS) {
-        BFALERT("run_vcpu failed\n");
-        return EXIT_FAILURE;
-    }
+    start_run_thread(&vm);
+    pthread_join(vm.run_thread, 0);
 
     ret = destroy_vcpu(&vm);
     if (ret != SUCCESS) {
         BFALERT("destroy_vcpu failed\n");
-        return EXIT_FAILURE;
+        goto FAILED;
     }
 
     ret = destroy_domain(&vm);
     if (ret != SUCCESS) {
         BFALERT("destroy_domain failed\n");
-        return EXIT_FAILURE;
+        goto FAILED_DESTROY_DOMAIN;
     }
 
     return EXIT_SUCCESS;
+
+FAILED:
+
+    ret = destroy_domain(&vm);
+    if (ret != SUCCESS) {
+        BFALERT("destroy_domain failed\n");
+    }
+
+FAILED_DESTROY_DOMAIN:
+
+    return EXIT_FAILURE;
 }

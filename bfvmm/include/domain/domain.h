@@ -127,7 +127,7 @@ public:
     ///
     static domainid_type generate_domainid()
     {
-        static domainid_type s_id = 0;
+        static domainid_type s_id = 1;
         return s_id++;
     }
 

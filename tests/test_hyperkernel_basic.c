@@ -18,11 +18,11 @@
 
 #include <hypercall.h>
 
-volatile uint64_t loop = 0;
-const char *msg = "Hello from VM\n";
-
-void _start(void)
+int main(void)
 {
+    uint64_t loop;
+    const char *msg = "Hello World from VM!!!\n";
+
     while(1) {
         int i = 0;
         char c = 0;
@@ -37,5 +37,6 @@ void _start(void)
         while (c != 0);
     }
 
+    // Unreachable
     __bf86_op__emulate_hlt();
 }

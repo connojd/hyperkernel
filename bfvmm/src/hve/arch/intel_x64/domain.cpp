@@ -38,10 +38,9 @@ domain::domain(domainid_type domainid) :
     m_idt_virt = 0x2000;
     m_tss_virt = 0x3000;
 
-    m_gdt.set(1, nullptr, 0xFFFFFFFF, ring0_cs_descriptor);
-    m_gdt.set(2, nullptr, 0xFFFFFFFF, ring0_ss_descriptor);
-    m_gdt.set(3, nullptr, 0xFFFFFFFF, ring0_fs_descriptor);
-    m_gdt.set(4, nullptr, 0xFFFFFFFF, ring0_gs_descriptor);
+    m_gdt.set(2, nullptr, 0xFFFFFFFF, ring0_cs_descriptor);
+    m_gdt.set(3, nullptr, 0xFFFFFFFF, ring0_ds_descriptor);
+    m_gdt.set(4, nullptr, 0xFFFFFFFF, ring0_ss_descriptor);
     m_gdt.set(5, m_tss_virt, sizeof(m_tss), ring0_tr_descriptor);
 
     m_cr3_map.map_4k(m_gdt_virt, m_gdt_virt, cr3::mmap::attr_type::read_write);
