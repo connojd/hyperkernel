@@ -38,9 +38,9 @@ vmcall_domain_op_handler::vmcall_domain_op_handler(
 
 uint64_t
 vmcall_domain_op_handler::domain_op__create_domain(
-    gsl::not_null<vmcs_t *> vmcs)
+    gsl::not_null<vcpu_t *> vcpu)
 {
-    bfignored(vmcs);
+    bfignored(vcpu);
 
     auto domainid = domain::generate_domainid();
     g_dm->create(domainid, nullptr);
@@ -50,18 +50,16 @@ vmcall_domain_op_handler::domain_op__create_domain(
 
 uint64_t
 vmcall_domain_op_handler::domain_op__map_md(
-    gsl::not_null<vmcs_t *> vmcs)
+    gsl::not_null<vcpu_t *> vcpu)
 {
     auto domain_op__map_md_arg =
-        get_hypercall_arg<__domain_op__map_md_arg_t>(vmcs);
+        get_hypercall_arg<__domain_op__map_md_arg_t>(vcpu);
 
     auto phys_addr =
         bfvmm::x64::virt_to_phys_with_cr3(
             domain_op__map_md_arg->virt_addr,
             vmcs_n::guest_cr3::get()
         );
-
-std::cout << std::hex << std::showbase << domain_op__map_md_arg->exec_addr << " - " << phys_addr << '\n';
 
     get_domain(domain_op__map_md_arg->domainid)->map_4k(
         domain_op__map_md_arg->exec_addr, phys_addr
@@ -72,41 +70,35 @@ std::cout << std::hex << std::showbase << domain_op__map_md_arg->exec_addr << " 
 
 uint64_t
 vmcall_domain_op_handler::domain_op__map_commit(
-    gsl::not_null<vmcs_t *> vmcs)
+    gsl::not_null<vcpu_t *> vcpu)
 {
-    auto domain_op__map_commit_arg =
-        get_hypercall_arg<__domain_op__map_commit_arg_t>(vmcs);
-
-    get_domain(domain_op__map_commit_arg->domainid)->map_commit();
+    get_domain(vcpu->rcx())->map_commit();
     return SUCCESS;
 }
 
 uint64_t
 vmcall_domain_op_handler::domain_op__destroy_domain(
-    gsl::not_null<vmcs_t *> vmcs)
+    gsl::not_null<vcpu_t *> vcpu)
 {
-    auto domain_op__destroy_domain_arg =
-        get_hypercall_arg<__domain_op__destroy_domain_arg_t>(vmcs);
-
-    g_dm->destroy(domain_op__destroy_domain_arg->domainid, nullptr);
+    g_dm->destroy(vcpu->rcx(), nullptr);
     return SUCCESS;
 }
 
 bool
 vmcall_domain_op_handler::dispatch(
-    gsl::not_null<vmcs_t *> vmcs)
+    gsl::not_null<vcpu_t *> vcpu)
 {
-    if (vmcs->save_state()->rax != __enum_domain_op) {
+    if (vcpu->rax() != __enum_domain_op) {
         return false;
     }
 
-    switch(vmcs->save_state()->rbx) {
+    switch(vcpu->rbx()) {
         case __enum_domain_op__create_domain:
         {
             auto domain_op__create_domain_delegate =
                 guard_vmcall_delegate(vmcall_domain_op_handler, domain_op__create_domain);
 
-            return guard_vmcall(vmcs, domain_op__create_domain_delegate);
+            return guard_vmcall(vcpu, domain_op__create_domain_delegate);
         }
 
         case __enum_domain_op__map_md:
@@ -114,7 +106,7 @@ vmcall_domain_op_handler::dispatch(
             auto domain_op__map_md_delegate =
                 guard_vmcall_delegate(vmcall_domain_op_handler, domain_op__map_md);
 
-            return guard_vmcall(vmcs, domain_op__map_md_delegate);
+            return guard_vmcall(vcpu, domain_op__map_md_delegate);
         }
 
         case __enum_domain_op__map_commit:
@@ -122,7 +114,7 @@ vmcall_domain_op_handler::dispatch(
             auto domain_op__map_commit_delegate =
                 guard_vmcall_delegate(vmcall_domain_op_handler, domain_op__map_commit);
 
-            return guard_vmcall(vmcs, domain_op__map_commit_delegate);
+            return guard_vmcall(vcpu, domain_op__map_commit_delegate);
         }
 
         case __enum_domain_op__destroy_domain:
@@ -130,7 +122,7 @@ vmcall_domain_op_handler::dispatch(
             auto domain_op__destroy_domain_delegate =
                 guard_vmcall_delegate(vmcall_domain_op_handler, domain_op__destroy_domain);
 
-            return guard_vmcall(vmcs, domain_op__destroy_domain_delegate);
+            return guard_vmcall(vcpu, domain_op__destroy_domain_delegate);
         }
 
         default:

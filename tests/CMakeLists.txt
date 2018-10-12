@@ -24,6 +24,9 @@ include_directories(${CMAKE_CURRENT_LIST_DIR}/../include/)
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
+# set(CMAKE_C_FLAGS "--target=x86_64-vmm-elf --sysroot=${VMM_PREFIX_PATH}")
+# set(CMAKE_CXX_FLAGS "--target=x86_64-vmm-elf --sysroot=${VMM_PREFIX_PATH}")
+
 add_executable(test_hyperkernel_basic_${TYPE} test_hyperkernel_basic.c start.s)
 target_link_libraries(test_hyperkernel_basic_${TYPE} bfintrinsics_static)
 

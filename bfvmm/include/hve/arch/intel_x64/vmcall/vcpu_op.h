@@ -65,14 +65,14 @@ public:
 
 private:
 
-    uint64_t vcpu_op__create_vcpu(gsl::not_null<vmcs_t *> vmcs);
-    uint64_t vcpu_op__run_vcpu(gsl::not_null<vmcs_t *> vmcs);
-    uint64_t vcpu_op__set_entry(gsl::not_null<vmcs_t *> vmcs);
-    uint64_t vcpu_op__set_stack(gsl::not_null<vmcs_t *> vmcs);
-    uint64_t vcpu_op__hlt_vcpu(gsl::not_null<vmcs_t *> vmcs);
-    uint64_t vcpu_op__destroy_vcpu(gsl::not_null<vmcs_t *> vmcs);
+    uint64_t vcpu_op__create_vcpu(gsl::not_null<vcpu_t *> vcpu);
+    uint64_t vcpu_op__run_vcpu(gsl::not_null<vcpu_t *> vcpu);
+    uint64_t vcpu_op__set_rip(gsl::not_null<vcpu_t *> vcpu);
+    uint64_t vcpu_op__set_rbx(gsl::not_null<vcpu_t *> vcpu);
+    uint64_t vcpu_op__hlt_vcpu(gsl::not_null<vcpu_t *> vcpu);
+    uint64_t vcpu_op__destroy_vcpu(gsl::not_null<vcpu_t *> vcpu);
 
-    bool dispatch(gsl::not_null<vmcs_t *> vmcs);
+    bool dispatch(gsl::not_null<vcpu_t *> vcpu);
 
 private:
 

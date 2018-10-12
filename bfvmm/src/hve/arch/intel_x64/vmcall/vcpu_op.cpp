@@ -36,20 +36,17 @@ vmcall_vcpu_op_handler::vmcall_vcpu_op_handler(
 
 uint64_t
 vmcall_vcpu_op_handler::vcpu_op__create_vcpu(
-    gsl::not_null<vmcs_t *> vmcs)
+    gsl::not_null<vcpu_t *> vcpu)
 {
-    auto vcpu_op__create_vcpu_arg =
-        get_hypercall_arg<__vcpu_op__create_vcpu_arg_t>(vmcs);
-
     auto vcpuid = bfvmm::vcpu::generate_vcpuid();
-    g_vcm->create(vcpuid, get_domain(vcpu_op__create_vcpu_arg->domainid));
+    g_vcm->create(vcpuid, get_domain(vcpu->rcx()));
 
     return vcpuid;
 }
 
 uint64_t
 vmcall_vcpu_op_handler::vcpu_op__run_vcpu(
-    gsl::not_null<vmcs_t *> vmcs)
+    gsl::not_null<vcpu_t *> vcpu)
 {
     // Note:
     //
@@ -58,81 +55,70 @@ vmcall_vcpu_op_handler::vcpu_op__run_vcpu(
     // the need to map in memory on every interrupt.
     //
 
-    auto vcpu = get_hk_vcpu(vmcs->save_state()->rcx);
-    vcpu->set_parent_vcpu(m_vcpu);
+    auto child_vcpu = get_hk_vcpu(vcpu->rcx());
+    child_vcpu->set_parent_vcpu(m_vcpu);
 
-::intel_x64::cr2::set(0);
-
-    if (!vcpu->is_killed()) {
-        vcpu->load();
-        vcpu->run();
+    if (!child_vcpu->is_killed()) {
+        child_vcpu->load();
+        child_vcpu->run();
     }
 
     return SUCCESS;
 }
 
 uint64_t
-vmcall_vcpu_op_handler::vcpu_op__set_entry(
-    gsl::not_null<vmcs_t *> vmcs)
+vmcall_vcpu_op_handler::vcpu_op__set_rip(
+    gsl::not_null<vcpu_t *> vcpu)
 {
-    auto vcpu_op__set_entry_arg =
-        get_hypercall_arg<__vcpu_op__set_entry_arg_t>(vmcs);
-
-    auto vcpu = get_hk_vcpu(vcpu_op__set_entry_arg->vcpuid);
-    vcpu->set_entry(vcpu_op__set_entry_arg->entry);
+    auto child_vcpu = get_hk_vcpu(vcpu->rcx());
+    child_vcpu->set_rip(vcpu->rdx());
 
     return SUCCESS;
 }
 
 uint64_t
-vmcall_vcpu_op_handler::vcpu_op__set_stack(
-    gsl::not_null<vmcs_t *> vmcs)
+vmcall_vcpu_op_handler::vcpu_op__set_rbx(
+    gsl::not_null<vcpu_t *> vcpu)
 {
-    auto vcpu_op__set_stack_arg =
-        get_hypercall_arg<__vcpu_op__set_stack_arg_t>(vmcs);
-
-    auto vcpu = get_hk_vcpu(vcpu_op__set_stack_arg->vcpuid);
-    vcpu->set_stack(vcpu_op__set_stack_arg->stack);
+    auto child_vcpu = get_hk_vcpu(vcpu->rcx());
+    child_vcpu->set_rbx(vcpu->rdx());
 
     return SUCCESS;
 }
 
 uint64_t
 vmcall_vcpu_op_handler::vcpu_op__hlt_vcpu(
-    gsl::not_null<vmcs_t *> vmcs)
+    gsl::not_null<vcpu_t *> vcpu)
 {
-    auto vcpu = get_hk_vcpu(vmcs->save_state()->rcx);
-    vcpu->kill();
+    auto child_vcpu = get_hk_vcpu(vcpu->rcx());
+    child_vcpu->kill();
 
     return SUCCESS;
 }
 
 uint64_t
 vmcall_vcpu_op_handler::vcpu_op__destroy_vcpu(
-    gsl::not_null<vmcs_t *> vmcs)
+    gsl::not_null<vcpu_t *> vcpu)
 {
-    auto vcpu_op__destroy_vcpu_arg =
-        get_hypercall_arg<__vcpu_op__destroy_vcpu_arg_t>(vmcs);
-
-    g_vcm->destroy(vcpu_op__destroy_vcpu_arg->vcpuid, nullptr);
+    g_vcm->destroy(vcpu->rcx(), nullptr);
     return SUCCESS;
 }
 
 bool
 vmcall_vcpu_op_handler::dispatch(
-    gsl::not_null<vmcs_t *> vmcs)
+    gsl::not_null<vcpu_t *> vcpu)
 {
-    if (vmcs->save_state()->rax != __enum_vcpu_op) {
+    if (vcpu->rax() != __enum_vcpu_op) {
         return false;
     }
 
-    switch(vmcs->save_state()->rbx) {
+    switch(vcpu->rbx()) {
         case __enum_vcpu_op__create_vcpu:
         {
             auto vcpu_op__create_vcpu_delegate =
                 guard_vmcall_delegate(vmcall_vcpu_op_handler, vcpu_op__create_vcpu);
 
-            return guard_vmcall(vmcs, vcpu_op__create_vcpu_delegate);
+            return guard_vmcall(vcpu, vcpu_op__create_vcpu_delegate);
         }
 
         case __enum_vcpu_op__run_vcpu:
@@ -140,23 +126,23 @@ vmcall_vcpu_op_handler::dispatch(
             auto vcpu_op__run_vcpu_delegate =
                 guard_vmcall_delegate(vmcall_vcpu_op_handler, vcpu_op__run_vcpu);
 
-            return guard_vmcall(vmcs, vcpu_op__run_vcpu_delegate);
+            return guard_vmcall(vcpu, vcpu_op__run_vcpu_delegate);
         }
 
-        case __enum_vcpu_op__set_entry:
+        case __enum_vcpu_op__set_rip:
         {
-            auto vcpu_op__set_entry_delegate =
-                guard_vmcall_delegate(vmcall_vcpu_op_handler, vcpu_op__set_entry);
+            auto vcpu_op__set_rip_delegate =
+                guard_vmcall_delegate(vmcall_vcpu_op_handler, vcpu_op__set_rip);
 
-            return guard_vmcall(vmcs, vcpu_op__set_entry_delegate);
+            return guard_vmcall(vcpu, vcpu_op__set_rip_delegate);
         }
 
-        case __enum_vcpu_op__set_stack:
+        case __enum_vcpu_op__set_rbx:
         {
-            auto vcpu_op__set_stack_delegate =
-                guard_vmcall_delegate(vmcall_vcpu_op_handler, vcpu_op__set_stack);
+            auto vcpu_op__set_rbx_delegate =
+                guard_vmcall_delegate(vmcall_vcpu_op_handler, vcpu_op__set_rbx);
 
-            return guard_vmcall(vmcs, vcpu_op__set_stack_delegate);
+            return guard_vmcall(vcpu, vcpu_op__set_rbx_delegate);
         }
 
         case __enum_vcpu_op__hlt_vcpu:
@@ -164,7 +150,7 @@ vmcall_vcpu_op_handler::dispatch(
             auto vcpu_op__hlt_vcpu_delegate =
                 guard_vmcall_delegate(vmcall_vcpu_op_handler, vcpu_op__hlt_vcpu);
 
-            return guard_vmcall(vmcs, vcpu_op__hlt_vcpu_delegate);
+            return guard_vmcall(vcpu, vcpu_op__hlt_vcpu_delegate);
         }
 
         case __enum_vcpu_op__destroy_vcpu:
@@ -172,7 +158,7 @@ vmcall_vcpu_op_handler::dispatch(
             auto vcpu_op__destroy_vcpu_delegate =
                 guard_vmcall_delegate(vmcall_vcpu_op_handler, vcpu_op__destroy_vcpu);
 
-            return guard_vmcall(vmcs, vcpu_op__destroy_vcpu_delegate);
+            return guard_vmcall(vcpu, vcpu_op__destroy_vcpu_delegate);
         }
 
         default:

@@ -38,19 +38,19 @@ vmcall_bf86_op_handler::vmcall_bf86_op_handler(
 
 uint64_t
 vmcall_bf86_op_handler::bf86_op__emulate_outb(
-    gsl::not_null<vmcs_t *> vmcs)
+    gsl::not_null<vcpu_t *> vcpu)
 {
-    bfignored(vmcs);
+    bfignored(vcpu);
 
-    std::cout << gsl::narrow_cast<char>(vmcs->save_state()->rcx);
+    std::cout << gsl::narrow_cast<char>(vcpu->rcx());
     return SUCCESS;
 }
 
 uint64_t
 vmcall_bf86_op_handler::bf86_op__emulate_hlt(
-    gsl::not_null<vmcs_t *> vmcs)
+    gsl::not_null<vcpu_t *> vcpu)
 {
-    bfignored(vmcs);
+    bfignored(vcpu);
     auto parent_vcpu = m_vcpu->parent_vcpu();
 
     parent_vcpu->load();
@@ -62,19 +62,19 @@ vmcall_bf86_op_handler::bf86_op__emulate_hlt(
 
 bool
 vmcall_bf86_op_handler::dispatch(
-    gsl::not_null<vmcs_t *> vmcs)
+    gsl::not_null<vcpu_t *> vcpu)
 {
-    if (vmcs->save_state()->rax != __enum_bf86_op) {
+    if (vcpu->rax() != __enum_bf86_op) {
         return false;
     }
 
-    switch(vmcs->save_state()->rbx) {
+    switch(vcpu->rbx()) {
         case __enum_bf86_op__emulate_outb:
         {
             auto bf86_op__emulate_outb_delegate =
                 guard_vmcall_delegate(vmcall_bf86_op_handler, bf86_op__emulate_outb);
 
-            return guard_vmcall(vmcs, bf86_op__emulate_outb_delegate);
+            return guard_vmcall(vcpu, bf86_op__emulate_outb_delegate);
         }
 
         case __enum_bf86_op__emulate_hlt:
@@ -82,7 +82,7 @@ vmcall_bf86_op_handler::dispatch(
             auto bf86_op__emulate_hlt_delegate =
                 guard_vmcall_delegate(vmcall_bf86_op_handler, bf86_op__emulate_hlt);
 
-            return guard_vmcall(vmcs, bf86_op__emulate_hlt_delegate);
+            return guard_vmcall(vcpu, bf86_op__emulate_hlt_delegate);
         }
 
         default:

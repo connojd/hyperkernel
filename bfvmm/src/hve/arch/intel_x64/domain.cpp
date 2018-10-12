@@ -38,14 +38,18 @@ domain::domain(domainid_type domainid) :
     m_idt_virt = 0x2000;
     m_tss_virt = 0x3000;
 
-    m_gdt.set(2, nullptr, 0xFFFFFFFF, ring0_cs_descriptor);
-    m_gdt.set(3, nullptr, 0xFFFFFFFF, ring0_ds_descriptor);
-    m_gdt.set(4, nullptr, 0xFFFFFFFF, ring0_ss_descriptor);
-    m_gdt.set(5, m_tss_virt, sizeof(m_tss), ring0_tr_descriptor);
+    // m_gdt.set(2, nullptr, 0xFFFFFFFF, ring0_cs_descriptor);
+    // m_gdt.set(3, nullptr, 0xFFFFFFFF, ring0_ss_descriptor);
+    // m_gdt.set(4, nullptr, 0xFFFFFFFF, ring0_ds_descriptor);
+    // m_gdt.set(5, m_tss_virt, sizeof(m_tss), ring0_tr_descriptor);
 
-    m_cr3_map.map_4k(m_gdt_virt, m_gdt_virt, cr3::mmap::attr_type::read_write);
-    m_cr3_map.map_4k(m_idt_virt, m_idt_virt, cr3::mmap::attr_type::read_write);
-    m_cr3_map.map_4k(m_tss_virt, m_tss_virt, cr3::mmap::attr_type::read_write);
+    m_gdt.set(2, nullptr, 0xFFFFFFFF, 0xc09b);
+    m_gdt.set(3, nullptr, 0xFFFFFFFF, 0xc093);
+    m_gdt.set(4, m_tss_virt, sizeof(m_tss), 0x008b);
+
+    // m_cr3_map.map_4k(m_gdt_virt, m_gdt_virt, cr3::mmap::attr_type::read_write);
+    // m_cr3_map.map_4k(m_idt_virt, m_idt_virt, cr3::mmap::attr_type::read_write);
+    // m_cr3_map.map_4k(m_tss_virt, m_tss_virt, cr3::mmap::attr_type::read_write);
 
     m_ept_map.map_4k(m_tss_virt, m_tss_phys, ept::mmap::attr_type::read_write);
     m_ept_map.map_4k(m_gdt_virt, m_gdt_phys, ept::mmap::attr_type::read_only);
@@ -59,7 +63,7 @@ domain::map_4k(uintptr_t virt_addr, uintptr_t phys_addr)
     using namespace eapis::intel_x64;
 
     m_ept_map.map_4k(virt_addr, phys_addr, ept::mmap::attr_type::read_write_execute);
-    m_cr3_map.map_4k(virt_addr, virt_addr, cr3::mmap::attr_type::read_write_execute);
+    // m_cr3_map.map_4k(virt_addr, virt_addr, cr3::mmap::attr_type::read_write_execute);
 }
 
 void
@@ -68,12 +72,12 @@ domain::map_commit()
     using namespace bfvmm::x64;
     using namespace eapis::intel_x64;
 
-    auto cr3_phys = bfn::upper(m_cr3_map.cr3());
-    m_ept_map.map_4k(cr3_phys, cr3_phys, ept::mmap::attr_type::read_write);
+    // auto cr3_phys = bfn::upper(m_cr3_map.cr3());
+    // m_ept_map.map_4k(cr3_phys, cr3_phys, ept::mmap::attr_type::read_write);
 
-    for (auto iter = m_cr3_map.mdl().begin(); iter != m_cr3_map.mdl().end(); iter++) {
-        m_ept_map.map_4k(iter->second, iter->second, ept::mmap::attr_type::read_write);
-    }
+    // for (auto iter = m_cr3_map.mdl().begin(); iter != m_cr3_map.mdl().end(); iter++) {
+    //     m_ept_map.map_4k(iter->second, iter->second, ept::mmap::attr_type::read_write);
+    // }
 }
 
 }

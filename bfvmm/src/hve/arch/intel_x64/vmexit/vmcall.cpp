@@ -49,20 +49,18 @@ vmcall_handler::add_handler(
 // -----------------------------------------------------------------------------
 
 bool
-vmcall_handler::handle(gsl::not_null<vmcs_t *> vmcs)
+vmcall_handler::handle(gsl::not_null<vcpu_t *> vcpu)
 {
     guard_exceptions([&] {
         for (const auto &d : m_handlers) {
-            if (d(vmcs)) {
+            if (d(vcpu)) {
                 return;
             }
         }
     });
 
-    m_vcpu->load();
-    m_vcpu->advance();
-
-    return true;
+    vcpu->load();
+    return vcpu->advance();
 }
 
 }

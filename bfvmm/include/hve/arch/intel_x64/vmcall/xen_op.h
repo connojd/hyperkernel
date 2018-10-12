@@ -1,5 +1,5 @@
 //
-// Bareflank Hypervisor
+// Bareflank Extended APIs
 // Copyright (C) 2018 Assured Information Security, Inc.
 //
 // This library is free software; you can redistribute it and/or
@@ -16,10 +16,13 @@
 // License along with this library; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-#ifndef FAULT_INTEL_X64_HYPERKERNEL_H
-#define FAULT_INTEL_X64_HYPERKERNEL_H
+#ifndef VMCALL_VCPU_INTEL_X64_HYPERKERNEL_H
+#define VMCALL_VCPU_INTEL_X64_HYPERKERNEL_H
 
 #include "../base.h"
+
+#include <bfvmm/hve/arch/intel_x64/vmcs.h>
+#include <bfvmm/hve/arch/intel_x64/exit_handler.h>
 
 // -----------------------------------------------------------------------------
 // Exports
@@ -46,18 +49,11 @@ namespace hyperkernel::intel_x64
 
 class vcpu;
 
-class EXPORT_HYPERKERNEL_HVE fault_handler
+class EXPORT_HYPERKERNEL_HVE vmcall_vcpu_op_handler
 {
 public:
 
-    /// Constructor
-    ///
-    /// @expects
-    /// @ensures
-    ///
-    /// @param vcpu the vcpu object for this interrupt window handler
-    ///
-    fault_handler(
+    vmcall_vcpu_op_handler(
         gsl::not_null<vcpu *> vcpu);
 
     /// Destructor
@@ -65,15 +61,17 @@ public:
     /// @expects
     /// @ensures
     ///
-    ~fault_handler() = default;
+    ~vmcall_vcpu_op_handler() = default;
 
-public:
+private:
 
-    /// @cond
+    uint64_t vcpu_op__create_vcpu(gsl::not_null<vcpu_t *> vcpu);
+    uint64_t vcpu_op__run_vcpu(gsl::not_null<vcpu_t *> vcpu);
+    uint64_t vcpu_op__set_entry(gsl::not_null<vcpu_t *> vcpu);
+    uint64_t vcpu_op__hlt_vcpu(gsl::not_null<vcpu_t *> vcpu);
+    uint64_t vcpu_op__destroy_vcpu(gsl::not_null<vcpu_t *> vcpu);
 
-    bool handle(gsl::not_null<vcpu_t *> vcpu);
-
-    /// @endcond
+    bool dispatch(gsl::not_null<vcpu_t *> vcpu);
 
 private:
 
@@ -83,11 +81,11 @@ public:
 
     /// @cond
 
-    fault_handler(fault_handler &&) = default;
-    fault_handler &operator=(fault_handler &&) = default;
+    vmcall_vcpu_op_handler(vmcall_vcpu_op_handler &&) = default;
+    vmcall_vcpu_op_handler &operator=(vmcall_vcpu_op_handler &&) = default;
 
-    fault_handler(const fault_handler &) = delete;
-    fault_handler &operator=(const fault_handler &) = delete;
+    vmcall_vcpu_op_handler(const vmcall_vcpu_op_handler &) = delete;
+    vmcall_vcpu_op_handler &operator=(const vmcall_vcpu_op_handler &) = delete;
 
     /// @endcond
 };

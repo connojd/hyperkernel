@@ -21,9 +21,6 @@
 
 #include "../base.h"
 
-#include <bfvmm/hve/arch/intel_x64/vmcs.h>
-#include <bfvmm/hve/arch/intel_x64/exit_handler.h>
-
 // -----------------------------------------------------------------------------
 // Exports
 // -----------------------------------------------------------------------------
@@ -59,7 +56,7 @@ public:
     /// handlers
     ///
     using handler_delegate_t =
-        delegate<bool(gsl::not_null<vmcs_t *>)>;
+        delegate<bool(gsl::not_null<vcpu_t *>)>;
 
     #define vmcall_handler_delegate(a,b) \
         vmcall_handler::handler_delegate_t::create<a, &a::b>(this)
@@ -96,7 +93,7 @@ public:
 
     /// @cond
 
-    bool handle(gsl::not_null<vmcs_t *> vmcs);
+    bool handle(gsl::not_null<vcpu_t *> vcpu);
 
     /// @endcond
 

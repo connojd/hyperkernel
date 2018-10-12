@@ -43,10 +43,10 @@ external_interrupt_handler::external_interrupt_handler(
 
 bool
 external_interrupt_handler::handle(
-    gsl::not_null<vmcs_t *> vmcs,
+    gsl::not_null<vcpu_t *> vcpu,
     eapis::intel_x64::external_interrupt_handler::info_t &info)
 {
-    bfignored(vmcs);
+    bfignored(vcpu);
     auto parent_vcpu = m_vcpu->parent_vcpu();
 
     parent_vcpu->load();

@@ -25,8 +25,7 @@
 #include <domain/domain_manager.h>
 
 #include <bfvmm/vcpu/vcpu_manager.h>
-#include <bfvmm/hve/arch/intel_x64/vmcs.h>
-#include <bfvmm/hve/arch/intel_x64/exit_handler.h>
+#include <bfvmm/hve/arch/intel_x64/vcpu.h>
 #include <bfvmm/memory_manager/arch/x64/unique_map.h>
 
 // -----------------------------------------------------------------------------
@@ -34,7 +33,7 @@
 // -----------------------------------------------------------------------------
 
 using guard_vmcall_delegate_t =
-    delegate<uint64_t(gsl::not_null<vmcs_t *>)>;
+    delegate<uint64_t(gsl::not_null<vcpu_t *>)>;
 
 #define guard_vmcall_delegate(a,b) \
     guard_vmcall_delegate_t::create<a, &a::b>(this)
@@ -53,10 +52,10 @@ using guard_vmcall_delegate_t =
 ///
 inline bool
 guard_vmcall(
-    gsl::not_null<vmcs_t *> vmcs, guard_vmcall_delegate_t &d)
+    gsl::not_null<vcpu_t *> vcpu, guard_vmcall_delegate_t &d)
 {
     try {
-        vmcs->save_state()->rax = d(vmcs);
+        vcpu->set_rax(d(vcpu));
         return true;
     }
     catch (std::bad_alloc &) {
@@ -79,17 +78,17 @@ guard_vmcall(
         });
     }
 
-    vmcs->save_state()->rax = 0xFFFFFFFFFFFFFFFF;
+    vcpu->set_rax(0xFFFFFFFFFFFFFFFF);
     return false;
 }
 
 template<typename T>
 auto
-get_hypercall_arg(gsl::not_null<vmcs_t *> vmcs)
+get_hypercall_arg(gsl::not_null<vcpu_t *> vcpu)
 {
     return
         bfvmm::x64::make_unique_map<T>(
-            vmcs->save_state()->rcx,
+            vcpu->rcx(),
             vmcs_n::guest_cr3::get(),
             sizeof(T)
         );

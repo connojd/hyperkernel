@@ -56,9 +56,10 @@ uint64_t _vmcall(uint64_t r1, uint64_t r2, uint64_t r3, uint64_t r4) NOEXCEPT;
 // Opcodes
 // -----------------------------------------------------------------------------
 
+#define __enum_bf86_op 0xBF86000000000100
 #define __enum_domain_op 0xBF5C000000000100
 #define __enum_vcpu_op 0xBF5C000000000200
-#define __enum_bf86_op 0xBF86000000000100
+#define __enum_xen_op 0xBF5C000000000300
 
 // -----------------------------------------------------------------------------
 // Domain Operations
@@ -71,17 +72,9 @@ uint64_t _vmcall(uint64_t r1, uint64_t r2, uint64_t r3, uint64_t r4) NOEXCEPT;
 
 typedef struct {
     domainid_t domainid;
-} __domain_op__destroy_domain_arg_t;
-
-typedef struct {
-    domainid_t domainid;
     uint64_t virt_addr;
     uint64_t exec_addr;
 } __domain_op__map_md_arg_t;
-
-typedef struct {
-    domainid_t domainid;
-} __domain_op__map_commit_arg_t;
 
 static inline domainid_t
 __domain_op__create_domain()
@@ -97,14 +90,10 @@ __domain_op__create_domain()
 static inline status_t
 __domain_op__destroy_domain(domainid_t domainid)
 {
-    __domain_op__destroy_domain_arg_t arg = {
-        domainid
-    };
-
     status_t ret = _vmcall(
         __enum_domain_op,
         __enum_domain_op__destroy_domain,
-        bfrcast(uint64_t, &arg),
+        domainid,
         0
     );
 
@@ -132,14 +121,10 @@ __domain_op__map_md(
 static inline status_t
 __domain_op__map_commit(domainid_t domainid)
 {
-    __domain_op__map_commit_arg_t arg = {
-        domainid
-    };
-
     status_t ret = _vmcall(
         __enum_domain_op,
         __enum_domain_op__map_commit,
-        bfrcast(uint64_t, &arg),
+        domainid,
         0
     );
 
@@ -154,38 +139,16 @@ __domain_op__map_commit(domainid_t domainid)
 #define __enum_vcpu_op__run_vcpu 0x101
 #define __enum_vcpu_op__hlt_vcpu 0x102
 #define __enum_vcpu_op__destroy_vcpu 0x103
-#define __enum_vcpu_op__set_entry 0x110
-#define __enum_vcpu_op__set_stack 0x111
-
-typedef struct {
-    domainid_t domainid;
-} __vcpu_op__create_vcpu_arg_t;
-
-typedef struct {
-    vcpuid_t vcpuid;
-} __vcpu_op__destroy_vcpu_arg_t;
-
-typedef struct {
-    vcpuid_t vcpuid;
-    uint64_t entry;
-} __vcpu_op__set_entry_arg_t;
-
-typedef struct {
-    vcpuid_t vcpuid;
-    uint64_t stack;
-} __vcpu_op__set_stack_arg_t;
+#define __enum_vcpu_op__set_rip 0x110
+#define __enum_vcpu_op__set_rbx 0x111
 
 static inline vcpuid_t
 __vcpu_op__create_vcpu(domainid_t domainid)
 {
-    __vcpu_op__create_vcpu_arg_t arg = {
-        domainid
-    };
-
     return _vmcall(
         __enum_vcpu_op,
         __enum_vcpu_op__create_vcpu,
-        bfrcast(uint64_t, &arg),
+        domainid,
         0
     );
 }
@@ -215,45 +178,33 @@ __vcpu_op__hlt_vcpu(vcpuid_t vcpuid)
 static inline status_t
 __vcpu_op__destroy_vcpu(vcpuid_t vcpuid)
 {
-    __vcpu_op__destroy_vcpu_arg_t arg = {
-        vcpuid
-    };
-
     return _vmcall(
         __enum_vcpu_op,
         __enum_vcpu_op__destroy_vcpu,
-        bfrcast(uint64_t, &arg),
+        vcpuid,
         0
     );
 }
 
 static inline status_t
-__vcpu_op__set_entry(vcpuid_t vcpuid, uint64_t entry)
+__vcpu_op__set_rip(vcpuid_t vcpuid, uint64_t rip)
 {
-    __vcpu_op__set_entry_arg_t arg = {
-        vcpuid, entry
-    };
-
     return _vmcall(
         __enum_vcpu_op,
-        __enum_vcpu_op__set_entry,
-        bfrcast(uint64_t, &arg),
-        0
+        __enum_vcpu_op__set_rip,
+        vcpuid,
+        rip
     );
 }
 
 static inline status_t
-__vcpu_op__set_stack(vcpuid_t vcpuid, uint64_t stack)
+__vcpu_op__set_rbx(vcpuid_t vcpuid, uint64_t rbx)
 {
-    __vcpu_op__set_stack_arg_t arg = {
-        vcpuid, stack
-    };
-
     return _vmcall(
         __enum_vcpu_op,
-        __enum_vcpu_op__set_stack,
-        bfrcast(uint64_t, &arg),
-        0
+        __enum_vcpu_op__set_rbx,
+        vcpuid,
+        rbx
     );
 }
 

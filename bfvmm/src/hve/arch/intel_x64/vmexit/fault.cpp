@@ -67,7 +67,7 @@ fault_handler::fault_handler(
 // -----------------------------------------------------------------------------
 
 bool
-fault_handler::handle(gsl::not_null<vmcs_t *> vmcs)
+fault_handler::handle(gsl::not_null<vcpu_t *> vcpu)
 {
     using namespace ::intel_x64::vmcs;
 
@@ -75,23 +75,23 @@ fault_handler::handle(gsl::not_null<vmcs_t *> vmcs)
     bferror_info(0, "killing guest");
     bferror_brk1(0);
 
-    bferror_subnhex(0, "rax", vmcs->save_state()->rax);
-    bferror_subnhex(0, "rbx", vmcs->save_state()->rbx);
-    bferror_subnhex(0, "rcx", vmcs->save_state()->rcx);
-    bferror_subnhex(0, "rdx", vmcs->save_state()->rdx);
-    bferror_subnhex(0, "rbp", vmcs->save_state()->rbp);
-    bferror_subnhex(0, "rsi", vmcs->save_state()->rsi);
-    bferror_subnhex(0, "rdi", vmcs->save_state()->rdi);
-    bferror_subnhex(0, "r08", vmcs->save_state()->r08);
-    bferror_subnhex(0, "r09", vmcs->save_state()->r09);
-    bferror_subnhex(0, "r10", vmcs->save_state()->r10);
-    bferror_subnhex(0, "r11", vmcs->save_state()->r11);
-    bferror_subnhex(0, "r12", vmcs->save_state()->r12);
-    bferror_subnhex(0, "r13", vmcs->save_state()->r13);
-    bferror_subnhex(0, "r14", vmcs->save_state()->r14);
-    bferror_subnhex(0, "r15", vmcs->save_state()->r15);
-    bferror_subnhex(0, "rip", vmcs->save_state()->rip);
-    bferror_subnhex(0, "rsp", vmcs->save_state()->rsp);
+    bferror_subnhex(0, "rax", vcpu->rax());
+    bferror_subnhex(0, "rbx", vcpu->rbx());
+    bferror_subnhex(0, "rcx", vcpu->rcx());
+    bferror_subnhex(0, "rdx", vcpu->rdx());
+    bferror_subnhex(0, "rbp", vcpu->rbp());
+    bferror_subnhex(0, "rsi", vcpu->rsi());
+    bferror_subnhex(0, "rdi", vcpu->rdi());
+    bferror_subnhex(0, "r08", vcpu->r08());
+    bferror_subnhex(0, "r09", vcpu->r09());
+    bferror_subnhex(0, "r10", vcpu->r10());
+    bferror_subnhex(0, "r11", vcpu->r11());
+    bferror_subnhex(0, "r12", vcpu->r12());
+    bferror_subnhex(0, "r13", vcpu->r13());
+    bferror_subnhex(0, "r14", vcpu->r14());
+    bferror_subnhex(0, "r15", vcpu->r15());
+    bferror_subnhex(0, "rip", vcpu->rip());
+    bferror_subnhex(0, "rsp", vcpu->rsp());
 
     bferror_subnhex(0, "cr0", guest_cr0::get());
     bferror_subnhex(0, "cr2", ::intel_x64::cr2::get());
@@ -103,6 +103,8 @@ fault_handler::handle(gsl::not_null<vmcs_t *> vmcs)
 
     bferror_subnhex(0, "exit reason", exit_reason::get());
     bferror_subnhex(0, "exit qualification", exit_qualification::get());
+
+    bfvmm::intel_x64::check::all();
 
     auto parent_vcpu = m_vcpu->parent_vcpu();
 

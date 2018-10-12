@@ -65,12 +65,12 @@ public:
 
 private:
 
-    uint64_t domain_op__create_domain(gsl::not_null<vmcs_t *> vmcs);
-    uint64_t domain_op__map_md(gsl::not_null<vmcs_t *> vmcs);
-    uint64_t domain_op__map_commit(gsl::not_null<vmcs_t *> vmcs);
-    uint64_t domain_op__destroy_domain(gsl::not_null<vmcs_t *> vmcs);
+    uint64_t domain_op__create_domain(gsl::not_null<vcpu_t *> vcpu);
+    uint64_t domain_op__map_md(gsl::not_null<vcpu_t *> vcpu);
+    uint64_t domain_op__map_commit(gsl::not_null<vcpu_t *> vcpu);
+    uint64_t domain_op__destroy_domain(gsl::not_null<vcpu_t *> vcpu);
 
-    bool dispatch(gsl::not_null<vmcs_t *> vmcs);
+    bool dispatch(gsl::not_null<vcpu_t *> vcpu);
 
 private:
 

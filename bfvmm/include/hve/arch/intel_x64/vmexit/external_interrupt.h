@@ -20,10 +20,6 @@
 #define EXTERNAL_INTERRUPT_INTEL_X64_HYPERKERNEL_H
 
 #include "../base.h"
-
-#include <bfvmm/hve/arch/intel_x64/vmcs.h>
-#include <bfvmm/hve/arch/intel_x64/exit_handler.h>
-
 #include <eapis/hve/arch/intel_x64/vmexit/external_interrupt.h>
 
 // -----------------------------------------------------------------------------
@@ -77,7 +73,7 @@ public:
     /// @cond
 
     bool handle(
-        gsl::not_null<vmcs_t *> vmcs,
+        gsl::not_null<vcpu_t *> vcpu,
         ::eapis::intel_x64::external_interrupt_handler::info_t &info);
 
     /// @endcond

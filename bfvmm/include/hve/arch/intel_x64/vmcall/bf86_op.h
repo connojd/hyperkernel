@@ -65,10 +65,10 @@ public:
 
 private:
 
-    uint64_t bf86_op__emulate_outb(gsl::not_null<vmcs_t *> vmcs);
-    uint64_t bf86_op__emulate_hlt(gsl::not_null<vmcs_t *> vmcs);
+    uint64_t bf86_op__emulate_outb(gsl::not_null<vcpu_t *> vcpu);
+    uint64_t bf86_op__emulate_hlt(gsl::not_null<vcpu_t *> vcpu);
 
-    bool dispatch(gsl::not_null<vmcs_t *> vmcs);
+    bool dispatch(gsl::not_null<vcpu_t *> vcpu);
 
 private:
 
