@@ -8,3 +8,11 @@ doxygen_warnings.txt
 ._.DS_Store
 tags
 *.swp
+*.o
+*.ko
+*.o.*
+*.cmd
+*.mod
+*.mod.*
+Module.symvers
+modules.order

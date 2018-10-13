@@ -31,6 +31,8 @@ if(ENABLE_BUILD_VMM)
         DEPENDS hyperkernel_bfvmm
         SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/bfvmm/src/main
     )
+
+    include(${CMAKE_CURRENT_LIST_DIR}/bfdriver/CMakeLists.txt)
 endif()
 
 # ------------------------------------------------------------------------------
@@ -112,3 +114,15 @@ userspace_extension(
     SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/bfexec
     DEPENDS bfintrinsics
 )
+
+if(NOT WIN32)
+    add_custom_target(hkd-test
+        COMMAND ${SUDO} ${USERSPACE_PREFIX_PATH}/bin/bfexec
+        DEPENDS bfexec_${USERSPACE_PREFIX}
+        USES_TERMINAL
+    )
+    add_custom_target_info(
+        TARGET hkd-test
+        COMMENT "Test the hyperkernel driver"
+    )
+endif()

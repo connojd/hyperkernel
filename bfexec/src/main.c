@@ -26,9 +26,13 @@
 #include <string.h>
 #include <inttypes.h>
 #include <sys/mman.h>
+#include <sys/ioctl.h>
+#include <fcntl.h>
 
 #include <hypercall.h>
 #include "xen/start_info.h"
+
+#include <hyperkernel/bfdriverinterface.h>
 
 // Notes:
 //
@@ -572,78 +576,91 @@ int
 main(int argc, const char *argv[])
 {
     status_t ret;
-    memset(&g_vm, 0, sizeof(g_vm));
+    int fd, sig;
 
-    if (argc != 2) {
-        BFALERT("invalid number of arguments\n");
-        return EXIT_FAILURE;
+    fd = open("/dev/hkd", O_RDWR);
+    if (fd < 0) {
+        BFALERT("open hkd failed\n");
+        return fd;
     }
 
-    if (ack() == 0) {
-        return EXIT_FAILURE;
-    }
+    ret = ioctl(fd, HKD_REQUEST_IRQ);
 
-    set_affinity(0);
-    setup_kill_signal_handler();
+    sig = SIGUSR1;
+    ret = ioctl(fd, HKD_SET_SIGNAL, &sig);
+    return ret;
+//    memset(&g_vm, 0, sizeof(g_vm));
+//
+//    if (argc != 2) {
+//        BFALERT("invalid number of arguments\n");
+//        return EXIT_FAILURE;
+//    }
+//
+//    if (ack() == 0) {
+//        return EXIT_FAILURE;
+//    }
+//
+//    set_affinity(0);
+//    setup_kill_signal_handler();
+//
+//    ret = domain_op__create_domain();
+//    if (ret != SUCCESS) {
+//        BFALERT("create_domain failed\n");
+//        return EXIT_FAILURE;
+//    }
+//
+//    ret = binary_read(argv[1]);
+//    if (ret != SUCCESS) {
+//        BFALERT("read_binary failed\n");
+//        goto CLEANUP_DOMAIN;
+//    }
+//
+//    ret = binary_load();
+//    if (ret != SUCCESS) {
+//        BFALERT("load_binary failed\n");
+//        goto CLEANUP_DOMAIN;
+//    }
+//
+//    ret = vcpu_op__create_vcpu();
+//    if (ret != SUCCESS) {
+//        BFALERT("create_vcpu failed\n");
+//        goto CLEANUP_DOMAIN;
+//    }
+//
+//    ret = setup_xen_start_info();
+//    if (ret != SUCCESS) {
+//        BFALERT("setup_xen_start_info failed\n");
+//        goto CLEANUP_VCPU;
+//    }
+//
+//    ret = setup_xen_cmdline();
+//    if (ret != SUCCESS) {
+//        BFALERT("setup_xen_cmdline failed\n");
+//        goto CLEANUP_VCPU;
+//    }
+//
+//    ret = setup_xen_e820_map();
+//    if (ret != SUCCESS) {
+//        BFALERT("setup_xen_e820_map failed\n");
+//        goto CLEANUP_VCPU;
+//    }
+//
+//    start_run_thread();
+//    pthread_join(g_vm.run_thread, 0);
+//
+//CLEANUP_VCPU:
+//
+//    ret = vcpu_op__destroy_vcpu();
+//    if (ret != SUCCESS) {
+//        BFALERT("destroy_vcpu failed\n");
+//    }
+//
+//CLEANUP_DOMAIN:
+//
+//    ret = domain_op__destroy_domain();
+//    if (ret != SUCCESS) {
+//        BFALERT("destroy_domain failed\n");
+//    }
 
-    ret = domain_op__create_domain();
-    if (ret != SUCCESS) {
-        BFALERT("create_domain failed\n");
-        return EXIT_FAILURE;
-    }
-
-    ret = binary_read(argv[1]);
-    if (ret != SUCCESS) {
-        BFALERT("read_binary failed\n");
-        goto CLEANUP_DOMAIN;
-    }
-
-    ret = binary_load();
-    if (ret != SUCCESS) {
-        BFALERT("load_binary failed\n");
-        goto CLEANUP_DOMAIN;
-    }
-
-    ret = vcpu_op__create_vcpu();
-    if (ret != SUCCESS) {
-        BFALERT("create_vcpu failed\n");
-        goto CLEANUP_DOMAIN;
-    }
-
-    ret = setup_xen_start_info();
-    if (ret != SUCCESS) {
-        BFALERT("setup_xen_start_info failed\n");
-        goto CLEANUP_VCPU;
-    }
-
-    ret = setup_xen_cmdline();
-    if (ret != SUCCESS) {
-        BFALERT("setup_xen_cmdline failed\n");
-        goto CLEANUP_VCPU;
-    }
-
-    ret = setup_xen_e820_map();
-    if (ret != SUCCESS) {
-        BFALERT("setup_xen_e820_map failed\n");
-        goto CLEANUP_VCPU;
-    }
-
-    start_run_thread();
-    pthread_join(g_vm.run_thread, 0);
-
-CLEANUP_VCPU:
-
-    ret = vcpu_op__destroy_vcpu();
-    if (ret != SUCCESS) {
-        BFALERT("destroy_vcpu failed\n");
-    }
-
-CLEANUP_DOMAIN:
-
-    ret = domain_op__destroy_domain();
-    if (ret != SUCCESS) {
-        BFALERT("destroy_domain failed\n");
-    }
-
-    return EXIT_SUCCESS;
+//    return EXIT_SUCCESS;
 }
