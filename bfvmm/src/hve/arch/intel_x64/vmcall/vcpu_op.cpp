@@ -104,6 +104,14 @@ vmcall_vcpu_op_handler::vcpu_op__destroy_vcpu(
     return SUCCESS;
 }
 
+uint64_t
+vmcall_vcpu_op_handler::vcpu_op__send_interrupt(
+    gsl::not_null<vcpu_t *> vcpu)
+{
+    auto child_vcpu = get_hk_vcpu(vcpu->rcx());
+    child_vcpu->send_interrupt(vcpu->rcx(), vcpu->rdx());
+}
+
 bool
 vmcall_vcpu_op_handler::dispatch(
     gsl::not_null<vcpu_t *> vcpu)
@@ -159,6 +167,14 @@ vmcall_vcpu_op_handler::dispatch(
                 guard_vmcall_delegate(vmcall_vcpu_op_handler, vcpu_op__destroy_vcpu);
 
             return guard_vmcall(vcpu, vcpu_op__destroy_vcpu_delegate);
+        }
+
+        case __enum_vcpu_op__send_interrupt:
+        {
+            auto vcpu_op__send_interrupt_delegate =
+                guard_vmcall_delegate(vmcall_vcpu_op_handler, vcpu_op__send_interrupt);
+
+            return guard_vmcall(vcpu, vcpu_op__send_interrupt_delegate);
         }
 
         default:

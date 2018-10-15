@@ -23,7 +23,10 @@
 #include <linux/miscdevice.h>
 #include <linux/notifier.h>
 #include <linux/reboot.h>
-#include <linux/pid.h>
+#include <linux/signal.h>
+#include <linux/sched.h>
+#include <linux/sched/signal.h>
+#include <linux/interrupt.h>
 
 #include <bfdebug.h>
 #include <bfdriverinterface.h>
@@ -34,8 +37,12 @@
 /* Global                                                                     */
 /* -------------------------------------------------------------------------- */
 
-int g_signum;
-pid_t g_pid;
+uint64_t g_irq;
+siginfo_t g_info;
+struct task_struct *g_task;
+
+static long ioctl_set_signal(int *sig);
+static long ioctl_request_irq(uint64_t *irq);
 
 /* -------------------------------------------------------------------------- */
 /* Misc Device                                                                */
@@ -62,46 +69,6 @@ dev_release(struct inode *inode, struct file *file)
 }
 
 static long
-ioctl_set_signal(int *signum)
-{
-    long ret;
-
-    if (signum == 0) {
-        BFALERT("hkd: ioctl_set_signal failed with signum == NULL\n");
-        return BF_IOCTL_FAILURE;
-    }
-
-    ret = copy_from_user(&g_signum, signum, sizeof(int));
-    if (ret != 0) {
-        BFALERT("ioctl_set_signal: failed to copy memory from userspace\n");
-        return BF_IOCTL_FAILURE;
-    }
-
-    BFDEBUG("ioctl_set_signal: signum: %d\n", g_signum);
-    return BF_IOCTL_SUCCESS;
-}
-
-static long
-ioctl_set_signal_watcher(pid_t *pid)
-{
-    long ret;
-
-    if (pid == 0) {
-        BFALERT("hkd: ioctl_set_signal_watcher failed with pid == NULL\n");
-        return BF_IOCTL_FAILURE;
-    }
-
-    ret = copy_from_user(&g_pid, pid, sizeof(int));
-    if (ret != 0) {
-        BFALERT("ioctl_set_signal_watcher: failed to copy memory from userspace\n");
-        return BF_IOCTL_FAILURE;
-    }
-
-    BFDEBUG("ioctl_set_signal_watcher: pid: %d\n", g_pid);
-    return BF_IOCTL_SUCCESS;
-}
-
-static long
 dev_unlocked_ioctl(struct file *file,
                    unsigned int cmd,
                    unsigned long arg)
@@ -112,8 +79,8 @@ dev_unlocked_ioctl(struct file *file,
         case HKD_SET_SIGNAL:
             return ioctl_set_signal((int *)arg);
 
-        case HKD_SET_SIGNAL_WATCHER:
-            return ioctl_set_signal_watcher((pid_t *)arg);
+        case HKD_REQUEST_IRQ:
+            return ioctl_request_irq((uint64_t *)arg);
 
         default:
             return -EINVAL;
@@ -175,6 +142,73 @@ dev_exit(void)
 
     BFDEBUG("hkd: dev_exit succeeded\n");
     return;
+}
+
+static long
+ioctl_set_signal(int *sig)
+{
+    long err;
+
+    if (sig == 0) {
+        BFALERT("hkd: ioctl_set_signal failed with signum == NULL\n");
+        return BF_IOCTL_FAILURE;
+    }
+
+    err = copy_from_user(&g_info.si_signo, sig, sizeof(int));
+    if (err) {
+        BFALERT("hkd: ioctl_set_signal: failed to copy mem from user\n");
+        return BF_IOCTL_FAILURE;
+    }
+
+    g_info.si_errno = 0;
+    g_info.si_code = SI_KERNEL;
+
+    rcu_read_lock();
+    g_task = current;
+    rcu_read_unlock();
+
+    BFDEBUG("hkd: ioctl_set_signal: signal: %d\n", *sig);
+    return BF_IOCTL_SUCCESS;
+}
+
+irqreturn_t handler(int irq, void *hkd_dev)
+{
+    send_sig_info(g_info.si_signo, &g_info, g_task);
+    return IRQ_HANDLED;
+}
+
+static long
+ioctl_request_irq(uint64_t *irq)
+{
+    long err;
+
+    if (irq == 0) {
+        BFALERT("hkd: ioctl_request_irq failed: with irq == NULL\n");
+        return BF_IOCTL_FAILURE;
+    }
+
+    err = copy_from_user(&g_irq, irq, sizeof(uint64_t));
+    if (err) {
+        BFALERT("hkd: ioctl_request_irq: failed to copy mem from user\n");
+        return BF_IOCTL_FAILURE;
+    }
+
+    if (g_irq < 32 || g_irq > 255) {
+        BFALERT("hkd: ioctl_request_irq: irq %llu out of range\n", g_irq);
+        g_irq = 0;
+        return BF_IOCTL_FAILURE;
+    }
+
+    err = request_irq(g_irq, handler, 0, HKD_NAME, &hkd_dev);
+    if (err) {
+        BFALERT("hkd: ioctl_request_irq: irq %llu not available", g_irq);
+        g_irq = 0;
+        return BF_IOCTL_FAILURE;
+    }
+
+
+    BFDEBUG("hkd: ioctl_request_irq: succeeded\n");
+    return BF_IOCTL_SUCCESS;
 }
 
 module_init(dev_init);

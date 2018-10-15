@@ -1,6 +1,6 @@
 #
-# Bareflank Hypervisor
-# Copyright (C) 2015 Assured Information Security, Inc.
+# Bareflank Hyperkernel
+# Copyright (C) 2018 Assured Information Security, Inc.
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -22,11 +22,14 @@ project(bfexec C CXX)
 include(${SOURCE_CMAKE_DIR}/project.cmake)
 init_project(
     INCLUDES ${CMAKE_CURRENT_LIST_DIR}/../include
+    INCLUDES ${CMAKE_CURRENT_LIST_DIR}/include
+    INCLUDES ${CMAKE_CURRENT_LIST_DIR}/../bfdriver/include
 )
 
 list(APPEND SOURCES
     src/main.c
     src/platform.c
+    src/hkd.c
 )
 
 add_executable(bfexec ${SOURCES})

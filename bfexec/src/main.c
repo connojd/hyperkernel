@@ -26,7 +26,10 @@
 #include <string.h>
 #include <inttypes.h>
 #include <sys/mman.h>
+#include <sys/types.h>
+#include <unistd.h>
 
+#include <hkd.h>
 #include <hypercall.h>
 #include "xen/start_info.h"
 
@@ -63,11 +66,12 @@ struct vm_t {
 
     void *entry;
 
-    uint64_t domainid;
-    uint64_t vcpuid;
+    domainid_t domainid;
+    vcpuid_t vcpuid;
 
     FILE *file;
     pthread_t run_thread;
+    pthread_t watchdog_thread;
 } g_vm;
 
 /* -------------------------------------------------------------------------- */
@@ -132,7 +136,7 @@ uint64_t g_ram_size = 0x8000000;
 
 uint32_t _cpuid_eax(uint32_t val) NOEXCEPT;
 
-inline uint64_t
+uint64_t
 ack()
 { return _cpuid_eax(0xBF00); }
 
@@ -318,6 +322,103 @@ vcpu_op__destroy_vcpu(void)
     return SUCCESS;
 }
 
+status_t
+vcpu_op__send_interrupt(vcpuid_t vcpuid, vector_t vector)
+{
+    status_t ret;
+
+    ret = __vcpu_op__send_interrupt(vcpuid, vector);
+    if (ret != SUCCESS) {
+        BFALERT("__vcpu_op__send_interrupt failed\n");
+        return FAILURE;
+    }
+
+    return SUCCESS;
+}
+
+void
+handle_hkd_signal(int sig, siginfo_t *info, void *ucontext)
+{
+    vcpuid_t vcpu;
+    vector_t vect;
+
+    if (sig != SIGUSR1) {
+        BFALERT("bfexec: handle_hkd_signal received wrong signal: %d", sig);
+        return;
+    }
+
+    vcpu = 0; // hard code to vcpu 0 for now
+    vect = 0xFF;
+    vcpu_op__send_interrupt(vcpu, vect);
+}
+
+status_t
+setup_sigaction(int sig, struct sigaction *sa)
+{
+    if (!sa) {
+        BFALERT("bfexec: register_sigaction: sa == NULL\n");
+        return FAILURE;
+    }
+
+    memset(sa, 0, sizeof(*sa));
+    sa->sa_flags = SA_SIGINFO;
+    sa->sa_sigaction = handle_hkd_signal;
+    sigaction(sig, sa, NULL);
+
+    return SUCCESS;
+}
+
+void *
+run_interrupt_watchdog(void *arg)
+{
+    bfignored(arg);
+
+    int fd;
+    uint64_t irq;
+    status_t err;
+    struct sigaction act;
+
+    fd = hkd_open();
+    if (fd) {
+        BFALERT("hkd_open failed\n");
+        return 0;
+    }
+
+    err = hkd_set_signal(fd, SIGUSR1);
+    if (err) {
+        BFALERT("hkd_set_signal failed\n");
+        return 0;
+    }
+
+    err = hkd_set_signal_pid(fd, getpid());
+    if (err) {
+        BFALERT("hkd_set_signal_pid failed\n");
+        return 0;
+    }
+
+    err = setup_sigaction(SIGUSR1, &act);
+    if (err != SUCCESS) {
+        BFALERT("bfexec: setup_sigaction failed\n");
+        return 0;
+    }
+
+    /*
+     * At this point, the destination vcpu must be ready to handle any
+     * interrupts that we receive.
+     */
+    irq = 42;
+    err = hkd_request_irq(fd, irq);
+
+    if (err) {
+        BFALERT("hkd_request_irq failed\n");
+        return 0;
+    }
+
+    while (1) {
+        _pause();
+    }
+}
+
 /* -------------------------------------------------------------------------- */
 /* Threading                                                                  */
 /* -------------------------------------------------------------------------- */
@@ -327,6 +428,10 @@ vcpu_op__destroy_vcpu(void)
 void
 start_run_thread()
 { pthread_create(&g_vm.run_thread, 0, vcpu_op__run_vcpu, 0); }
+
+void
+start_interrupt_watchdog()
+{ pthread_create(&g_vm.watchdog_thread, 0, run_interrupt_watchdog, 0); }
 
 /* -------------------------------------------------------------------------- */
 /* ELF File Functions                                                         */
@@ -518,6 +623,7 @@ setup_xen_e820_map()
 int
 main(int argc, const char *argv[])
 {
+    int fd;
     status_t ret;
     memset(&g_vm, 0, sizeof(g_vm));
 
@@ -576,6 +682,7 @@ main(int argc, const char *argv[])
     }
 
     start_run_thread();
+    start_interrupt_watchdog();
     pthread_join(g_vm.run_thread, 0);
 
 CLEANUP_VCPU:

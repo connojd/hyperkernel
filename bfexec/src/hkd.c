@@ -1,5 +1,5 @@
-/*
- * Bareflank PV Interface
+/**
+ * Bareflank Hyperkernel
  * Copyright (C) 2018 Assured Information Security, Inc.
  *
  * This library is free software; you can redistribute it and/or
@@ -17,26 +17,39 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-/* -------------------------------------------------------------------------- */
-/* Hyperkernel Driver (hkd) IOCTL Interface                                   */
-/* -------------------------------------------------------------------------- */
+#include <fcntl.h>
+#include <stdint.h>
+#include <unistd.h>
+#include <sys/ioctl.h>
 
-#define HKD_SET_SIGNAL_CMD 1
-#define HKD_SET_SIGNAL_PID_CMD 2
-#define HKD_REQUEST_IRQ_CMD 3
+#include <hkd/entry.h>
 
-#ifdef __linux__
+int hkd_open()
+{
+    return open("/dev/hkd", O_RDWR);
+}
 
-#define HKD_MAJOR 151
-#define HKD_NAME "hkd"
+int hkd_write(int fd, unsigned long request, const void *data)
+{
+    return ioctl(fd, request, data);
+}
 
-#define HKD_SET_SIGNAL \
-       _IOW(HKD_MAJOR, HKD_SET_SIGNAL_CMD, int *)
+int hkd_close(int fd)
+{
+    return close(fd);
+}
 
-#define HKD_SET_SIGNAL_PID \
-       _IOW(HKD_MAJOR, HKD_SET_SIGNAL_PID_CMD, uint64_t *)
+int hkd_set_signal(int fd, int signum)
+{
+    return hkd_write(fd, HKD_SET_SIGNAL, &signum);
+}
 
-#define HKD_REQUEST_IRQ \
-       _IOR(HKD_MAJOR, HKD_REQUEST_IRQ_CMD, uint64_t *)
+int hkd_set_signal_pid(int fd, uint64_t pid)
+{
+    return hkd_write(fd, HKD_SET_SIGNAL_PID, &pid);
+}
 
-#endif
+int hkd_request_irq(int fd, uint64_t irq)
+{
+    return hkd_write(fd, HKD_REQUEST_IRQ, &irq);
+}

@@ -71,6 +71,7 @@ private:
     uint64_t vcpu_op__set_rbx(gsl::not_null<vcpu_t *> vcpu);
     uint64_t vcpu_op__hlt_vcpu(gsl::not_null<vcpu_t *> vcpu);
     uint64_t vcpu_op__destroy_vcpu(gsl::not_null<vcpu_t *> vcpu);
+    uint64_t vcpu_op__send_interrupt(gsl::not_null<vcpu_t *> vcpu);
 
     bool dispatch(gsl::not_null<vcpu_t *> vcpu);
 

@@ -48,6 +48,7 @@ uint64_t _vmcall(uint64_t r1, uint64_t r2, uint64_t r3, uint64_t r4) NOEXCEPT;
 
 #define domainid_t uint64_t
 #define vcpuid_t uint64_t
+#define vector_t uint64_t
 
 #define INVALID_DOMAINID 0xFFFFFFFFFFFFFFFF
 #define INVALID_VCPUID 0xFFFFFFFFFFFFFFFF
@@ -141,6 +142,12 @@ __domain_op__map_commit(domainid_t domainid)
 #define __enum_vcpu_op__destroy_vcpu 0x103
 #define __enum_vcpu_op__set_rip 0x110
 #define __enum_vcpu_op__set_rbx 0x111
+#define __enum_vcpu_op__send_interrupt 0x112
+
+struct interrupt {
+    vcpuid_t dest_vcpuid;
+    vector_t dest_vector;
+};
 
 static inline vcpuid_t
 __vcpu_op__create_vcpu(domainid_t domainid)
@@ -205,6 +212,17 @@ __vcpu_op__set_rbx(vcpuid_t vcpuid, uint64_t rbx)
         __enum_vcpu_op__set_rbx,
         vcpuid,
         rbx
+    );
+}
+
+static inline status_t
+__vcpu_op__send_interrupt(vcpuid_t vcpuid, vector_t vector)
+{
+    return _vmcall(
+        __enum_vcpu_op,
+        __enum_vcpu_op__send_interrupt,
+        vcpuid,
+        vector
     );
 }
 
