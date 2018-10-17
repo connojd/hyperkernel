@@ -17,6 +17,7 @@
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 #include <hve/arch/intel_x64/vcpu.h>
+#include <hve/arch/intel_x64/fault.h>
 #include <hve/arch/intel_x64/vmexit/vmcall.h>
 
 namespace hyperkernel::intel_x64
@@ -51,16 +52,20 @@ vmcall_handler::add_handler(
 bool
 vmcall_handler::handle(gsl::not_null<vcpu_t *> vcpu)
 {
-    guard_exceptions([&] {
-        for (const auto &d : m_handlers) {
-            if (d(vcpu)) {
-                return;
-            }
-        }
-    });
+    for (const auto &d : m_handlers) {
+        if (d(vcpu)) {
+            vcpu->load();
+            vcpu->advance();
 
-    vcpu->load();
-    return vcpu->advance();
+            return true;
+        }
+    }
+
+    bferror_info(0, "vmcall_handler: no registered handler!!!");
+    fault(vcpu);
+
+    // Unreachable
+    return true;
 }
 
 }

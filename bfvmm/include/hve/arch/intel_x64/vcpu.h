@@ -27,6 +27,8 @@
 #include "vmcall/vcpu_op.h"
 #include "vmcall/bf86_op.h"
 
+#include "xen/xen_op.h"
+
 #include "domain.h"
 
 #include <bfvmm/vcpu/vcpu_manager.h>
@@ -184,6 +186,21 @@ public:
     ///
     VIRTUAL bool is_killed() const;
 
+    //--------------------------------------------------------------------------
+    // Memory Mapping
+    //--------------------------------------------------------------------------
+
+    /// Convert GPA to HPA
+    ///
+    /// Converts a guest physical address to a host physical address
+    /// using EPT.
+    ///
+    /// @expects
+    /// @ensures
+    ///
+    /// @param gpa the guest physical address
+    ///
+    uint64_t gpa_to_hpa(uint64_t gpa);
 
 public:
 
@@ -199,6 +216,8 @@ public:
     vmcall_domain_op_handler m_vmcall_domain_op_handler;
     vmcall_vcpu_op_handler m_vmcall_vcpu_op_handler;
     vmcall_bf86_op_handler m_vmcall_bf86_op_handler;
+
+    xen_op_handler m_xen_op_handler;
 };
 
 }

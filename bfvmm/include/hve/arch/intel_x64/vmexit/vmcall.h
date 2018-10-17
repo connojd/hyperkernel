@@ -16,8 +16,8 @@
 // License along with this library; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-#ifndef VMCALL_INTEL_X64_HYPERKERNEL_H
-#define VMCALL_INTEL_X64_HYPERKERNEL_H
+#ifndef VMEXIT_VMCALL_INTEL_X64_HYPERKERNEL_H
+#define VMEXIT_VMCALL_INTEL_X64_HYPERKERNEL_H
 
 #include "../base.h"
 

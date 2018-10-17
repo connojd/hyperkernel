@@ -19,6 +19,8 @@
 #include <bfdebug.h>
 #include <hve/arch/intel_x64/domain.h>
 
+using namespace eapis::intel_x64;
+
 namespace hyperkernel::intel_x64
 {
 
@@ -26,9 +28,6 @@ domain::domain(domainid_type domainid) :
     hyperkernel::domain{domainid}
 {
     using namespace ::x64::access_rights;
-
-    using namespace bfvmm::x64;
-    using namespace eapis::intel_x64;
 
     m_gdt_phys = g_mm->virtint_to_physint(m_gdt.base());
     m_idt_phys = g_mm->virtint_to_physint(m_idt.base());
@@ -38,18 +37,9 @@ domain::domain(domainid_type domainid) :
     m_idt_virt = 0x2000;
     m_tss_virt = 0x3000;
 
-    // m_gdt.set(2, nullptr, 0xFFFFFFFF, ring0_cs_descriptor);
-    // m_gdt.set(3, nullptr, 0xFFFFFFFF, ring0_ss_descriptor);
-    // m_gdt.set(4, nullptr, 0xFFFFFFFF, ring0_ds_descriptor);
-    // m_gdt.set(5, m_tss_virt, sizeof(m_tss), ring0_tr_descriptor);
-
     m_gdt.set(2, nullptr, 0xFFFFFFFF, 0xc09b);
     m_gdt.set(3, nullptr, 0xFFFFFFFF, 0xc093);
     m_gdt.set(4, m_tss_virt, sizeof(m_tss), 0x008b);
-
-    // m_cr3_map.map_4k(m_gdt_virt, m_gdt_virt, cr3::mmap::attr_type::read_write);
-    // m_cr3_map.map_4k(m_idt_virt, m_idt_virt, cr3::mmap::attr_type::read_write);
-    // m_cr3_map.map_4k(m_tss_virt, m_tss_virt, cr3::mmap::attr_type::read_write);
 
     m_ept_map.map_4k(m_tss_virt, m_tss_phys, ept::mmap::attr_type::read_write);
     m_ept_map.map_4k(m_gdt_virt, m_gdt_phys, ept::mmap::attr_type::read_only);
@@ -57,27 +47,15 @@ domain::domain(domainid_type domainid) :
 }
 
 void
-domain::map_4k(uintptr_t virt_addr, uintptr_t phys_addr)
-{
-    using namespace bfvmm::x64;
-    using namespace eapis::intel_x64;
+domain::map_4k(uintptr_t gpa, uintptr_t hpa)
+{ m_ept_map.map_4k(gpa, hpa, ept::mmap::attr_type::read_write_execute); }
 
-    m_ept_map.map_4k(virt_addr, phys_addr, ept::mmap::attr_type::read_write_execute);
-    // m_cr3_map.map_4k(virt_addr, virt_addr, cr3::mmap::attr_type::read_write_execute);
-}
+uint64_t
+domain::gpa_to_hpa(uint64_t gpa)
+{ return m_ept_map.virt_to_phys(gpa); }
 
 void
-domain::map_commit()
-{
-    using namespace bfvmm::x64;
-    using namespace eapis::intel_x64;
-
-    // auto cr3_phys = bfn::upper(m_cr3_map.cr3());
-    // m_ept_map.map_4k(cr3_phys, cr3_phys, ept::mmap::attr_type::read_write);
-
-    // for (auto iter = m_cr3_map.mdl().begin(); iter != m_cr3_map.mdl().end(); iter++) {
-    //     m_ept_map.map_4k(iter->second, iter->second, ept::mmap::attr_type::read_write);
-    // }
-}
+domain::add_e820_entry(const e820_map_entry_t &entry)
+{ m_e820_map.emplace_back(entry); }
 
 }

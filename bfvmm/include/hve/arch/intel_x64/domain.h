@@ -19,6 +19,8 @@
 #ifndef DOMAIN_INTEL_X64_HYPERKERNEL_H
 #define DOMAIN_INTEL_X64_HYPERKERNEL_H
 
+#include <vector>
+
 #include "../../../domain/domain.h"
 
 #include <eapis/hve/arch/intel_x64/vcpu.h>
@@ -46,6 +48,12 @@
 
 namespace hyperkernel::intel_x64
 {
+
+struct e820_map_entry_t {
+    uint64_t addr;
+    uint64_t size;
+    uint32_t type;
+};
 
 /// Domain
 ///
@@ -85,23 +93,25 @@ public:
     /// @expects
     /// @ensures
     ///
-    /// @param virt_addr the virtual address to map from
-    /// @param phys_addr the physical address to map to
-    /// @param attr the map permissions
-    /// @param cache the memory type for the mapping
+    /// @param gpa the guest physical address
+    /// @param hpa the host physical address
     ///
-    void map_4k(uintptr_t virt_addr, uintptr_t phys_addr);
+    void map_4k(uint64_t gpa, uint64_t hpa);
 
-    void map_commit();
+    /// Convert GPA to HPA
+    ///
+    /// Converts a guest physical address to a host physical address
+    /// using EPT.
+    ///
+    /// @expects
+    /// @ensures
+    ///
+    /// @param gpa the guest physical address
+    ///
+    uint64_t gpa_to_hpa(uint64_t gpa);
 
     eapis::intel_x64::ept::mmap &ept()
     { return m_ept_map; }
-
-    uintptr_t cr3()
-    { return m_cr3_map.cr3(); }
-
-    uintptr_t pat()
-    { return m_cr3_map.pat(); }
 
     uintptr_t gdt_virt() const
     { return m_gdt_virt; }
@@ -114,6 +124,11 @@ public:
 
     gsl::not_null<bfvmm::x64::idt *> idt()
     { return &m_idt; }
+
+    std::vector<e820_map_entry_t> &e820_map()
+    { return m_e820_map; }
+
+    void add_e820_entry(const e820_map_entry_t &entry);
 
 private:
 
@@ -129,9 +144,9 @@ private:
     uintptr_t m_gdt_virt;
     uintptr_t m_idt_virt;
 
-    bfvmm::x64::cr3::mmap m_cr3_map;
-    eapis::intel_x64::ept::mmap m_ept_map;
+    std::vector<e820_map_entry_t> m_e820_map;
 
+    eapis::intel_x64::ept::mmap m_ept_map;
     eapis::intel_x64::vcpu_global_state_t m_vcpu_global_state;
 
 public:

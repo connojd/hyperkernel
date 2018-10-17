@@ -68,13 +68,20 @@ uint64_t _vmcall(uint64_t r1, uint64_t r2, uint64_t r3, uint64_t r4) NOEXCEPT;
 #define __enum_domain_op__create_domain 0x100
 #define __enum_domain_op__destroy_domain 0x101
 #define __enum_domain_op__map_md 0x110
-#define __enum_domain_op__map_commit 0x111
+#define __enum_domain_op__add_e820_map_entry 0x111
 
 typedef struct {
     domainid_t domainid;
     uint64_t virt_addr;
     uint64_t exec_addr;
 } __domain_op__map_md_arg_t;
+
+typedef struct {
+    domainid_t domainid;
+    uint64_t addr;
+    uint64_t size;
+    uint32_t type;
+} __domain_op__add_e820_map_entry_arg_t;
 
 static inline domainid_t
 __domain_op__create_domain()
@@ -119,12 +126,17 @@ __domain_op__map_md(
 }
 
 static inline status_t
-__domain_op__map_commit(domainid_t domainid)
+__domain_op__add_e820_map_entry(
+    domainid_t domainid, uint64_t addr, uint64_t size, uint32_t type)
 {
+    __domain_op__add_e820_map_entry_arg_t arg = {
+        domainid, addr, size, type
+    };
+
     status_t ret = _vmcall(
         __enum_domain_op,
-        __enum_domain_op__map_commit,
-        domainid,
+        __enum_domain_op__add_e820_map_entry,
+        bfrcast(uint64_t, &arg),
         0
     );
 

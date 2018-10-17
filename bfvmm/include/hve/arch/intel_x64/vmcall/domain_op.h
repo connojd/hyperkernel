@@ -21,9 +21,6 @@
 
 #include "../base.h"
 
-#include <bfvmm/hve/arch/intel_x64/vmcs.h>
-#include <bfvmm/hve/arch/intel_x64/exit_handler.h>
-
 // -----------------------------------------------------------------------------
 // Exports
 // -----------------------------------------------------------------------------
@@ -67,7 +64,7 @@ private:
 
     uint64_t domain_op__create_domain(gsl::not_null<vcpu_t *> vcpu);
     uint64_t domain_op__map_md(gsl::not_null<vcpu_t *> vcpu);
-    uint64_t domain_op__map_commit(gsl::not_null<vcpu_t *> vcpu);
+    uint64_t domain_op__add_e820_map_entry(gsl::not_null<vcpu_t *> vcpu);
     uint64_t domain_op__destroy_domain(gsl::not_null<vcpu_t *> vcpu);
 
     bool dispatch(gsl::not_null<vcpu_t *> vcpu);

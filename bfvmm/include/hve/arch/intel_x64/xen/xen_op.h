@@ -16,13 +16,15 @@
 // License along with this library; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-#ifndef VMCALL_VCPU_INTEL_X64_HYPERKERNEL_H
-#define VMCALL_VCPU_INTEL_X64_HYPERKERNEL_H
+#ifndef XEN_OP_INTEL_X64_HYPERKERNEL_H
+#define XEN_OP_INTEL_X64_HYPERKERNEL_H
 
+#include "cpuid.h"
 #include "../base.h"
 
-#include <bfvmm/hve/arch/intel_x64/vmcs.h>
-#include <bfvmm/hve/arch/intel_x64/exit_handler.h>
+#include <eapis/hve/arch/intel_x64/vmexit/cpuid.h>
+#include <eapis/hve/arch/intel_x64/vmexit/wrmsr.h>
+#include <eapis/hve/arch/intel_x64/vmexit/rdmsr.h>
 
 // -----------------------------------------------------------------------------
 // Exports
@@ -49,11 +51,11 @@ namespace hyperkernel::intel_x64
 
 class vcpu;
 
-class EXPORT_HYPERKERNEL_HVE vmcall_vcpu_op_handler
+class EXPORT_HYPERKERNEL_HVE xen_op_handler
 {
 public:
 
-    vmcall_vcpu_op_handler(
+    xen_op_handler(
         gsl::not_null<vcpu *> vcpu);
 
     /// Destructor
@@ -61,31 +63,39 @@ public:
     /// @expects
     /// @ensures
     ///
-    ~vmcall_vcpu_op_handler() = default;
+    ~xen_op_handler() = default;
 
 private:
 
-    uint64_t vcpu_op__create_vcpu(gsl::not_null<vcpu_t *> vcpu);
-    uint64_t vcpu_op__run_vcpu(gsl::not_null<vcpu_t *> vcpu);
-    uint64_t vcpu_op__set_entry(gsl::not_null<vcpu_t *> vcpu);
-    uint64_t vcpu_op__hlt_vcpu(gsl::not_null<vcpu_t *> vcpu);
-    uint64_t vcpu_op__destroy_vcpu(gsl::not_null<vcpu_t *> vcpu);
+    bool HYPERVISOR_memory_op(gsl::not_null<vcpu_t *> vcpu);
+    uint64_t XENMEM_memory_map_handler(gsl::not_null<vcpu_t *> vcpu);
 
-    bool dispatch(gsl::not_null<vcpu_t *> vcpu);
+    bool xen_cpuid_leaf1_handler(
+        gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::cpuid_handler::info_t &info);
+    bool xen_cpuid_leaf3_handler(
+        gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::cpuid_handler::info_t &info);
+
+    bool xen_hypercall_page_wrmsr_handler(
+        gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::wrmsr_handler::info_t &info);
+    bool xen_debug_ndec_wrmsr_handler(
+        gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::wrmsr_handler::info_t &info);
+    bool xen_debug_nhex_wrmsr_handler(
+        gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::wrmsr_handler::info_t &info);
 
 private:
 
     vcpu *m_vcpu;
+    uint64_t m_hypercall_page_gpa{0};
 
 public:
 
     /// @cond
 
-    vmcall_vcpu_op_handler(vmcall_vcpu_op_handler &&) = default;
-    vmcall_vcpu_op_handler &operator=(vmcall_vcpu_op_handler &&) = default;
+    xen_op_handler(xen_op_handler &&) = default;
+    xen_op_handler &operator=(xen_op_handler &&) = default;
 
-    vmcall_vcpu_op_handler(const vmcall_vcpu_op_handler &) = delete;
-    vmcall_vcpu_op_handler &operator=(const vmcall_vcpu_op_handler &) = delete;
+    xen_op_handler(const xen_op_handler &) = delete;
+    xen_op_handler &operator=(const xen_op_handler &) = delete;
 
     /// @endcond
 };

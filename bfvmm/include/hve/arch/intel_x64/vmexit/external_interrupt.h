@@ -16,8 +16,8 @@
 // License along with this library; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-#ifndef EXTERNAL_INTERRUPT_INTEL_X64_HYPERKERNEL_H
-#define EXTERNAL_INTERRUPT_INTEL_X64_HYPERKERNEL_H
+#ifndef VMEXIT_EXTERNAL_INTERRUPT_INTEL_X64_HYPERKERNEL_H
+#define VMEXIT_EXTERNAL_INTERRUPT_INTEL_X64_HYPERKERNEL_H
 
 #include "../base.h"
 #include <eapis/hve/arch/intel_x64/vmexit/external_interrupt.h>

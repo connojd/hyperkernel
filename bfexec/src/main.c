@@ -122,7 +122,6 @@ reserved_4000_t *g_reserved_4000 = 0;
 reserved_5000_t *g_reserved_5000 = 0;
 reserved_6000_t *g_reserved_6000 = 0;
 
-void *g_ram = 0;
 uint64_t g_ram_addr = 0x1000000;
 uint64_t g_ram_size = 0x8000000;
 
@@ -239,7 +238,8 @@ domain_op__map_md(uint64_t gva, uint64_t gpa)
 }
 
 status_t
-domain_op__map_buffer(uint64_t gva, uint64_t gpa, uint64_t size)
+domain_op__map_buffer(
+    uint64_t gva, uint64_t gpa, uint64_t size)
 {
     uint64_t index;
 
@@ -480,6 +480,15 @@ setup_xen_e820_map()
 {
     status_t ret;
 
+    /**
+     * The E820 map can be reported to Linux PVH using either the start_info
+     * struct with version 1, or it can be reported using the XENMEM_memory_map
+     * hypercall. Since we don't know what method will be used, we provide
+     * both. Here, we add the map the the start_info, we map the table into
+     * physical memory for the VM, and we give the map to the hypervisor just
+     * in case the guest asks for it using this hypercall.
+     */
+
     g_reserved_6000 = (reserved_6000_t *)alloc_page();
     if (g_reserved_6000 == 0) {
         BFALERT("g_reserved_6000 alloc failed: %s\n", strerror(errno));
@@ -490,17 +499,65 @@ setup_xen_e820_map()
     g_reserved_6000->e820[0].size = 0x1000;
     g_reserved_6000->e820[0].type = XEN_HVM_MEMMAP_TYPE_UNUSABLE;
 
+    ret = __domain_op__add_e820_map_entry(
+        g_vm.domainid,
+        g_reserved_6000->e820[0].addr,
+        g_reserved_6000->e820[0].size,
+        g_reserved_6000->e820[0].type
+    );
+
+    if (ret != SUCCESS) {
+        BFALERT("__domain_op__add_e820_map_entry failed\n");
+        return FAILURE;
+    }
+
     g_reserved_6000->e820[1].addr = 0x1000;
     g_reserved_6000->e820[1].size = 0x6000;
     g_reserved_6000->e820[1].type = XEN_HVM_MEMMAP_TYPE_RESERVED;
+
+    ret = __domain_op__add_e820_map_entry(
+        g_vm.domainid,
+        g_reserved_6000->e820[1].addr,
+        g_reserved_6000->e820[1].size,
+        g_reserved_6000->e820[1].type
+    );
+
+    if (ret != SUCCESS) {
+        BFALERT("__domain_op__add_e820_map_entry failed\n");
+        return FAILURE;
+    }
 
     g_reserved_6000->e820[2].addr = 0x7000;
     g_reserved_6000->e820[2].size = 0xFF9000;
     g_reserved_6000->e820[2].type = XEN_HVM_MEMMAP_TYPE_UNUSABLE;
 
+    ret = __domain_op__add_e820_map_entry(
+        g_vm.domainid,
+        g_reserved_6000->e820[2].addr,
+        g_reserved_6000->e820[2].size,
+        g_reserved_6000->e820[2].type
+    );
+
+    if (ret != SUCCESS) {
+        BFALERT("__domain_op__add_e820_map_entry failed\n");
+        return FAILURE;
+    }
+
     g_reserved_6000->e820[3].addr = g_ram_addr;
     g_reserved_6000->e820[3].size = g_ram_size;
     g_reserved_6000->e820[3].type = XEN_HVM_MEMMAP_TYPE_RAM;
+
+    ret = __domain_op__add_e820_map_entry(
+        g_vm.domainid,
+        g_reserved_6000->e820[3].addr,
+        g_reserved_6000->e820[3].size,
+        g_reserved_6000->e820[3].type
+    );
+
+    if (ret != SUCCESS) {
+        BFALERT("__domain_op__add_e820_map_entry failed\n");
+        return FAILURE;
+    }
 
     ret = domain_op__map_md((uint64_t)g_reserved_6000, 0x6000);
     if (ret != BF_SUCCESS) {

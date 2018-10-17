@@ -69,10 +69,18 @@ vmcall_domain_op_handler::domain_op__map_md(
 }
 
 uint64_t
-vmcall_domain_op_handler::domain_op__map_commit(
+vmcall_domain_op_handler::domain_op__add_e820_map_entry(
     gsl::not_null<vcpu_t *> vcpu)
 {
-    get_domain(vcpu->rcx())->map_commit();
+    auto domain_op__add_e820_map_entry_arg =
+        get_hypercall_arg<__domain_op__add_e820_map_entry_arg_t>(vcpu);
+
+    get_domain(domain_op__add_e820_map_entry_arg->domainid)->add_e820_entry({
+        domain_op__add_e820_map_entry_arg->addr,
+        domain_op__add_e820_map_entry_arg->size,
+        domain_op__add_e820_map_entry_arg->type
+    });
+
     return SUCCESS;
 }
 
@@ -109,12 +117,12 @@ vmcall_domain_op_handler::dispatch(
             return guard_vmcall(vcpu, domain_op__map_md_delegate);
         }
 
-        case __enum_domain_op__map_commit:
+        case __enum_domain_op__add_e820_map_entry:
         {
-            auto domain_op__map_commit_delegate =
-                guard_vmcall_delegate(vmcall_domain_op_handler, domain_op__map_commit);
+            auto domain_op__add_e820_map_entry_delegate =
+                guard_vmcall_delegate(vmcall_domain_op_handler, domain_op__add_e820_map_entry);
 
-            return guard_vmcall(vcpu, domain_op__map_commit_delegate);
+            return guard_vmcall(vcpu, domain_op__add_e820_map_entry_delegate);
         }
 
         case __enum_domain_op__destroy_domain:
