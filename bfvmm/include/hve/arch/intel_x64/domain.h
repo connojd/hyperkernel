@@ -91,21 +91,6 @@ public:
 
 public:
 
-    /// Add E820 Map Entry
-    ///
-    /// Adds an E820 map entry to the list. This is populated by the domain
-    /// builder, which is them provided to the guest on demand through the
-    /// vmcall interface
-    ///
-    /// @expects
-    /// @ensures
-    ///
-    /// @param entry the E820 map entry to add
-    ///
-    void add_e820_entry(const e820_map_entry_t &entry);
-
-public:
-
     /// Map 1g GPA to HPA
     ///
     /// Maps a 1g guest physical address to a 1g host physical address
@@ -145,123 +130,20 @@ public:
     ///
     void map_4k(uintptr_t gpa, uintptr_t hpa);
 
-    /// Convert GPA to HPA
+public:
+
+    /// Add E820 Map Entry
     ///
-    /// Converts a guest physical address to a host physical address
-    /// using EPT.
+    /// Adds an E820 map entry to the list. This is populated by the domain
+    /// builder, which is them provided to the guest on demand through the
+    /// vmcall interface
     ///
     /// @expects
     /// @ensures
     ///
-    /// @param gpa the guest physical address
-    /// @return the resulting host physical address
+    /// @param entry the E820 map entry to add
     ///
-    std::pair<uintptr_t, uintptr_t> gpa_to_hpa(uint64_t gpa);
-
-    /// Map GPA (1g)
-    ///
-    /// Map a 1g guest physical address. The result of this function is a
-    /// unique_map that will unmap when scope is lost
-    ///
-    /// @expects gpa is 1g page aligned
-    /// @expects gpa != 0
-    /// @ensures
-    ///
-    /// @param gpa the guest physical address
-    /// @return a unique_map that can be used to access the gpa
-    ///
-    template<typename T>
-    auto map_gpa_1g(uintptr_t gpa)
-    {
-        auto [hpa, unused] = this->gpa_to_hpa(gpa);
-        return bfvmm::x64::map_hpa_1g<T>(hpa);
-    }
-
-    /// Map GPA (1g)
-    ///
-    /// Map a 1g guest physical address. The result of this function is a
-    /// unique_map that will unmap when scope is lost
-    ///
-    /// @expects gpa is 1g page aligned
-    /// @expects gpa != 0
-    /// @ensures
-    ///
-    /// @param gpa the guest physical address
-    /// @return a unique_map that can be used to access the gpa
-    ///
-    template<typename T>
-    auto map_gpa_1g(void *gpa)
-    { return map_gpa_1g<T>(reinterpret_cast<uintptr_t>(gpa)); }
-
-    /// Map GPA (2m)
-    ///
-    /// Map a 2m guest physical address. The result of this function is a
-    /// unique_map that will unmap when scope is lost
-    ///
-    /// @expects gpa is 2m page aligned
-    /// @expects gpa != 0
-    /// @ensures
-    ///
-    /// @param gpa the guest physical address
-    /// @return a unique_map that can be used to access the gpa
-    ///
-    template<typename T>
-    auto map_gpa_2m(uintptr_t gpa)
-    {
-        auto [hpa, unused] = this->gpa_to_hpa(gpa);
-        return bfvmm::x64::map_hpa_2m<T>(hpa);
-    }
-
-    /// Map GPA (2m)
-    ///
-    /// Map a 2m guest physical address. The result of this function is a
-    /// unique_map that will unmap when scope is lost
-    ///
-    /// @expects gpa is 2m page aligned
-    /// @expects gpa != 0
-    /// @ensures
-    ///
-    /// @param gpa the guest physical address
-    /// @return a unique_map that can be used to access the gpa
-    ///
-    template<typename T>
-    auto map_gpa_2m(void *gpa)
-    { return map_gpa_2m<T>(reinterpret_cast<uintptr_t>(gpa)); }
-
-    /// Map GPA (4k)
-    ///
-    /// Map a 4k guest physical address. The result of this function is a
-    /// unique_map that will unmap when scope is lost
-    ///
-    /// @expects gpa is 4k page aligned
-    /// @expects gpa != 0
-    /// @ensures
-    ///
-    /// @param gpa the guest physical address
-    /// @return a unique_map that can be used to access the gpa
-    ///
-    template<typename T>
-    auto map_gpa_4k(uintptr_t gpa)
-    {
-        auto [hpa, unused] = this->gpa_to_hpa(gpa);
-        return bfvmm::x64::map_hpa_4k<T>(hpa);
-    }
-
-    /// Map GPA (4k)
-    ///
-    /// Map a 4k guest physical address. The result of this function is a
-    /// unique_map that will unmap when scope is lost
-    ///
-    /// @expects gpa is 4k page aligned
-    /// @expects gpa != 0
-    /// @ensures
-    ///
-    /// @param gpa the guest physical address
-    /// @return a unique_map that can be used to access the gpa
-    ///
-    template<typename T>
-    auto map_gpa_4k(void *gpa)
-    { return map_gpa_4k<T>(reinterpret_cast<uintptr_t>(gpa)); }
+    void add_e820_entry(const e820_map_entry_t &entry);
 
 public:
 

@@ -283,33 +283,4 @@ bool
 vcpu::is_killed() const
 { return m_killed; }
 
-//--------------------------------------------------------------------------
-// Memory Mapping
-//--------------------------------------------------------------------------
-
-uintptr_t
-vcpu::get_entry(
-    uintptr_t tble_gpa, std::ptrdiff_t index)
-{
-    auto tble = m_domain->map_gpa_4k<uintptr_t>(tble_gpa);
-    auto span = gsl::span(tble.get(), ::x64::pt::num_entries);
-
-    return span[index];
-}
-
-std::pair<uintptr_t, uintptr_t>
-vcpu::gpa_to_hpa(uint64_t gpa)
-{ return m_domain->gpa_to_hpa(gpa); }
-
-std::pair<uintptr_t, uintptr_t>
-vcpu::gva_to_gpa(uint64_t gva)
-{ return bfvmm::x64::gva_to_gpa(gva, vmcs_n::guest_cr3::get(), get_entry_delegate); }
-
-std::pair<uintptr_t, uintptr_t>
-vcpu::gva_to_hpa(uint64_t gva)
-{
-    auto [gpa, unused] = this->gva_to_gpa(gva);
-    return this->gpa_to_hpa(gpa);
-}
-
 }

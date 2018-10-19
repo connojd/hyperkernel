@@ -77,10 +77,6 @@ void
 domain::map_4k(uintptr_t gpa, uintptr_t hpa)
 { m_ept_map.map_4k(gpa, hpa); }
 
-std::pair<uintptr_t, uintptr_t>
-domain::gpa_to_hpa(uintptr_t gpa)
-{ return m_ept_map.virt_to_phys(gpa); }
-
 void
 domain::add_e820_entry(const e820_map_entry_t &entry)
 { m_e820_map.emplace_back(entry); }
