@@ -75,15 +75,62 @@ public:
     ///
     ~domain() = default;
 
-    /// Get EAPIs vCPU Global State
+    /// Set up Dom0
     ///
-    /// Return a pointer to the global vCPU state needed by the EAPIs.
-    /// A pointer for this structure is needed for each vCPU that is
-    /// created.
+    /// @expects
+    /// @ensures
     ///
-    gsl::not_null<eapis::intel_x64::vcpu_global_state_t*>
-    global_state()
-    { return &m_vcpu_global_state; }
+    void setup_dom0();
+
+    /// Set up DomU
+    ///
+    /// @expects
+    /// @ensures
+    ///
+    void setup_domU();
+
+public:
+
+    /// Add E820 Map Entry
+    ///
+    /// Adds an E820 map entry to the list. This is populated by the domain
+    /// builder, which is them provided to the guest on demand through the
+    /// vmcall interface
+    ///
+    /// @expects
+    /// @ensures
+    ///
+    /// @param entry the E820 map entry to add
+    ///
+    void add_e820_entry(const e820_map_entry_t &entry);
+
+public:
+
+    /// Map 1g GPA to HPA
+    ///
+    /// Maps a 1g guest physical address to a 1g host physical address
+    /// using EPT
+    ///
+    /// @expects
+    /// @ensures
+    ///
+    /// @param gpa the guest physical address
+    /// @param hpa the host physical address
+    ///
+    void map_1g(uintptr_t gpa, uintptr_t hpa);
+
+    /// Map 2m GPA to HPA
+    ///
+    /// Maps a 2m guest physical address to a 2m host physical address
+    /// using EPT
+    ///
+    /// @expects
+    /// @ensures
+    ///
+    /// @param gpa the guest physical address
+    /// @param hpa the host physical address
+    ///
+    void map_2m(uintptr_t gpa, uintptr_t hpa);
 
     /// Map 4k GPA to HPA
     ///
@@ -96,7 +143,7 @@ public:
     /// @param gpa the guest physical address
     /// @param hpa the host physical address
     ///
-    void map_4k(uint64_t gpa, uint64_t hpa);
+    void map_4k(uintptr_t gpa, uintptr_t hpa);
 
     /// Convert GPA to HPA
     ///
@@ -107,17 +154,116 @@ public:
     /// @ensures
     ///
     /// @param gpa the guest physical address
+    /// @return the resulting host physical address
     ///
-    uint64_t gpa_to_hpa(uint64_t gpa);
+    std::pair<uintptr_t, uintptr_t> gpa_to_hpa(uint64_t gpa);
 
-    eapis::intel_x64::ept::mmap &ept()
-    { return m_ept_map; }
+    /// Map GPA (1g)
+    ///
+    /// Map a 1g guest physical address. The result of this function is a
+    /// unique_map that will unmap when scope is lost
+    ///
+    /// @expects gpa is 1g page aligned
+    /// @expects gpa != 0
+    /// @ensures
+    ///
+    /// @param gpa the guest physical address
+    /// @return a unique_map that can be used to access the gpa
+    ///
+    template<typename T>
+    auto map_gpa_1g(uintptr_t gpa)
+    {
+        auto [hpa, unused] = this->gpa_to_hpa(gpa);
+        return bfvmm::x64::map_hpa_1g<T>(hpa);
+    }
 
-    uintptr_t gdt_virt() const
-    { return m_gdt_virt; }
+    /// Map GPA (1g)
+    ///
+    /// Map a 1g guest physical address. The result of this function is a
+    /// unique_map that will unmap when scope is lost
+    ///
+    /// @expects gpa is 1g page aligned
+    /// @expects gpa != 0
+    /// @ensures
+    ///
+    /// @param gpa the guest physical address
+    /// @return a unique_map that can be used to access the gpa
+    ///
+    template<typename T>
+    auto map_gpa_1g(void *gpa)
+    { return map_gpa_1g<T>(reinterpret_cast<uintptr_t>(gpa)); }
 
-    uintptr_t idt_virt() const
-    { return m_idt_virt; }
+    /// Map GPA (2m)
+    ///
+    /// Map a 2m guest physical address. The result of this function is a
+    /// unique_map that will unmap when scope is lost
+    ///
+    /// @expects gpa is 2m page aligned
+    /// @expects gpa != 0
+    /// @ensures
+    ///
+    /// @param gpa the guest physical address
+    /// @return a unique_map that can be used to access the gpa
+    ///
+    template<typename T>
+    auto map_gpa_2m(uintptr_t gpa)
+    {
+        auto [hpa, unused] = this->gpa_to_hpa(gpa);
+        return bfvmm::x64::map_hpa_2m<T>(hpa);
+    }
+
+    /// Map GPA (2m)
+    ///
+    /// Map a 2m guest physical address. The result of this function is a
+    /// unique_map that will unmap when scope is lost
+    ///
+    /// @expects gpa is 2m page aligned
+    /// @expects gpa != 0
+    /// @ensures
+    ///
+    /// @param gpa the guest physical address
+    /// @return a unique_map that can be used to access the gpa
+    ///
+    template<typename T>
+    auto map_gpa_2m(void *gpa)
+    { return map_gpa_2m<T>(reinterpret_cast<uintptr_t>(gpa)); }
+
+    /// Map GPA (4k)
+    ///
+    /// Map a 4k guest physical address. The result of this function is a
+    /// unique_map that will unmap when scope is lost
+    ///
+    /// @expects gpa is 4k page aligned
+    /// @expects gpa != 0
+    /// @ensures
+    ///
+    /// @param gpa the guest physical address
+    /// @return a unique_map that can be used to access the gpa
+    ///
+    template<typename T>
+    auto map_gpa_4k(uintptr_t gpa)
+    {
+        auto [hpa, unused] = this->gpa_to_hpa(gpa);
+        return bfvmm::x64::map_hpa_4k<T>(hpa);
+    }
+
+    /// Map GPA (4k)
+    ///
+    /// Map a 4k guest physical address. The result of this function is a
+    /// unique_map that will unmap when scope is lost
+    ///
+    /// @expects gpa is 4k page aligned
+    /// @expects gpa != 0
+    /// @ensures
+    ///
+    /// @param gpa the guest physical address
+    /// @return a unique_map that can be used to access the gpa
+    ///
+    template<typename T>
+    auto map_gpa_4k(void *gpa)
+    { return map_gpa_4k<T>(reinterpret_cast<uintptr_t>(gpa)); }
+
+public:
 
     gsl::not_null<bfvmm::x64::gdt *> gdt()
     { return &m_gdt; }
@@ -125,10 +271,21 @@ public:
     gsl::not_null<bfvmm::x64::idt *> idt()
     { return &m_idt; }
 
+    uintptr_t gdt_virt() const
+    { return m_gdt_virt; }
+
+    uintptr_t idt_virt() const
+    { return m_idt_virt; }
+
     std::vector<e820_map_entry_t> &e820_map()
     { return m_e820_map; }
 
-    void add_e820_entry(const e820_map_entry_t &entry);
+    eapis::intel_x64::ept::mmap &ept()
+    { return m_ept_map; }
+
+    gsl::not_null<eapis::intel_x64::vcpu_global_state_t*>
+    global_state()
+    { return &m_vcpu_global_state; }
 
 private:
 

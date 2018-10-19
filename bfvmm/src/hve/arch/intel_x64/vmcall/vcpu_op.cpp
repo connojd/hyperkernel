@@ -19,6 +19,10 @@
 #include <hve/arch/intel_x64/vcpu.h>
 #include <hve/arch/intel_x64/vmcall/vcpu_op.h>
 
+template<typename T>
+auto get_hypercall_arg(gsl::not_null<vcpu_t *> vcpu)
+{ return vcpu_cast(vcpu)->map_gva_4k<T>(vcpu->rcx(), sizeof(T)); }
+
 namespace hyperkernel::intel_x64
 {
 
@@ -55,7 +59,7 @@ vmcall_vcpu_op_handler::vcpu_op__run_vcpu(
     // the need to map in memory on every interrupt.
     //
 
-    auto child_vcpu = get_hk_vcpu(vcpu->rcx());
+    auto child_vcpu = get_vcpu(vcpu->rcx());
     child_vcpu->set_parent_vcpu(m_vcpu);
 
     if (!child_vcpu->is_killed()) {
@@ -70,7 +74,7 @@ uint64_t
 vmcall_vcpu_op_handler::vcpu_op__set_rip(
     gsl::not_null<vcpu_t *> vcpu)
 {
-    auto child_vcpu = get_hk_vcpu(vcpu->rcx());
+    auto child_vcpu = get_vcpu(vcpu->rcx());
     child_vcpu->set_rip(vcpu->rdx());
 
     return SUCCESS;
@@ -80,7 +84,7 @@ uint64_t
 vmcall_vcpu_op_handler::vcpu_op__set_rbx(
     gsl::not_null<vcpu_t *> vcpu)
 {
-    auto child_vcpu = get_hk_vcpu(vcpu->rcx());
+    auto child_vcpu = get_vcpu(vcpu->rcx());
     child_vcpu->set_rbx(vcpu->rdx());
 
     return SUCCESS;
@@ -90,7 +94,7 @@ uint64_t
 vmcall_vcpu_op_handler::vcpu_op__hlt_vcpu(
     gsl::not_null<vcpu_t *> vcpu)
 {
-    auto child_vcpu = get_hk_vcpu(vcpu->rcx());
+    auto child_vcpu = get_vcpu(vcpu->rcx());
     child_vcpu->kill();
 
     return SUCCESS;

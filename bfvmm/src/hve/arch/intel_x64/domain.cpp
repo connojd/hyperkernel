@@ -27,6 +27,25 @@ namespace hyperkernel::intel_x64
 domain::domain(domainid_type domainid) :
     hyperkernel::domain{domainid}
 {
+    if (domainid == 0) {
+        setup_dom0();
+    }
+    else {
+        setup_domU();
+    }
+}
+
+void
+domain::setup_dom0()
+{
+    ept::identity_map(
+        m_ept_map, MAX_PHYS_ADDR
+    );
+}
+
+void
+domain::setup_domU()
+{
     using namespace ::x64::access_rights;
 
     m_gdt_phys = g_mm->virtint_to_physint(m_gdt.base());
@@ -47,11 +66,19 @@ domain::domain(domainid_type domainid) :
 }
 
 void
-domain::map_4k(uintptr_t gpa, uintptr_t hpa)
-{ m_ept_map.map_4k(gpa, hpa, ept::mmap::attr_type::read_write_execute); }
+domain::map_1g(uintptr_t gpa, uintptr_t hpa)
+{ m_ept_map.map_1g(gpa, hpa); }
 
-uint64_t
-domain::gpa_to_hpa(uint64_t gpa)
+void
+domain::map_2m(uintptr_t gpa, uintptr_t hpa)
+{ m_ept_map.map_2m(gpa, hpa); }
+
+void
+domain::map_4k(uintptr_t gpa, uintptr_t hpa)
+{ m_ept_map.map_4k(gpa, hpa); }
+
+std::pair<uintptr_t, uintptr_t>
+domain::gpa_to_hpa(uintptr_t gpa)
 { return m_ept_map.virt_to_phys(gpa); }
 
 void

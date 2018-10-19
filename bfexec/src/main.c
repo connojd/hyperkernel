@@ -114,10 +114,6 @@ typedef union {
     char pad[0x1000];
 } reserved_6000_t;
 
-static char size_check1[sizeof(reserved_4000_t) != 0x1000 ? -1 : 1];
-static char size_check2[sizeof(reserved_5000_t) != 0x1000 ? -1 : 1];
-static char size_check3[sizeof(reserved_6000_t) != 0x1000 ? -1 : 1];
-
 reserved_4000_t *g_reserved_4000 = 0;
 reserved_5000_t *g_reserved_5000 = 0;
 reserved_6000_t *g_reserved_6000 = 0;

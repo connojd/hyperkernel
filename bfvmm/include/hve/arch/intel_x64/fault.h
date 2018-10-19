@@ -21,14 +21,28 @@
 
 #include "vcpu.h"
 
+/// TODO:
+///
+/// List of faults that still have to be handled include:
+/// - All uses of halt() in the base hypervisor
+/// - Exception handler in the base hypervisor
+/// - abort() (which is also called from std::terminate)
+///
+/// Note that for some of these, we will need to lookup the vCPU to return to.
+/// This will require the ability to lookup the vcpuid from ASM. All of this
+/// should be doable, allowing us to recover from a vCPU going down for any
+/// reason
+///
+
 inline void
 fault(gsl::not_null<vcpu_t *> vcpu)
 {
     using namespace ::intel_x64::vmcs;
 
     bferror_lnbr(0);
-    bferror_info(0, "killing guest");
-    bferror_brk1(0);
+    bferror_brk2(0);
+    bferror_info(0, "*** FAULT ***");
+    bferror_brk2(0);
 
     bferror_subnhex(0, "rax", vcpu->rax());
     bferror_subnhex(0, "rbx", vcpu->rbx());
@@ -61,11 +75,15 @@ fault(gsl::not_null<vcpu_t *> vcpu)
 
     bfvmm::intel_x64::check::all();
 
-    auto parent_vcpu =
-        static_cast<hyperkernel::intel_x64::vcpu *>(vcpu.get())->parent_vcpu();
+    if (auto parent_vcpu = vcpu_cast(vcpu)->parent_vcpu()) {
 
-    parent_vcpu->load();
-    parent_vcpu->return_failure();
+        bferror_lnbr(0);
+        bferror_info(0, "child vCPU being killed");
+        bferror_lnbr(0);
+
+        parent_vcpu->load();
+        parent_vcpu->return_failure();
+    }
 }
 
 #endif

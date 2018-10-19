@@ -21,6 +21,10 @@
 #include <hve/arch/intel_x64/vcpu.h>
 #include <hve/arch/intel_x64/vmcall/bf86_op.h>
 
+template<typename T>
+auto get_hypercall_arg(gsl::not_null<vcpu_t *> vcpu)
+{ return vcpu_cast(vcpu)->map_gva_4k<T>(vcpu->rcx(), sizeof(T)); }
+
 namespace hyperkernel::intel_x64
 {
 

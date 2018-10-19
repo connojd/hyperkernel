@@ -20,13 +20,13 @@
 #define BASE_INTEL_X64_HYPERKERNEL_H
 
 #include <bfdebug.h>
-#include <hypercall.h>
-
-#include <domain/domain_manager.h>
 
 #include <bfvmm/vcpu/vcpu_manager.h>
 #include <bfvmm/hve/arch/intel_x64/vcpu.h>
-#include <bfvmm/memory_manager/arch/x64/unique_map.h>
+
+#include "../../../domain/domain_manager.h"
+#include "../../../../../include/hypercall.h"
+
 
 // -----------------------------------------------------------------------------
 // Helpers
@@ -58,40 +58,11 @@ guard_vmcall(
         vcpu->set_rax(d(vcpu));
         return true;
     }
-    catch (std::bad_alloc &) {
-    }
-    catch (std::exception &e) {
-        bfdebug_transaction(0, [&](std::string * msg) {
-            bferror_lnbr(0, msg);
-            bferror_brk1(0, msg);
-            bferror_info(0, typeid(e).name(), msg);
-            bferror_brk1(0, msg);
-            bferror_info(0, e.what(), msg);
-        });
-    }
-    catch (...) {
-        bfdebug_transaction(0, [&](std::string * msg) {
-            bferror_lnbr(0, msg);
-            bferror_brk1(0, msg);
-            bferror_info(0, "unknown exception", msg);
-            bferror_brk1(0, msg);
-        });
-    }
-
-    vcpu->set_rax(0xFFFFFFFFFFFFFFFF);
-    return false;
+    catchall({
+        vcpu->set_rax(0xFFFFFFFFFFFFFFFF);
+        return true;
+    });
 }
 
-template<typename T>
-auto
-get_hypercall_arg(gsl::not_null<vcpu_t *> vcpu)
-{
-    return
-        bfvmm::x64::make_unique_map<T>(
-            vcpu->rcx(),
-            vmcs_n::guest_cr3::get(),
-            sizeof(T)
-        );
-}
 
 #endif

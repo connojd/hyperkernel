@@ -52,19 +52,27 @@ vmcall_handler::add_handler(
 bool
 vmcall_handler::handle(gsl::not_null<vcpu_t *> vcpu)
 {
-    for (const auto &d : m_handlers) {
-        if (d(vcpu)) {
-            vcpu->load();
-            vcpu->advance();
+    auto ___ = gsl::finally([&]{
+        vcpu->load();
+    });
 
-            return true;
+    vcpu->advance();
+
+    try {
+        for (const auto &d : m_handlers) {
+            if (d(vcpu)) {
+                return true;
+            }
         }
     }
+    catchall({
+        fault(vcpu);
+        return true;
+    });
 
     bferror_info(0, "vmcall_handler: no registered handler!!!");
     fault(vcpu);
 
-    // Unreachable
     return true;
 }
 

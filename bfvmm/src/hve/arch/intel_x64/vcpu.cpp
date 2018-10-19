@@ -25,7 +25,7 @@ extern "C" void vmcs_resume(
     bfvmm::intel_x64::save_state_t *save_state) noexcept;
 
 //--------------------------------------------------------------------------
-// Handlers
+// Fault Handlers
 //--------------------------------------------------------------------------
 
 static bool
@@ -72,18 +72,19 @@ wrmsr_handler(
     return true;
 }
 
-namespace hyperkernel
-{
-namespace intel_x64
+//--------------------------------------------------------------------------
+// Implementation
+//--------------------------------------------------------------------------
+
+namespace hyperkernel::intel_x64
 {
 
 vcpu::vcpu(
     vcpuid::type id,
-    hyperkernel::intel_x64::domain *domain
+    gsl::not_null<hyperkernel::intel_x64::domain *> domain
 ) :
     eapis::intel_x64::vcpu{
-        id,
-        domain != nullptr ? domain->global_state() : nullptr
+        id, domain->global_state()
     },
 
     m_domain{domain},
@@ -98,18 +99,26 @@ vcpu::vcpu(
 
     m_xen_op_handler{this}
 {
-    if (this->is_guest_vm_vcpu()) {
-        this->write_guest_state(domain);
+    if (domain->id() == 0) {
+        this->write_dom0_guest_state(domain);
+    }
+    else {
+        this->write_domU_guest_state(domain);
     }
 }
 
-//==========================================================================
+//--------------------------------------------------------------------------
 // Setup
-//==========================================================================
+//--------------------------------------------------------------------------
 
 void
-vcpu::write_guest_state(
-    hyperkernel::intel_x64::domain *domain)
+vcpu::write_dom0_guest_state(domain *domain)
+{
+    this->set_eptp(domain->ept());
+}
+
+void
+vcpu::write_domU_guest_state(domain *domain)
 {
     using namespace ::intel_x64;
     using namespace ::intel_x64::vmcs;
@@ -211,10 +220,6 @@ vcpu::write_guest_state(
     );
 }
 
-//==========================================================================
-// VMExit
-//==========================================================================
-
 //--------------------------------------------------------------------------
 // VMCall
 //--------------------------------------------------------------------------
@@ -246,7 +251,6 @@ vcpu::return_success()
     this->set_rax(SUCCESS);
     vmcs_n::guest_rflags::carry_flag::disable();
 
-    this->advance();
     this->run();
 }
 
@@ -256,7 +260,6 @@ vcpu::return_failure()
     this->set_rax(FAILURE);
     vmcs_n::guest_rflags::carry_flag::disable();
 
-    this->advance();
     this->run();
 }
 
@@ -265,7 +268,6 @@ vcpu::return_and_continue()
 {
     vmcs_n::guest_rflags::carry_flag::enable();
 
-    this->advance();
     this->run();
 }
 
@@ -285,15 +287,29 @@ vcpu::is_killed() const
 // Memory Mapping
 //--------------------------------------------------------------------------
 
-uint64_t
-vcpu::gpa_to_hpa(uint64_t gpa)
+uintptr_t
+vcpu::get_entry(
+    uintptr_t tble_gpa, std::ptrdiff_t index)
 {
-    if (m_domain != nullptr) {
-        return m_domain->gpa_to_hpa(gpa);
-    }
+    auto tble = m_domain->map_gpa_4k<uintptr_t>(tble_gpa);
+    auto span = gsl::span(tble.get(), ::x64::pt::num_entries);
 
-    throw std::runtime_error("gpa_to_hpa: no domain");
+    return span[index];
 }
 
+std::pair<uintptr_t, uintptr_t>
+vcpu::gpa_to_hpa(uint64_t gpa)
+{ return m_domain->gpa_to_hpa(gpa); }
+
+std::pair<uintptr_t, uintptr_t>
+vcpu::gva_to_gpa(uint64_t gva)
+{ return bfvmm::x64::gva_to_gpa(gva, vmcs_n::guest_cr3::get(), get_entry_delegate); }
+
+std::pair<uintptr_t, uintptr_t>
+vcpu::gva_to_hpa(uint64_t gva)
+{
+    auto [gpa, unused] = this->gva_to_gpa(gva);
+    return this->gpa_to_hpa(gpa);
 }
+
 }

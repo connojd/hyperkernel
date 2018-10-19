@@ -21,6 +21,10 @@
 #include <hve/arch/intel_x64/vcpu.h>
 #include <hve/arch/intel_x64/vmcall/domain_op.h>
 
+template<typename T>
+auto get_hypercall_arg(gsl::not_null<vcpu_t *> vcpu)
+{ return vcpu_cast(vcpu)->map_gva_4k<T>(vcpu->rcx(), sizeof(T)); }
+
 namespace hyperkernel::intel_x64
 {
 
@@ -55,14 +59,11 @@ vmcall_domain_op_handler::domain_op__map_md(
     auto domain_op__map_md_arg =
         get_hypercall_arg<__domain_op__map_md_arg_t>(vcpu);
 
-    auto phys_addr =
-        bfvmm::x64::virt_to_phys_with_cr3(
-            domain_op__map_md_arg->virt_addr,
-            vmcs_n::guest_cr3::get()
-        );
+    auto [hpa, unused] =
+        m_vcpu->gva_to_hpa(domain_op__map_md_arg->virt_addr);
 
     get_domain(domain_op__map_md_arg->domainid)->map_4k(
-        domain_op__map_md_arg->exec_addr, phys_addr
+        domain_op__map_md_arg->exec_addr, hpa
     );
 
     return SUCCESS;

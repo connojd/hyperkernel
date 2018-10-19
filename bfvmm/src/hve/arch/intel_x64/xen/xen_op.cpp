@@ -124,12 +124,9 @@ bool
 xen_op_handler::xen_hypercall_page_wrmsr_handler(
     gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::wrmsr_handler::info_t &info)
 {
-    auto map =
-        bfvmm::x64::make_unique_map<uint8_t>(
-            static_cast<class vcpu *>(vcpu.get())->gpa_to_hpa(info.val)
-        );
-
+    auto map = vcpu_cast(vcpu)->map_gpa_4k<uint8_t>(info.val);
     vmx_init_hypercall_page(map.get());
+
     return true;
 }
 
@@ -181,12 +178,12 @@ uint64_t
 xen_op_handler::XENMEM_memory_map_handler(
     gsl::not_null<vcpu_t *> vcpu)
 {
-    auto map =
-        bfvmm::x64::make_unique_map<xen_memory_map>(
-            static_cast<class vcpu *>(vcpu.get())->gpa_to_hpa(vcpu->rsi())
-        );
+    // auto map =
+    //     bfvmm::x64::make_unique_map<xen_memory_map>(
+    //         static_cast<class vcpu *>(vcpu.get())->gpa_to_hpa(vcpu->rsi())
+    //     );
 
-    bffield_hex(map->nr_entries);
+    // bffield_hex(map->nr_entries);
     return 0;
 }
 
