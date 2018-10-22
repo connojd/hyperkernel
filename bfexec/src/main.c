@@ -22,6 +22,7 @@
 
 #include <stdio.h>
 #include <errno.h>
+#include <signal.h>
 #include <stdlib.h>
 #include <string.h>
 #include <inttypes.h>
@@ -72,6 +73,7 @@ struct vm_t {
 
     FILE *file;
     pthread_t run_thread;
+    pthread_t sig_thread;
 } g_vm;
 
 /* -------------------------------------------------------------------------- */
@@ -322,11 +324,52 @@ vcpu_op__destroy_vcpu(void)
 /* Threading                                                                  */
 /* -------------------------------------------------------------------------- */
 
+void handle_signal(int signo, siginfo_t *info, void *user_ctx)
+{
+    printf("handling signal: %d\n", signo);
+}
+
+void *run_sig_thread(void *arg)
+{
+    int fd;
+    struct sigaction sa;
+    struct hkd_sig_handler sh;
+
+    fd = open("/dev/hkd_misc_dev", O_RDWR);
+    if (fd < 0) {
+        BFALERT("open hkd failed\n");
+        return NULL;
+    }
+
+    sh.sig = SIGUSR1;
+    sh.irq = 0;
+
+    sa.sa_sigaction = handle_signal;
+    sa.sa_flags = SA_SIGINFO;
+
+    // User-space registration
+    sigaction(sh.sig, &sa, NULL);
+
+    // Kernel-space registration
+    if (ioctl(fd, HKD_SET_HANDLER, &sh)) {
+        BFALERT("hkd: SET_HANDLER failed\n");
+        return NULL;
+    }
+
+    while (1) {
+        __asm__ volatile("pause");
+    }
+}
+
 #include <pthread.h>
 
 void
 start_run_thread()
 { pthread_create(&g_vm.run_thread, 0, vcpu_op__run_vcpu, 0); }
+
+void
+start_sig_thread()
+{ pthread_create(&g_vm.sig_thread, 0, run_sig_thread, 0); }
 
 /* -------------------------------------------------------------------------- */
 /* ELF File Functions                                                         */
@@ -576,19 +619,7 @@ int
 main(int argc, const char *argv[])
 {
     status_t ret;
-    int fd, sig;
 
-    fd = open("/dev/hkd", O_RDWR);
-    if (fd < 0) {
-        BFALERT("open hkd failed\n");
-        return fd;
-    }
-
-    ret = ioctl(fd, HKD_REQUEST_IRQ);
-
-    sig = SIGUSR1;
-    ret = ioctl(fd, HKD_SET_SIGNAL, &sig);
-    return ret;
 //    memset(&g_vm, 0, sizeof(g_vm));
 //
 //    if (argc != 2) {
@@ -645,8 +676,9 @@ main(int argc, const char *argv[])
 //        goto CLEANUP_VCPU;
 //    }
 //
-//    start_run_thread();
-//    pthread_join(g_vm.run_thread, 0);
+    start_sig_thread();
+    pthread_join(g_vm.sig_thread, 0);
+    return ret;
 //
 //CLEANUP_VCPU:
 //
