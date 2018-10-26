@@ -60,6 +60,7 @@ uint64_t _vmcall(uint64_t r1, uint64_t r2, uint64_t r3, uint64_t r4) NOEXCEPT;
 #define __enum_domain_op 0xBF5C000000000100
 #define __enum_vcpu_op 0xBF5C000000000200
 #define __enum_xen_op 0xBF5C000000000300
+#define __enum_event_op 0xBF5C000000000400
 
 // -----------------------------------------------------------------------------
 // Domain Operations
@@ -248,6 +249,35 @@ __bf86_op__emulate_hlt()
         0
     );
 }
+
+// -----------------------------------------------------------------------------
+// Bareflank Event Operations
+// -----------------------------------------------------------------------------
+
+#define __enum_event_op__send 0x01
+
+typedef struct event {
+    vcpuid_t dest;
+    uint64_t vector;
+
+} __event_op__event_arg_t;
+
+static inline status_t
+__event_op__send(vcpuid_t dest, uint64_t vector)
+{
+    __event_op__event_arg_t arg = {
+        .dest = dest,
+        .vector = vector
+    };
+
+    return _vmcall(
+        __enum_event_op,
+        __enum_event_op__send,
+        (uint64_t)&arg,
+        0
+    );
+}
+
 
 #pragma pack(pop)
 

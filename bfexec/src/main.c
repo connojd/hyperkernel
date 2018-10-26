@@ -17,23 +17,28 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#include <bfaffinity.h>
-#include <bfelf_loader.h>
-
-#include <stdio.h>
 #include <errno.h>
+#include <fcntl.h>
+#include <inttypes.h>
+#include <pthread.h>
+#include <stdio.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <string.h>
-#include <inttypes.h>
+#include <unistd.h>
+
+#include <sys/eventfd.h>
 #include <sys/mman.h>
 #include <sys/ioctl.h>
-#include <fcntl.h>
+#include <sys/types.h>
 
+#include <bfaffinity.h>
+#include <bfelf_loader.h>
 #include <hypercall.h>
+#include <hyperkernel/bfdriverinterface.h>
+
 #include "xen/start_info.h"
 
-#include <hyperkernel/bfdriverinterface.h>
 
 // Notes:
 //
@@ -73,7 +78,7 @@ struct vm_t {
 
     FILE *file;
     pthread_t run_thread;
-    pthread_t sig_thread;
+    pthread_t event_thread;
 } g_vm;
 
 /* -------------------------------------------------------------------------- */
@@ -324,41 +329,82 @@ vcpu_op__destroy_vcpu(void)
 /* Threading                                                                  */
 /* -------------------------------------------------------------------------- */
 
-void handle_signal(int signo, siginfo_t *info, void *user_ctx)
+status_t
+event_op__send(vcpuid_t dest, uint64_t vector)
 {
-    printf("handling signal: %d\n", signo);
+    status_t ret;
+
+    ret = __event_op__send(dest, vector);
+    if (ret != SUCCESS) {
+        BFALERT("__event_op__send failed\n");
+        return FAILURE;
+    }
+
+    return SUCCESS;
 }
 
-void *run_sig_thread(void *arg)
+long handle_event(struct hkd_event *evt)
 {
-    int fd;
-    struct sigaction sa;
-    struct hkd_sig_handler sh;
+    vcpuid_t dest = 0;
+    uint64_t count = 0;
+    ssize_t ret = 0;
 
-    fd = open("/dev/hkd_misc_dev", O_RDWR);
-    if (fd < 0) {
-        BFALERT("open hkd failed\n");
+    const int vec = evt->vector;
+    const int efd = evt->eventfd;
+    const int len = sizeof(count);
+
+    while(1) {
+        ret = read(efd, &count, len);
+        if (ret != len) {
+            BFALERT("hkd: %s: eventfd %d read failed: %d\n",
+                    __func__,
+                    eventfd,
+                    ret);
+
+            count = 0;
+            if (write(efd, &count, len) == -1) {
+                BFALERT("hkd %s: failed to write eventfd: %s", strerror(errno));
+                exit(1);
+            }
+
+            continue;
+        }
+
+        ret = event_op__send(dest, vec);
+        if (ret != SUCCESS) {
+            BFALERT("event_op__send failed\n");
+            return FAILURE;
+        }
+    }
+}
+
+void *run_event_thread(void *arg)
+{
+    int hfd, efd;
+    struct hkd_event evt;
+
+    hfd = open("/dev/hkd", O_RDWR);
+    if (hfd < 0) {
+        BFALERT("open hkd failed: %s\n", strerror(errno));
         return NULL;
     }
 
-    sh.sig = SIGUSR1;
-    sh.irq = 0;
-
-    sa.sa_sigaction = handle_signal;
-    sa.sa_flags = SA_SIGINFO;
-
-    // User-space registration
-    sigaction(sh.sig, &sa, NULL);
-
-    // Kernel-space registration
-    if (ioctl(fd, HKD_SET_HANDLER, &sh)) {
-        BFALERT("hkd: SET_HANDLER failed\n");
+    efd = eventfd(0, 0);
+    if (efd < 0) {
+        BFALERT("eventfd failed: %s\n", strerror(errno));
         return NULL;
     }
 
-    while (1) {
-        __asm__ volatile("pause");
+    evt.pid = getpid();
+    evt.eventfd = efd;
+
+    if (ioctl(hfd, HKD_ADD_EVENT, &evt)) {
+        BFALERT("hkd: HKD_ADD_EVENT failed\n");
+        return NULL;
     }
+
+    // shouldn't ever return
+    return (void *)handle_event(&evt);
 }
 
 #include <pthread.h>
@@ -368,8 +414,8 @@ start_run_thread()
 { pthread_create(&g_vm.run_thread, 0, vcpu_op__run_vcpu, 0); }
 
 void
-start_sig_thread()
-{ pthread_create(&g_vm.sig_thread, 0, run_sig_thread, 0); }
+start_event_thread()
+{ pthread_create(&g_vm.event_thread, 0, run_event_thread, 0); }
 
 /* -------------------------------------------------------------------------- */
 /* ELF File Functions                                                         */
@@ -676,8 +722,8 @@ main(int argc, const char *argv[])
 //        goto CLEANUP_VCPU;
 //    }
 //
-    start_sig_thread();
-    pthread_join(g_vm.sig_thread, 0);
+    start_event_thread();
+    pthread_join(g_vm.event_thread, 0);
     return ret;
 //
 //CLEANUP_VCPU:

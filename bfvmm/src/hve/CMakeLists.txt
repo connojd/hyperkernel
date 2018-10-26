@@ -22,6 +22,7 @@ if(${BUILD_TARGET_ARCH} STREQUAL "x86_64")
         arch/intel_x64/vmexit/fault.cpp
         arch/intel_x64/vmexit/vmcall.cpp
         arch/intel_x64/vmcall/domain_op.cpp
+        arch/intel_x64/vmcall/event_op.cpp
         arch/intel_x64/vmcall/vcpu_op.cpp
         arch/intel_x64/vmcall/bf86_op.cpp
         arch/intel_x64/xen/xen_op.cpp

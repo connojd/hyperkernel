@@ -68,9 +68,9 @@ static long hkd_unlocked_ioctl(struct file *file,
     (void) file;
 
     switch (cmd) {
-        case HKD_ADD_EVENT_HANDLER:
-            return hkd_add_event_handler(g_dev,
-                                         (struct hkd_event_handler *)arg);
+        case HKD_ADD_EVENT:
+            return hkd_add_event(g_dev, (struct hkd_event *)arg);
+
         default:
             return -ENOTTY;
     }

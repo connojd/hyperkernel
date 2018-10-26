@@ -21,6 +21,7 @@
 #include <linux/irq.h>
 #include <linux/irqdomain.h>
 #include <linux/interrupt.h>
+#include <linux/pid.h>
 #include <linux/printk.h>
 #include <linux/sched.h>
 #include <linux/string.h>
@@ -62,13 +63,15 @@ static irqreturn_t handler(int irq, void *dev_id)
 {
     struct hkd_event_handler *eh = dev_id;
 
-    printk("handling irq (%d): pid: %d eventfd: %d vector: %d irq: %d",
+    printk("handling irq (%d): pid: %d eventfd: %d vector: %d irq: %d task: %p",
            irq,
-           eh->pid,
-           eh->eventfd,
-           eh->vector,
-           eh->irq);
+           eh->evt.pid,
+           eh->evt.eventfd,
+           eh->evt.vector,
+           eh->irq,
+           eh->tsk);
 
+    eventfd_signal(eh->ctx, 1);
     return IRQ_HANDLED;
 }
 
@@ -110,16 +113,25 @@ static struct irq_data *hkd_irq_alloc(void)
  * @return 0 on success, != 0 otherwise
  */
 static int hkd_irq_set_handler(struct irq_data *data,
-                                      struct hkd_event_handler *eh)
+                               struct hkd_event_handler *eh)
 {
+    struct eventfd_ctx *ctx = NULL;
+    struct pid *pid = find_get_pid(eh->evt.pid);
     struct apic_chip_data *apic = data->chip_data;
     struct irq_desc *desc = irq_data_to_desc(data);
 
+    ctx = eventfd_ctx_fdget(eh->evt.eventfd);
+    if (IS_ERR(ctx)) {
+        return PTR_ERR(ctx);
+    }
+
+    eh->ctx = ctx;
     eh->irq = apic->irq;
-    eh->vector = apic->vector;
+    eh->tsk = pid_task(pid, PIDTYPE_PID);
+    eh->evt.vector = apic->vector;
     desc->handle_irq = handle_edge_irq;
 
-    return request_irq(data->irq, handler, 0, HKD_NAME, eh);
+    return request_irq(eh->irq, handler, 0, HKD_NAME, eh);
 }
 
 /**
@@ -144,14 +156,15 @@ static void hkd_irq_free(struct irq_data *data)
 static void hkd_irq_free_handler(struct irq_data *data,
                                  struct hkd_event_handler *eh)
 {
+    eventfd_ctx_put(eh->ctx);
     free_irq(data->irq, eh);
 }
 
-long hkd_add_event_handler(struct hkd_dev *dev,
-                           struct hkd_event_handler __user *user_eh)
+long hkd_add_event(struct hkd_dev *dev, struct hkd_event __user *user_evt)
 {
     int err;
     struct irq_data *data;
+    struct hkd_event *evt;
     struct hkd_event_handler *eh;
 
     if (event_count >= HKD_HANDLER_COUNT) {
@@ -160,31 +173,35 @@ long hkd_add_event_handler(struct hkd_dev *dev,
     event_count++;
 
     eh = &dev->handler[event_count - 1];
-    err = copy_from_user(eh, user_eh, sizeof(struct hkd_event_handler));
+    evt = &eh->evt;
+    err = copy_from_user(evt, user_evt, sizeof(struct hkd_event));
     if (err) {
+        BFALERT("copy_from_user failed: %d\n", err);
         goto subtract;
     }
 
     data = hkd_irq_alloc();
     if (!data) {
+        BFALERT("hkd_irq_alloc failed");
         err = -ENOMEM;
         goto subtract;
     }
 
     err = hkd_irq_set_handler(data, eh);
     if (err) {
+        BFALERT("hkd_irq_set_handler failed: %d\n", err);
         goto free_irq;
     }
 
-    BFDEBUG("%s: pid: %d eventfd: %d vector: %d irq: %d",
+    BFDEBUG("%s: pid: %d eventfd: %d vector: %d\n",
             __func__,
-            eh->pid,
-            eh->eventfd,
-            eh->vector,
-            eh->irq);
+            eh->evt.pid,
+            eh->evt.eventfd,
+            eh->evt.vector);
 
-    err = copy_to_user(user_eh, eh, sizeof(struct hkd_event_handler));
+    err = put_user(eh->evt.vector, &user_evt->vector);
     if (err) {
+        BFALERT("put_user failed");
         goto free_handler;
     }
 

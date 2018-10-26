@@ -42,7 +42,7 @@ extern "C" {
 #define HKD_DEVICETYPE 0xCAFE
 #endif
 
-#define HKD_ADD_EVENT_HANDLER_CMD 0x1
+#define HKD_ADD_EVENT_CMD 0x1
 
 /* -------------------------------------------------------------------------- */
 /* Linux Interfaces                                                           */
@@ -51,22 +51,19 @@ extern "C" {
 #ifdef __linux__
 
 /**
- * struct hkd_event_handler
+ * struct hkd_event
  *
  * @pid[in] the pid of the calling process
  * @eventfd[in] the eventfd of the calling process
- * @vector[out] the IDT vector associated with the event
- * @irq the Linux irq associated with the event
+ * @vector[out] the physical vector of the event
  */
-struct hkd_event_handler {
+struct hkd_event {
     unsigned int pid;
     unsigned int eventfd;
     unsigned int vector;
-    unsigned int irq;
 };
 
-#define HKD_ADD_EVENT_HANDLER \
-        _IOWR(HKD_MAGIC, HKD_ADD_EVENT_HANDLER_CMD, struct hkd_event_handler)
+#define HKD_ADD_EVENT _IOWR(HKD_MAGIC, HKD_ADD_EVENT_CMD, struct hkd_event)
 
 #endif
 
