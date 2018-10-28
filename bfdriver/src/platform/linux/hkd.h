@@ -21,35 +21,47 @@
 #define HKD_H
 
 #include <linux/eventfd.h>
+#include <linux/list.h>
 #include <linux/miscdevice.h>
-#include <linux/sched.h>
-#include <hyperkernel/bfdriverinterface.h>
+#include <linux/mutex.h>
+#include <linux/pid.h>
 
-#ifndef HKD_HANDLER_COUNT
-#define HKD_HANDLER_COUNT 2
-#endif
+#include <asm/hw_irq.h>
+
+#include <bfdebug.h>
+#include <hyperkernel/bfdriverinterface.h>
 
 /**
  * struct hkd_event_handler
  *
- * @evt[in] the event to handle on behalf of the process
- * @irq the Linux IRQ of the event
- * @task handle of the process to notify
+ * @param node list_head for list operations
+ * @param ctx the context of the eventfd to handle on behalf of the process
+ * @param info hardware-specific info for the event's interrupt
+ * @param data hardware-specific info for the event's interrupt
+ * @param event[in, out] the HKD event. The user supplies the eventfd
+ *        as input, and the driver supplies the corresponding physical vector.
+ * @param irq the Linux IRQ of the event
+ * @param pid the pid of the process listening to this event
  */
 struct hkd_event_handler {
-    struct eventfd_ctx *ctx;
-    struct task_struct *tsk;
-    struct hkd_event evt;
+    struct list_head node;
+    struct eventfd_ctx *efd_ctx;
+    struct irq_alloc_info irq_info;
+    struct irq_data *irq_data;
+    struct hkd_event event;
     unsigned int irq;
+    pid_t pid;
 };
 
 struct hkd_dev {
-    struct hkd_event_handler handler[HKD_HANDLER_COUNT];
+    struct list_head event_list;
+    struct mutex event_lock;
     struct miscdevice misc;
     const char *name;
 };
 
 long hkd_add_event(struct hkd_dev *dev, struct hkd_event __user *evt);
-void hkd_free_event_handlers(struct hkd_dev *dev);
+void hkd_free_event_handler(struct hkd_event_handler *handler);
+void hkd_release_event_handlers(struct hkd_dev *dev);
 
 #endif

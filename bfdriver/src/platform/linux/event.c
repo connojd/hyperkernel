@@ -21,9 +21,7 @@
 #include <linux/irq.h>
 #include <linux/irqdomain.h>
 #include <linux/interrupt.h>
-#include <linux/pid.h>
-#include <linux/printk.h>
-#include <linux/sched.h>
+#include <linux/mutex.h>
 #include <linux/string.h>
 #include <linux/uaccess.h>
 
@@ -31,16 +29,13 @@
 #include <asm/irqdomain.h>
 
 #include <hyperkernel/bfdriverinterface.h>
-#include  "hkd.h"
-
-static struct irq_alloc_info info;
-static unsigned int event_count;
+#include "hkd.h"
 
 /**
  * See arch/x86/kernel/apic/vector.c
  *
- * We really just need the vector, but we include the whole thing
- * so we can do a proper cast from void *
+ * We really just use the vector, but we need the
+ * whole struct so we can do a proper cast from void*
  */
 struct apic_chip_data {
 	struct irq_cfg		hw_irq_cfg;
@@ -57,43 +52,44 @@ struct apic_chip_data {
 };
 
 /**
- * Handle the irq
+ * Event handler
+ *
+ * Here we simply write to the eventfd to
+ * notify userspace an event has arrived
  */
-static irqreturn_t handler(int irq, void *dev_id)
+static irqreturn_t hkd_irq_handler(int irq, void *dev_id)
 {
     struct hkd_event_handler *eh = dev_id;
+    eventfd_signal(eh->efd_ctx, 1);
 
-    printk("handling irq (%d): pid: %d eventfd: %d vector: %d irq: %d task: %p",
-           irq,
-           eh->evt.pid,
-           eh->evt.eventfd,
-           eh->evt.vector,
-           eh->irq,
-           eh->tsk);
-
-    eventfd_signal(eh->ctx, 1);
     return IRQ_HANDLED;
 }
 
 /**
- * Map and allocate a new irq
+ * Initialize a new irq
  *
- * @return the irq_data associated with the new irq
+ * @param info the allocation info containing the affinity mask
+ *      of the irq
+ * @return the irq_data associated with the irq; NULL on failure
  */
-static struct irq_data *hkd_irq_alloc(void)
+static struct irq_data *
+hkd_init_irq_data(struct irq_alloc_info *info)
 {
     const int count = 1;
     const int dummy = 42;
-    int irq = 0;
-    struct irq_domain *dom = x86_vector_domain;
 
-    irq = irq_create_mapping(dom, dummy);
+    struct irq_domain *dom = x86_vector_domain;
+    int irq = irq_create_mapping(dom, dummy);
+
     if (!irq) {
-        return 0;
+        return NULL;
     }
 
-    info.mask = cpumask_of(smp_processor_id());
-    if (dom->ops->alloc(dom, irq, count, &info)) {
+    preempt_disable();
+    info->mask = cpumask_of(smp_processor_id());
+    preempt_enable();
+
+    if (dom->ops->alloc(dom, irq, count, info)) {
         irq_dispose_mapping(irq);
     }
 
@@ -101,136 +97,144 @@ static struct irq_data *hkd_irq_alloc(void)
 }
 
 /**
- * Set the handler for the interrupt
+ * DONT CALL THIS
  *
- * Note that desc->handle_irq is a "high-level flow handler" that linux
- * provides for common interrupt controller hardware. All of these handlers
- * _write_an_EOI_ to the local APIC, so we have to ensure that we deliver
- * interrupts through the VMM via IPIs instead of VMCS event injection.
- *
- * @data the irq_data of the irq
- * @eh the event handler for this irq
- * @return 0 on success, != 0 otherwise
+ * dom->ops->free kfree's the apic chip, so subsequent
+ * uses point to lala land
  */
-static int hkd_irq_set_handler(struct irq_data *data,
-                               struct hkd_event_handler *eh)
+static void
+hkd_fini_irq_data(struct irq_data *data)
 {
-    struct eventfd_ctx *ctx = NULL;
-    struct pid *pid = find_get_pid(eh->evt.pid);
-    struct apic_chip_data *apic = data->chip_data;
-    struct irq_desc *desc = irq_data_to_desc(data);
-
-    ctx = eventfd_ctx_fdget(eh->evt.eventfd);
-    if (IS_ERR(ctx)) {
-        return PTR_ERR(ctx);
-    }
-
-    eh->ctx = ctx;
-    eh->irq = apic->irq;
-    eh->tsk = pid_task(pid, PIDTYPE_PID);
-    eh->evt.vector = apic->vector;
-    desc->handle_irq = handle_edge_irq;
-
-    return request_irq(eh->irq, handler, 0, HKD_NAME, eh);
-}
-
-/**
- * Free domain-specific and general resources of the interrupt
- *
- * @data the irq_data to free
- */
-static void hkd_irq_free(struct irq_data *data)
-{
-    const int count = 1;
     struct irq_domain *dom = x86_vector_domain;
 
-    dom->ops->free(dom, data->irq, count);
+    dom->ops->free(dom, data->irq, 1);
     irq_dispose_mapping(data->irq);
 }
 
 /**
- * Free the handler itself
+ * Allocate and initialize the event handler
  *
- * @data the irq_data to free
+ * Note that desc->handle_irq is a "high-level flow handler" that linux
+ * provides for common interrupt controller hardware.
+ *
+ * NOTE: All of these handlers _write_an_EOI_ to the local APIC,
+ * so we have to ensure the VMM sends via IPIs instead
+ * of VMCS event injection.
+ *
+ * @param[in,out] event - the hkd_event to init a handler for
+ * @return the address of the new event handler; NULL on failure
  */
-static void hkd_irq_free_handler(struct irq_data *data,
-                                 struct hkd_event_handler *eh)
+static struct hkd_event_handler *
+hkd_alloc_event_handler(const struct hkd_event *event)
 {
-    eventfd_ctx_put(eh->ctx);
-    free_irq(data->irq, eh);
+    struct hkd_event_handler *eh = NULL;
+    struct apic_chip_data *apic = NULL;
+    struct eventfd_ctx *ctx = NULL;
+    struct irq_desc *desc = NULL;
+    struct irq_data *data = NULL;
+
+    eh = kzalloc(sizeof(struct hkd_event_handler), GFP_KERNEL);
+    if (!eh) {
+        BFALERT("kzalloc error\n");
+        return NULL;
+    }
+
+    data = hkd_init_irq_data(&eh->irq_info);
+    if (!data) {
+        BFALERT("hkd_init_irq_data error\n");
+        kfree(eh);
+        return NULL;
+    }
+
+    ctx = eventfd_ctx_fdget(event->eventfd);
+    if (IS_ERR(ctx)) {
+        BFALERT("eventfd_ctx_fdget error\n");
+        hkd_fini_irq_data(data);
+        kfree(eh);
+        return NULL;
+    }
+
+    desc = irq_data_to_desc(data);
+    desc->handle_irq = handle_edge_irq;
+
+    apic = data->chip_data;
+    eh->event.vector = apic->vector;
+    eh->irq = apic->irq;
+
+    eh->pid = current->pid;
+    eh->irq_data = data;
+    eh->efd_ctx = ctx;
+
+    return eh;
 }
 
+/**
+ * Free the domain-specific and general
+ * resources held by the interrupt
+ *
+ * @eh the event handler to free
+ */
+void hkd_free_event_handler(struct hkd_event_handler *eh)
+{
+    free_irq(eh->irq_data->irq, eh);
+    eventfd_ctx_put(eh->efd_ctx);
+    hkd_fini_irq_data(eh->irq_data);
+    kfree(eh);
+}
+
+/**
+ * The user supplies the open'd eventfd in user_evt that
+ * we will later use to notify the process of an interrupt
+ */
 long hkd_add_event(struct hkd_dev *dev, struct hkd_event __user *user_evt)
 {
     int err;
-    struct irq_data *data;
-    struct hkd_event *evt;
-    struct hkd_event_handler *eh;
+    struct hkd_event event;
+    struct hkd_event_handler *handler = NULL;
 
-    if (event_count >= HKD_HANDLER_COUNT) {
-        return -ENOSPC;
-    }
-    event_count++;
-
-    eh = &dev->handler[event_count - 1];
-    evt = &eh->evt;
-    err = copy_from_user(evt, user_evt, sizeof(struct hkd_event));
+    err = copy_from_user(&event, user_evt, sizeof(struct hkd_event));
     if (err) {
-        BFALERT("copy_from_user failed: %d\n", err);
-        goto subtract;
+        BFALERT("copy_from_user error: %d\n", err);
+        return err;
     }
 
-    data = hkd_irq_alloc();
-    if (!data) {
-        BFALERT("hkd_irq_alloc failed");
-        err = -ENOMEM;
-        goto subtract;
+    handler = hkd_alloc_event_handler(&event);
+    if (!handler) {
+        BFALERT("hkd_alloc_event_handler error\n");
+        return -ENOMEM;
     }
 
-    err = hkd_irq_set_handler(data, eh);
+    err = request_irq(handler->irq, hkd_irq_handler, 0, HKD_NAME, handler);
     if (err) {
-        BFALERT("hkd_irq_set_handler failed: %d\n", err);
-        goto free_irq;
+        BFALERT("hkd_request_irq error: %d\n", err);
+        hkd_free_event_handler(handler);
+        return err;
     }
 
-    BFDEBUG("%s: pid: %d eventfd: %d vector: %d\n",
-            __func__,
-            eh->evt.pid,
-            eh->evt.eventfd,
-            eh->evt.vector);
-
-    err = put_user(eh->evt.vector, &user_evt->vector);
+    err = put_user(handler->event.vector, &user_evt->vector);
     if (err) {
-        BFALERT("put_user failed");
-        goto free_handler;
+        BFALERT("put_user error: %d\n", err);
+        hkd_free_event_handler(handler);
+        return err;
     }
+
+    mutex_lock(&dev->event_lock);
+    list_add(&handler->node, &dev->event_list);
+    mutex_unlock(&dev->event_lock);
 
     return 0;
-
-free_handler:
-    hkd_irq_free_handler(data, eh);
-free_irq:
-    hkd_irq_free(data);
-subtract:
-    event_count--;
-    return err;
 }
 
-void hkd_free_event_handlers(struct hkd_dev *dev)
+void hkd_release_event_handlers(struct hkd_dev *dev)
 {
-    int i;
-    struct irq_data *data;
-    struct hkd_event_handler *eh;
+    struct hkd_event_handler *eh = NULL;
 
-    for (i = 0; i < HKD_HANDLER_COUNT; ++i) {
-
-        if (!dev->handler[i].irq) {
-            continue;
+    mutex_lock(&dev->event_lock);
+    list_for_each_entry(eh, &dev->event_list, node) {
+        if (eh->pid == current->pid) {
+            list_del(&eh->node);
+            hkd_free_event_handler(eh);
         }
-
-        eh = &dev->handler[i];
-        data = irq_get_irq_data(eh->irq);
-        hkd_irq_free_handler(data, eh);
-        hkd_irq_free(data);
     }
+    mutex_unlock(&dev->event_lock);
 }

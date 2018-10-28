@@ -42,7 +42,7 @@ extern "C" {
 #define HKD_DEVICETYPE 0xCAFE
 #endif
 
-#define HKD_ADD_EVENT_CMD 0x1
+#define HKD_CMD_ADD_EVENT 0x1
 
 /* -------------------------------------------------------------------------- */
 /* Linux Interfaces                                                           */
@@ -53,17 +53,15 @@ extern "C" {
 /**
  * struct hkd_event
  *
- * @pid[in] the pid of the calling process
  * @eventfd[in] the eventfd of the calling process
  * @vector[out] the physical vector of the event
  */
 struct hkd_event {
-    unsigned int pid;
     unsigned int eventfd;
     unsigned int vector;
 };
 
-#define HKD_ADD_EVENT _IOWR(HKD_MAGIC, HKD_ADD_EVENT_CMD, struct hkd_event)
+#define HKD_ADD_EVENT _IOWR(HKD_MAGIC, HKD_CMD_ADD_EVENT, struct hkd_event)
 
 #endif
 

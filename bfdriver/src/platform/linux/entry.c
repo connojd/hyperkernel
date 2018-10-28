@@ -18,16 +18,10 @@
  */
 
 #include <linux/fs.h>
-#include <linux/module.h>
-#include <linux/uaccess.h>
+#include <linux/list.h>
 #include <linux/miscdevice.h>
-#include <linux/notifier.h>
-#include <linux/reboot.h>
-#include <linux/sched.h>
-#include <linux/sched/signal.h>
-#include <linux/irq.h>
-#include <linux/interrupt.h>
-#include <linux/mm.h>
+#include <linux/module.h>
+#include <linux/mutex.h>
 
 #include <bfdebug.h>
 #include <hyperkernel/bfdriverinterface.h>
@@ -38,7 +32,7 @@
 /* Global                                                                     */
 /* -------------------------------------------------------------------------- */
 
-struct hkd_dev *g_dev = NULL;
+static struct hkd_dev g_dev;
 
 /* -------------------------------------------------------------------------- */
 /* File operations                                                            */
@@ -49,6 +43,7 @@ static int hkd_open(struct inode *inode, struct file *file)
     (void) inode;
     (void) file;
 
+    BFDEBUG("%s: success", __func__);
     return 0;
 }
 
@@ -57,7 +52,9 @@ static int hkd_release(struct inode *inode, struct file *file)
     (void) inode;
     (void) file;
 
-    hkd_free_event_handlers(g_dev);
+    hkd_release_event_handlers(&g_dev);
+    BFDEBUG("%s: success", __func__);
+
     return 0;
 }
 
@@ -69,8 +66,7 @@ static long hkd_unlocked_ioctl(struct file *file,
 
     switch (cmd) {
         case HKD_ADD_EVENT:
-            return hkd_add_event(g_dev, (struct hkd_event *)arg);
-
+            return hkd_add_event(&g_dev, (struct hkd_event *)arg);
         default:
             return -ENOTTY;
     }
@@ -90,16 +86,15 @@ static struct file_operations hkd_fops = {
 
 int hkd_init(void)
 {
-    if (!(g_dev = kzalloc(sizeof(struct hkd_dev), GFP_KERNEL))) {
-        return -ENOMEM;
-    }
+    INIT_LIST_HEAD(&g_dev.event_list);
+    mutex_init(&g_dev.event_lock);
 
-    g_dev->name = HKD_NAME;
-    g_dev->misc.minor = MISC_DYNAMIC_MINOR;
-    g_dev->misc.name = "hkd";
-    g_dev->misc.fops = &hkd_fops;
+    g_dev.name = HKD_NAME;
+    g_dev.misc.name = HKD_NAME;
+    g_dev.misc.fops = &hkd_fops;
+    g_dev.misc.minor = MISC_DYNAMIC_MINOR;
 
-    if (misc_register(&g_dev->misc)) {
+    if (misc_register(&g_dev.misc)) {
         return -EPERM;
     }
 
@@ -108,9 +103,14 @@ int hkd_init(void)
 
 void hkd_exit(void)
 {
-    misc_deregister(&g_dev->misc);
-    kfree(g_dev);
+    struct hkd_event_handler *eh = NULL;
 
+    list_for_each_entry(eh, &g_dev.event_list, node) {
+        list_del(&eh->node);
+        hkd_free_event_handler(eh);
+    }
+
+    misc_deregister(&g_dev.misc);
     return;
 }
 

@@ -343,7 +343,7 @@ event_op__send(vcpuid_t dest, uint64_t vector)
     return SUCCESS;
 }
 
-long handle_event(struct hkd_event *evt)
+void handle_event(struct hkd_event *evt)
 {
     vcpuid_t dest = 0;
     uint64_t count = 0;
@@ -353,27 +353,18 @@ long handle_event(struct hkd_event *evt)
     const int efd = evt->eventfd;
     const int len = sizeof(count);
 
-    while(1) {
+    while (1) {
         ret = read(efd, &count, len);
         if (ret != len) {
-            BFALERT("hkd: %s: eventfd %d read failed: %d\n",
-                    __func__,
-                    eventfd,
-                    ret);
-
-            count = 0;
-            if (write(efd, &count, len) == -1) {
-                BFALERT("hkd %s: failed to write eventfd: %s", strerror(errno));
-                exit(1);
-            }
-
+            BFALERT("hkd: %s: read failed: %d\n", __func__, ret);
             continue;
         }
 
-        ret = event_op__send(dest, vec);
+        BFDEBUG("VMCALL sending\n");
+//        ret = event_op__send(dest, vec);
+        BFDEBUG("VMCALL sent\n");
         if (ret != SUCCESS) {
             BFALERT("event_op__send failed\n");
-            return FAILURE;
         }
     }
 }
@@ -395,16 +386,17 @@ void *run_event_thread(void *arg)
         return NULL;
     }
 
-    evt.pid = getpid();
     evt.eventfd = efd;
 
     if (ioctl(hfd, HKD_ADD_EVENT, &evt)) {
-        BFALERT("hkd: HKD_ADD_EVENT failed\n");
+        BFALERT("%s: HKD_ADD_EVENT failed\n", __func__);
         return NULL;
     }
 
-    // shouldn't ever return
-    return (void *)handle_event(&evt);
+    handle_event(&evt);
+
+    // Unreachable
+    return NULL;
 }
 
 #include <pthread.h>

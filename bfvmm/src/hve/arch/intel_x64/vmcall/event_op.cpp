@@ -55,7 +55,7 @@ vmcall_event_op_handler::dispatch(gsl::not_null<vcpu_t *> vcpu)
         return false;
     }
 
-    switch(vcpu->rbx()) {
+    switch (vcpu->rbx()) {
         case __enum_event_op__send: {
             auto event_op__send_delegate =
                 guard_vmcall_delegate(vmcall_event_op_handler,
