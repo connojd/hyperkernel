@@ -168,6 +168,7 @@ xen_op_handler::xen_op_handler(
     EMULATE_CPUID(0xD, cpuid_zero_handler);
     EMULATE_CPUID(0xF, cpuid_zero_handler);
     EMULATE_CPUID(0x10, cpuid_zero_handler);
+    ADD_CPUID_HANDLER(0x15, cpuid_pass_through_handler);            // TODO: 0 reserved bits
     ADD_CPUID_HANDLER(0x16, cpuid_pass_through_handler);            // TODO: 0 reserved bits
     ADD_CPUID_HANDLER(0x80000000, cpuid_pass_through_handler);      // TODO: 0 reserved bits
     ADD_CPUID_HANDLER(0x80000001, cpuid_leaf80000001_handler);      // TODO: 0 reserved bits
@@ -197,11 +198,138 @@ xen_op_handler::xen_op_handler(
     vcpu->pass_through_io_accesses(0x3fc);
     vcpu->pass_through_io_accesses(0x3fd);
 
-    ADD_EPT_WRITE_HANDLER(xapic_handle_write);
+    this->emulate_rdmsr_x2apic();
+    this->emulate_wrmsr_x2apic();
 
- //   this->init_disassembler();
 
     // m_sched_op = std::make_unique<sched_op>(vcpu, tsc_frequency());
+}
+
+/// TODO
+///
+/// The commented registers are not readable, so we really
+/// should inject a #GP
+///
+void
+xen_op_handler::emulate_rdmsr_x2apic()
+{
+    using namespace ::intel_x64::msrs;
+
+    EMULATE_RDMSR(ia32_x2apic_apicid::addr, handle_rdmsr_x2apic);
+    EMULATE_RDMSR(ia32_x2apic_version::addr, handle_rdmsr_x2apic);
+    EMULATE_RDMSR(ia32_x2apic_tpr::addr, handle_rdmsr_x2apic);
+    EMULATE_RDMSR(ia32_x2apic_ppr::addr, handle_rdmsr_x2apic);
+//    EMULATE_RDMSR(ia32_x2apic_eoi::addr, handle_rdmsr_x2apic);
+    EMULATE_RDMSR(ia32_x2apic_ldr::addr, handle_rdmsr_x2apic);
+    EMULATE_RDMSR(ia32_x2apic_svr::addr, handle_rdmsr_x2apic);
+
+    EMULATE_RDMSR(ia32_x2apic_isr0::addr, handle_rdmsr_x2apic);
+    EMULATE_RDMSR(ia32_x2apic_isr1::addr, handle_rdmsr_x2apic);
+    EMULATE_RDMSR(ia32_x2apic_isr2::addr, handle_rdmsr_x2apic);
+    EMULATE_RDMSR(ia32_x2apic_isr3::addr, handle_rdmsr_x2apic);
+    EMULATE_RDMSR(ia32_x2apic_isr4::addr, handle_rdmsr_x2apic);
+    EMULATE_RDMSR(ia32_x2apic_isr5::addr, handle_rdmsr_x2apic);
+    EMULATE_RDMSR(ia32_x2apic_isr6::addr, handle_rdmsr_x2apic);
+    EMULATE_RDMSR(ia32_x2apic_isr7::addr, handle_rdmsr_x2apic);
+
+    EMULATE_RDMSR(ia32_x2apic_tmr0::addr, handle_rdmsr_x2apic);
+    EMULATE_RDMSR(ia32_x2apic_tmr1::addr, handle_rdmsr_x2apic);
+    EMULATE_RDMSR(ia32_x2apic_tmr2::addr, handle_rdmsr_x2apic);
+    EMULATE_RDMSR(ia32_x2apic_tmr3::addr, handle_rdmsr_x2apic);
+    EMULATE_RDMSR(ia32_x2apic_tmr4::addr, handle_rdmsr_x2apic);
+    EMULATE_RDMSR(ia32_x2apic_tmr5::addr, handle_rdmsr_x2apic);
+    EMULATE_RDMSR(ia32_x2apic_tmr6::addr, handle_rdmsr_x2apic);
+    EMULATE_RDMSR(ia32_x2apic_tmr7::addr, handle_rdmsr_x2apic);
+
+    EMULATE_RDMSR(ia32_x2apic_irr0::addr, handle_rdmsr_x2apic);
+    EMULATE_RDMSR(ia32_x2apic_irr1::addr, handle_rdmsr_x2apic);
+    EMULATE_RDMSR(ia32_x2apic_irr2::addr, handle_rdmsr_x2apic);
+    EMULATE_RDMSR(ia32_x2apic_irr3::addr, handle_rdmsr_x2apic);
+    EMULATE_RDMSR(ia32_x2apic_irr4::addr, handle_rdmsr_x2apic);
+    EMULATE_RDMSR(ia32_x2apic_irr5::addr, handle_rdmsr_x2apic);
+    EMULATE_RDMSR(ia32_x2apic_irr6::addr, handle_rdmsr_x2apic);
+    EMULATE_RDMSR(ia32_x2apic_irr7::addr, handle_rdmsr_x2apic);
+
+    EMULATE_RDMSR(ia32_x2apic_esr::addr, handle_rdmsr_x2apic);
+    EMULATE_RDMSR(ia32_x2apic_lvt_cmci::addr, handle_rdmsr_x2apic);
+    EMULATE_RDMSR(ia32_x2apic_icr::addr, handle_rdmsr_x2apic);
+    EMULATE_RDMSR(ia32_x2apic_lvt_timer::addr, handle_rdmsr_x2apic);
+    EMULATE_RDMSR(ia32_x2apic_lvt_thermal::addr, handle_rdmsr_x2apic);
+    EMULATE_RDMSR(ia32_x2apic_lvt_pmi::addr, handle_rdmsr_x2apic);
+    EMULATE_RDMSR(ia32_x2apic_lvt_lint0::addr, handle_rdmsr_x2apic);
+    EMULATE_RDMSR(ia32_x2apic_lvt_lint1::addr, handle_rdmsr_x2apic);
+    EMULATE_RDMSR(ia32_x2apic_lvt_error::addr, handle_rdmsr_x2apic);
+    EMULATE_RDMSR(ia32_x2apic_init_count::addr, handle_rdmsr_x2apic);
+    EMULATE_RDMSR(ia32_x2apic_cur_count::addr, handle_rdmsr_x2apic);
+    EMULATE_RDMSR(ia32_x2apic_dcr::addr, handle_rdmsr_x2apic);
+//    EMULATE_RDMSR(ia32_x2apic_self_ipi::addr, handle_rdmsr_x2apic);
+}
+
+/// TODO
+///
+/// The commented registers are not writeable, so we really
+/// should inject a #GP
+///
+
+void
+xen_op_handler::emulate_wrmsr_tsc_deadline()
+{
+
+}
+
+void
+xen_op_handler::emulate_wrmsr_x2apic()
+{
+    using namespace ::intel_x64::msrs;
+
+//    EMULATE_WRMSR(ia32_x2apic_apicid::addr, handle_wrmsr_x2apic);
+//    EMULATE_WRMSR(ia32_x2apic_version::addr, handle_wrmsr_x2apic);
+    EMULATE_WRMSR(ia32_x2apic_tpr::addr, handle_wrmsr_x2apic);
+//    EMULATE_WRMSR(ia32_x2apic_ppr::addr, handle_wrmsr_x2apic);
+    EMULATE_WRMSR(ia32_x2apic_eoi::addr, handle_wrmsr_x2apic);
+//    EMULATE_WRMSR(ia32_x2apic_ldr::addr, handle_wrmsr_x2apic);
+    EMULATE_WRMSR(ia32_x2apic_svr::addr, handle_wrmsr_x2apic);
+
+//    EMULATE_WRMSR(ia32_x2apic_isr0::addr, handle_wrmsr_x2apic);
+//    EMULATE_WRMSR(ia32_x2apic_isr1::addr, handle_wrmsr_x2apic);
+//    EMULATE_WRMSR(ia32_x2apic_isr2::addr, handle_wrmsr_x2apic);
+//    EMULATE_WRMSR(ia32_x2apic_isr3::addr, handle_wrmsr_x2apic);
+//    EMULATE_WRMSR(ia32_x2apic_isr4::addr, handle_wrmsr_x2apic);
+//    EMULATE_WRMSR(ia32_x2apic_isr5::addr, handle_wrmsr_x2apic);
+//    EMULATE_WRMSR(ia32_x2apic_isr6::addr, handle_wrmsr_x2apic);
+//    EMULATE_WRMSR(ia32_x2apic_isr7::addr, handle_wrmsr_x2apic);
+//
+//    EMULATE_WRMSR(ia32_x2apic_tmr0::addr, handle_wrmsr_x2apic);
+//    EMULATE_WRMSR(ia32_x2apic_tmr1::addr, handle_wrmsr_x2apic);
+//    EMULATE_WRMSR(ia32_x2apic_tmr2::addr, handle_wrmsr_x2apic);
+//    EMULATE_WRMSR(ia32_x2apic_tmr3::addr, handle_wrmsr_x2apic);
+//    EMULATE_WRMSR(ia32_x2apic_tmr4::addr, handle_wrmsr_x2apic);
+//    EMULATE_WRMSR(ia32_x2apic_tmr5::addr, handle_wrmsr_x2apic);
+//    EMULATE_WRMSR(ia32_x2apic_tmr6::addr, handle_wrmsr_x2apic);
+//    EMULATE_WRMSR(ia32_x2apic_tmr7::addr, handle_wrmsr_x2apic);
+//
+//    EMULATE_WRMSR(ia32_x2apic_irr0::addr, handle_wrmsr_x2apic);
+//    EMULATE_WRMSR(ia32_x2apic_irr1::addr, handle_wrmsr_x2apic);
+//    EMULATE_WRMSR(ia32_x2apic_irr2::addr, handle_wrmsr_x2apic);
+//    EMULATE_WRMSR(ia32_x2apic_irr3::addr, handle_wrmsr_x2apic);
+//    EMULATE_WRMSR(ia32_x2apic_irr4::addr, handle_wrmsr_x2apic);
+//    EMULATE_WRMSR(ia32_x2apic_irr5::addr, handle_wrmsr_x2apic);
+//    EMULATE_WRMSR(ia32_x2apic_irr6::addr, handle_wrmsr_x2apic);
+//    EMULATE_WRMSR(ia32_x2apic_irr7::addr, handle_wrmsr_x2apic);
+
+    EMULATE_WRMSR(ia32_x2apic_esr::addr, handle_wrmsr_x2apic);
+    EMULATE_WRMSR(ia32_x2apic_lvt_cmci::addr, handle_wrmsr_x2apic);
+    EMULATE_WRMSR(ia32_x2apic_icr::addr, handle_wrmsr_x2apic);
+    EMULATE_WRMSR(ia32_x2apic_lvt_timer::addr, handle_wrmsr_x2apic);
+    EMULATE_WRMSR(ia32_x2apic_lvt_thermal::addr, handle_wrmsr_x2apic);
+    EMULATE_WRMSR(ia32_x2apic_lvt_pmi::addr, handle_wrmsr_x2apic);
+    EMULATE_WRMSR(ia32_x2apic_lvt_lint0::addr, handle_wrmsr_x2apic);
+    EMULATE_WRMSR(ia32_x2apic_lvt_lint1::addr, handle_wrmsr_x2apic);
+    EMULATE_WRMSR(ia32_x2apic_lvt_error::addr, handle_wrmsr_x2apic);
+    EMULATE_WRMSR(ia32_x2apic_init_count::addr, handle_wrmsr_x2apic);
+//    EMULATE_WRMSR(ia32_x2apic_cur_count::addr, handle_wrmsr_x2apic);
+    EMULATE_WRMSR(ia32_x2apic_dcr::addr, handle_wrmsr_x2apic);
+    EMULATE_WRMSR(ia32_x2apic_self_ipi::addr, handle_wrmsr_x2apic);
 }
 
 static uint64_t
@@ -253,34 +381,6 @@ tsc_frequency(void)
     bfdebug_ndec(0, "TSC (kHz)", 24000 * numerator / denominator);
 
     if (freq == 0) {
-        //
-        // We need the display family here, not the family id.
-        // See
-        //      eapis/bfvmm/src/hve/arch/intel_x64/cpuid.cpp
-        //      eapis/bfvmm/include/hve/arch/intel_x64/{time,cpuid}.h
-        //
-        // for details; display family is a function of family id
-        //
-//        switch (feature_information::eax::family_id::get()) {
-//            case 0x4E:  // Skylake Mobile
-//            case 0x5E:  // Skylake Desktop
-//            case 0x8E:  // Kabylake Mobile
-//            case 0x9E:  // Kabylake Desktop
-//                freq = 24000;
-//                break;
-//
-//            case 0x5F:  // Atom Denverton
-//                freq = 25000;
-//                break;
-//
-//            case 0x5C:  // Atom Goldmont
-//                freq = 19200;
-//                break;
-//
-//            default:
-//                throw std::runtime_error("unsupported system: unknown freq");
-//        }
-
         auto bus = eapis::intel_x64::time::bus_freq_MHz();
         auto tsc = eapis::intel_x64::time::tsc_freq_MHz(bus);
 //        auto pet = eapis::intel_x64::time::pet_freq_MHz(tsc);
@@ -370,35 +470,6 @@ xen_op_handler::exit_handler(
 // xAPIC
 // -----------------------------------------------------------------------------
 
-//static uint64_t
-//read_udis_reg(gsl::not_null<vcpu *> vcpu, const ud_operand_t *src)
-//{
-//    switch (src->base) {
-//        case UD_R_EAX: return vcpu->rax();
-//        case UD_R_EBX: return vcpu->rbx();
-//        case UD_R_ECX: return vcpu->rcx();
-//        case UD_R_EDX: return vcpu->rdx();
-//        case UD_R_ESI: return vcpu->rsi();
-//        case UD_R_EDI: return vcpu->rdi();
-//        case UD_R_R8D: return vcpu->r08();
-//        case UD_R_R9D: return vcpu->r09();
-//        case UD_R_R10D: return vcpu->r10();
-//        case UD_R_R11D: return vcpu->r11();
-//        case UD_R_R12D: return vcpu->r12();
-//        case UD_R_R13D: return vcpu->r13();
-//        case UD_R_R14D: return vcpu->r14();
-//        case UD_R_R15D: return vcpu->r15();
-//        default: throw std::runtime_error("udis src error");
-//    }
-//}
-//
-uint64_t
-xen_op_handler::xapic_parse_write(const uint8_t *buf, size_t len)
-{
-    return m_vcpu->rax() & 0xffffffffULL;
-}
-
-
 bool
 xen_op_handler::xapic_handle_write_icr(
     eapis::intel_x64::ept_violation_handler::info_t &info)
@@ -472,6 +543,38 @@ xen_op_handler::xapic_handle_read(
     return false;
 }
 
+uint64_t
+src_op_value(gsl::not_null<vcpu_t *> vcpu, int64_t src_op)
+{
+    switch (src_op) {
+        case hyperkernel::intel_x64::insn_decoder::eax:
+            return vcpu->rax() & 0xFFFFFFFFU;
+        case hyperkernel::intel_x64::insn_decoder::ecx:
+            return vcpu->rcx() & 0xFFFFFFFFU;
+        case hyperkernel::intel_x64::insn_decoder::edx:
+            return vcpu->rdx() & 0xFFFFFFFFU;
+        case hyperkernel::intel_x64::insn_decoder::ebx:
+            return vcpu->rbx() & 0xFFFFFFFFU;
+        case hyperkernel::intel_x64::insn_decoder::esp:
+            return vcpu->rsp() & 0xFFFFFFFFU;
+        case hyperkernel::intel_x64::insn_decoder::ebp:
+            return vcpu->rbp() & 0xFFFFFFFFU;
+        case hyperkernel::intel_x64::insn_decoder::esi:
+            return vcpu->rsi() & 0xFFFFFFFFU;
+        case hyperkernel::intel_x64::insn_decoder::edi:
+            return vcpu->rdi() & 0xFFFFFFFFU;
+    }
+
+    throw std::invalid_argument("invalid reg");
+}
+
+static void print_insn(const unsigned char *buf, size_t len)
+{
+    for (auto i = 0; i < len; i++) {
+        printf("%02x", buf[i]);
+    }
+}
+
 bool
 xen_op_handler::xapic_handle_write(
     gsl::not_null<vcpu_t *> vcpu,
@@ -489,7 +592,6 @@ xen_op_handler::xapic_handle_write(
         info.ignore_advance = false;
         return true;
     }
- //   bfdebug_nhex(0, "xapic write:", idx << 2);
 
     const auto len = ::intel_x64::vmcs::vm_exit_instruction_length::get();
     const auto rip = ::intel_x64::vmcs::guest_rip::get();
@@ -506,13 +608,13 @@ xen_op_handler::xapic_handle_write(
     }
 
     const auto buf = itr->second.get();
-    printf("received xapic insn: ");
-    for (auto i = 0; i < len; i++) {
-        printf("%02x", buf[i]);
-    }
-    printf("\n");
 
-    const auto val = this->xapic_parse_write(buf, len);
+    printf("xapic_write: ");
+    print_insn(buf, len);
+
+    hyperkernel::intel_x64::insn_decoder dec(buf, len);
+    const auto val = src_op_value(vcpu, dec.src_op());
+    printf(" value: %08lx\n", val);
 
     switch (idx) {
         case icr_high::indx:
@@ -621,6 +723,7 @@ xen_op_handler::ia32_apic_base_rdmsr_handler(
 
     auto val = m_vcpu->lapic_base();
     ::intel_x64::msrs::ia32_apic_base::bsp::enable(val);
+    ::intel_x64::msrs::ia32_apic_base::state::enable_x2apic(val);
     info.val = val;
 
     return true;
@@ -633,7 +736,129 @@ xen_op_handler::ia32_apic_base_wrmsr_handler(
     bfignored(vcpu);
     bfignored(info);
 
+    bfalert_info(0, "Unexpected write to IA32_APIC_BASE...halting");
+
     return false;
+}
+
+// We get the *dword* indx into the virtual lapic
+//
+// See lapic.h in eapis for details
+//
+static uint64_t indx_to_msr(uint32_t indx)
+{
+    constexpr const auto x2apic_base = 0x800U;
+    return x2apic_base | (indx >> 2U);
+}
+
+static uint64_t msr_to_indx(uint32_t msr)
+{ return (msr & 0xFFU) << 2U; }
+
+
+bool
+xen_op_handler::handle_rdmsr_x2apic(
+    gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::rdmsr_handler::info_t &info)
+{
+    bfignored(vcpu);
+
+    info.val = m_vcpu->lapic_read(msr_to_indx(info.msr));
+    return true;
+}
+
+bool
+xen_op_handler::handle_wrmsr_x2apic(
+    gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::wrmsr_handler::info_t &info)
+{
+    using eapis::intel_x64;
+
+    const auto indx = msr_to_indx(info.msr);
+    switch (indx) {
+
+    // We greedily assume the guest wrote a 0
+    // (the only value allowed) and return immediately
+    //
+    case lapic::eoi::indx:
+        return true;
+
+    case lapic::lvt::timer::indx:
+        return this->handle_wrmsr_lvt_timer(vcpu, info);
+
+    case lapic::icr_high::indx:
+        vcpu->lapic_write(indx, info.val);
+        return true;
+
+    case lapic::icr_low::indx:
+        return this->handle_wrmsr_icr(vcpu, info);
+
+    case lapic::self_ipi::indx:
+        vcpu->queue_external_interrupt(info.val & 0xFFU);
+        return true;
+
+    default:
+        bfalert_info(0, "Unexpected x2apic write");
+        bfalert_subnhex(0, "msr", info.msr);
+        bfalert_subnhex(0, "val", info.val);
+        bfalert_subnhex(0, "dword indx", indx);
+        bfalert_subnhex(0, "byte indx", indx << 2);
+        return false;
+    }
+}
+
+bool
+xen_op_handler::handle_wrmsr_icr(
+    gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::wrmsr_handler::info_t &info)
+{
+    using namespace eapis::intel_x64::lapic;
+
+    const auto low = info.val;
+
+    switch (icr_low::delivery_mode::get(low)) {
+    case icr_low::delivery_mode::fixed:
+        break;
+
+    default:
+        bfalert_info(0, "Unexpected IPI delivery mode");
+        icr_high::dump(0, vcpu->lapic_read(icr_high::indx));
+        icr_low::dump(0, low);
+        return false;
+    }
+
+    vcpu->lapic_write(icr_low::indx, low);
+
+    // Right now we only have one vcpu, so we skip the destination
+    // calculations. Also, a sane and well-behaved guest would never
+    // take this path, they would use the self IPI register explicitly
+    //
+    icr_high::dump(0, vcpu->lapic_read(icr_high::indx));
+    icr_low::dump(0, low);
+
+    vcpu->queue_external_interrupt(vector::get(low));
+
+    return true;
+}
+
+bool
+xen_op_handler::handle_wrmsr_lvt_timer(
+    gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::wrmsr_handler::info_t &info)
+{
+    using namespace eapis::intel_x64::lapic::lvt;
+
+    auto mode = timer::mode::get(info.val);
+
+    switch (mode) {
+    case timer::mode::tsc_deadline:
+        break;
+
+    default:
+        bfalert_info(0, "Unexpected LVT timer mode");
+        timer::dump(0, info.val);
+        return false;
+    }
+
+    vcpu->lapic_write(timer::indx, info.val);
+//    EMULATE_WRMSR(indx_to_msr(timer::indx), emulate_wrmsr_tsc_deadline);
+
+    return true;
 }
 
 static void
@@ -1038,13 +1263,12 @@ xen_op_handler::XENVER_get_features_handler(
         info->submap |= (1 << XENFEAT_highmem_assist);
         info->submap |= (1 << XENFEAT_gnttab_map_avail_bits);
         info->submap |= (1 << XENFEAT_hvm_callback_vector);
-        info->submap |= (1 << XENFEAT_hvm_safe_pvclock);
-        info->submap |= (1 << XENFEAT_hvm_pirqs);
+        // info->submap |= (1 << XENFEAT_hvm_safe_pvclock);
+        // info->submap |= (1 << XENFEAT_hvm_pirqs);
         info->submap |= (1 << XENFEAT_dom0);
         info->submap |= (1 << XENFEAT_memory_op_vnode_supported);
         // info->submap |= (1 << XENFEAT_ARM_SMCCC_supported);
         info->submap |= (1 << XENFEAT_linux_rsdp_unrestricted);
-        info->submap |= (1 << XENFEAT_hvm_pirqs);
 
         vcpu->set_rax(SUCCESS);
     }
@@ -1139,7 +1363,7 @@ xen_op_handler::EVTCHNOP_send_handler(
     try {
         auto arg = vcpu->map_arg<evtchn_send_t>(vcpu->rsi());
         m_evtchn_op->send(arg.get());
-        vcpu->set_rax(SUCCESS);
+        vcpu->set_rax(FAILURE);
     }
     catchall({
         vcpu->set_rax(FAILURE);
@@ -1319,97 +1543,9 @@ xen_op_handler::update_vcpu_time_info()
     info.version = 0;
 }
 
-//void
-//xen_op_handler::init_disassembler()
-//{
-//    ud_t *ud = &m_udis;
-//
-//    ud_init(ud);
-//    ud_set_mode(ud, 64);
-//    ud_set_vendor(ud, UD_VENDOR_INTEL);
-//}
-
 shared_info_t *
 xen_op_handler::shared_info()
 { return m_shared_info.get(); }
-
-// -----------------------------------------------------------------------------
-// INIT-SIPI-SIPI handler
-// -----------------------------------------------------------------------------
-
-// bool
-// xen_op_handler::handle_xapic_init_sipi(
-//     gsl::not_null<vcpu_t *> vcpu,
-//     eapis::intel_x64::ept_violation_handler::info_t &info)
-// {
-//     constexpr uint32_t icr0_offset = 0x300U;
-//     constexpr uint32_t icr1_offset = 0x310U;
-//
-//     const auto base = vcpu->lapic_base();
-//     if (bfn::upper(info.gpa) != base) {
-//         return false;
-//     }
-//
-//     const auto offset = bfn::lower(info.gpa);
-//     switch (offset) {
-//         case icr0_offset:
-//         case icr1_offset:
-//             break;
-//         default:
-//             return false;
-//     }
-//
-//     const auto len = vmcs_n::vm_exit_instruction_length::get();
-//     const auto ump = vcpu->map_gpa_4k<uint8_t>(base);
-//     if (!ump) {
-//         throw std::runtime_error("failed to map xAPIC gpa");
-//     }
-//
-//     ZydisDecoder decoder;
-//     ZydisDecodedInstruction insn;
-//     ZydisDecoderInit(&decoder, ZYDIS_MACHINE_MODE_LONG_64, ZYDIS_ADDRESS_WIDTH_64);
-//     const auto ret = ZydisDecoderDecodeBuffer(&decoder,
-//                                               ump.get,
-//                                               len,
-//                                               info.gva,
-//                                               &insn);
-//     if (!ZYAN_SUCCESS(ret)) {
-//         throw std::runtime_error("failed to decode xAPIC access");
-//     }
-//
-//     if (insn.operand_count != 2) {
-//         throw std::runtime_error("invalid op count for xAPIC access");
-//     }
-//
-//     ZydisDecodedOperand *src = insn.operands[1];
-//     if (src->type != ZYDIS_OPERAND_TYPE_REGISTER) {
-//         throw std::runtime_error("invalid src op for xAPIC access");
-//     }
-//
-//     uint64_t data;
-//
-//     switch (src->reg.value) {
-//         case ZYDIS_REGISTER_EAX: data = vcpu->rax();
-//         case ZYDIS_REGISTER_EBX: data = vcpu->rbx();
-//         case ZYDIS_REGISTER_ECX: data = vcpu->rcx();
-//         case ZYDIS_REGISTER_EDX: data = vcpu->rdx();
-//         case ZYDIS_REGISTER_ESI: data = vcpu->rsi();
-//         case ZYDIS_REGISTER_EDI: data = vcpu->rdi();
-//         case ZYDIS_REGISTER_R8D: data = vcpu->r08();
-//         case ZYDIS_REGISTER_R9D: data = vcpu->r09();
-//         case ZYDIS_REGISTER_R10D: data = vcpu->r10();
-//         case ZYDIS_REGISTER_R11D: data = vcpu->r11();
-//         case ZYDIS_REGISTER_R12D: data = vcpu->r12();
-//         case ZYDIS_REGISTER_R13D: data = vcpu->r13();
-//         case ZYDIS_REGISTER_R14D: data = vcpu->r14();
-//         case ZYDIS_REGISTER_R15D: data = vcpu->r15();
-//         default:
-//             throw std::runtime_error("Unexpected register value: " +
-//                                      std::to_string(src->reg.value));
-//     }
-//
-//     const auto mode = ::intel_x64::lapic::icr::delivery_mode::get(data);
-// }
 
 // -----------------------------------------------------------------------------
 // Quirks

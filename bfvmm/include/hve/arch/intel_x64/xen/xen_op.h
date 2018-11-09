@@ -178,7 +178,7 @@ private:
     void SCHEDOP_yield_handler(gsl::not_null<vcpu *> vcpu);
 
     // -------------------------------------------------------------------------
-    // xAPIC
+    // Local APIC
     // -------------------------------------------------------------------------
 
     bool xapic_handle_read(
@@ -194,13 +194,29 @@ private:
 
     uint64_t xapic_parse_write(const uint8_t *buf, size_t len);
 
+    void emulate_rdmsr_x2apic();
+    void emulate_wrmsr_x2apic();
+    void emulate_wrmsr_tsc_deadline();
+
+    bool handle_rdmsr_x2apic(
+        gsl::not_null<vcpu_t *> vcpu,
+        eapis::intel_x64::rdmsr_handler::info_t &info);
+
+    bool handle_wrmsr_icr(
+        gsl::not_null<vcpu_t *> vcpu,
+        eapis::intel_x64::wrmsr_handler::info_t &info);
+
+    bool handle_wrmsr_lvt_timer(
+        gsl::not_null<vcpu_t *> vcpu,
+        eapis::intel_x64::wrmsr_handler::info_t &info);
+
+
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
 
     void reset_vcpu_time_info();
     void update_vcpu_time_info();
-    void init_disassembler();
 
     // -------------------------------------------------------------------------
     // Quirks
@@ -212,18 +228,19 @@ private:
 
     uint64_t m_tsc_frequency{};
     uint64_t m_callback_via{};
-    uint64_t m_icr{};
 
     std::unordered_map<uint32_t, uint64_t> m_msrs;
-    std::unordered_map<uint64_t, eapis::x64::unique_map<uint8_t>> m_xapic_rip_cache;
+//    std::unordered_map<uint64_t, eapis::x64::unique_map<uint8_t>> m_xapic_rip_cache;
 
 private:
 
     vcpu *m_vcpu;
 
     uint64_t m_hypercall_page_gpa{};
+
     eapis::x64::unique_map<shared_info_t> m_shared_info;
     eapis::x64::unique_map<uint8_t> m_console;
+
     std::unique_ptr<hyperkernel::intel_x64::evtchn_op> m_evtchn_op;
     std::unique_ptr<hyperkernel::intel_x64::sched_op> m_sched_op;
 

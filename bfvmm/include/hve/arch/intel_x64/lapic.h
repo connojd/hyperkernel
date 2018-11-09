@@ -158,14 +158,11 @@ public:
     enum reg { eax, ecx, edx, ebx, esp, ebp, esi, edi };
 
     ///
-    /// Prefix used to override to 32-bit operands in while in long mode
+    /// Prefix used to override 32-bit operands while in long mode
     ///
-    static const auto size_override = 0x67;
-
-    static const std::array<uint8_t, 3> write_opcode = {
+    static constexpr auto size_override = 0x67;
+    static constexpr std::array<uint8_t, 3> mov_opcode = {
         0x89, // MOV r/m32, r32   (MR)
-        0xA3, // MOV moffs32, EAX (TD)
-        0xC7  // MOV r/m32, imm32 (MI)
     };
 
     /// Constructor
@@ -174,53 +171,17 @@ public:
     /// @ensures
     ///
     /// @param vcpu the vcpu associated with this insn_decoder
-    ///
-    /// @cond
+    /// @param buf the bytes associated with this insn_decoder
+    /// @param len the number of bytes associated with this insn_decoder
     ///
     explicit insn_decoder(
-        const gsl::not_null<vcpu *> vcpu,
         const gsl::not_null<uint8_t *> buf,
         size_t len)
     :
-        m_vcpu{vcpu},
         m_buf{buf}
     {
         expects(len >= 2 && len <= 15);
-        m_len{len}
-    }
-
-    /// @endcond
-
-    /// Destructor
-    ///
-    /// @expects
-    /// @ensures
-    ///
-    ~insn_decoder() = default;
-
-    /// Source operand value
-    ///
-    /// @expects
-    /// @ensures
-    ///
-    uint64_t src_op_value()
-    {
-        auto reg = this->src_op();
-        if (reg < 0) {
-            //throw??
-            return 0;
-        }
-
-        switch (reg) {
-            case eax: return m_vcpu->rax() & 0xFFFFFFFFU;
-            case ecx: return m_vcpu->rcx() & 0xFFFFFFFFU;
-            case edx: return m_vcpu->rdx() & 0xFFFFFFFFU;
-            case ebx: return m_vcpu->rbx() & 0xFFFFFFFFU;
-            case esp: return m_vcpu->rsp() & 0xFFFFFFFFU;
-            case ebp: return m_vcpu->rbp() & 0xFFFFFFFFU;
-            case esi: return m_vcpu->rsi() & 0xFFFFFFFFU;
-            case edi: return m_vcpu->rdi() & 0xFFFFFFFFU;
-        }
+        m_len = len;
     }
 
     auto mod(uint64_t modrm)
@@ -249,20 +210,26 @@ public:
         m_pos = (m_buf[0] == size_override) ? 1 : 0;
 
         switch (m_buf[m_pos++]) {
-            case write_opcode[0]: return mov_mr_src_op();
-            case write_opcode[1]: return mov_td_src_op();
-            case write_opcode[2]: return mov_mi_src_op();
-            default: return -1;
+            case mov_opcode[0]:
+                return mov_mr_src_op();
+            default:
+                printf("unhandled insn: ");
+                for (auto i = 0; i < m_len; i++) {
+                    printf("%02x", m_buf[i]);
+                }
+                printf("\n");
+                throw std::runtime_error("unhandled insn");
         }
     }
 
+    /// @endcond
+
 private:
 
-    vcpu *m_vcpu{};
     uint8_t *m_buf{};
     size_t m_len{};
     size_t m_pos{};
-}
+};
 }
 
 #endif
