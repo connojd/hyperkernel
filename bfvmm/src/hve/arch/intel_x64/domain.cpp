@@ -35,7 +35,8 @@ domain::domain(domainid_type domainid) :
     m_rsdp{make_page<rsdp_t>()},
     m_xsdt{make_page<xsdt_t>()},
     m_madt{make_page<madt_t>()},
-    m_fadt{make_page<fadt_t>()}
+    m_fadt{make_page<fadt_t>()},
+    m_dsdt{make_page<dsdt_t>()}
 {
     if (domainid == 0) {
         this->setup_dom0();
@@ -132,20 +133,35 @@ domain::setup_acpi()
     m_fadt->header.oemrevision = OEMREVISION;
     std::strncpy(m_fadt->header.aslcompilerid, ASLCOMPILERID, sizeof(m_fadt->header.aslcompilerid));
     m_fadt->header.aslcompilerrevision = ASLCOMPILERREVISION;
+    m_fadt->dsdt = 0;
     m_fadt->flags = 0x101873U;
     m_fadt->minorrevision = 1;
+    m_fadt->xdsdt = ACPI_DSDT_GPA;
     m_fadt->hypervisorid = 0xBFU;
     m_fadt->header.checksum = acpi_checksum(m_fadt.get(), m_fadt->header.length);
+
+    std::strncpy(m_dsdt->header.signature, "DSDT", sizeof(m_dsdt->header.signature));
+    m_dsdt->header.length = sizeof(dsdt_t);
+    m_dsdt->header.revision = 6;
+    m_dsdt->header.checksum = 0;
+    std::strncpy(m_dsdt->header.oemid, OEMID, sizeof(m_dsdt->header.oemid));
+    std::strncpy(m_dsdt->header.oemtableid, OEMTABLEID, sizeof(m_dsdt->header.oemtableid));
+    m_dsdt->header.oemrevision = OEMREVISION;
+    std::strncpy(m_dsdt->header.aslcompilerid, ASLCOMPILERID, sizeof(m_dsdt->header.aslcompilerid));
+    m_dsdt->header.aslcompilerrevision = ASLCOMPILERREVISION;
+    m_dsdt->header.checksum = acpi_checksum(m_dsdt.get(), m_dsdt->header.length);
 
     auto rsdp_hpa = g_mm->virtptr_to_physint(m_rsdp.get());
     auto xsdt_hpa = g_mm->virtptr_to_physint(m_xsdt.get());
     auto madt_hpa = g_mm->virtptr_to_physint(m_madt.get());
     auto fadt_hpa = g_mm->virtptr_to_physint(m_fadt.get());
+    auto dsdt_hpa = g_mm->virtptr_to_physint(m_dsdt.get());
 
     m_ept_map.map_4k(ACPI_RSDP_GPA, rsdp_hpa, ept::mmap::attr_type::read_only);
     m_ept_map.map_4k(ACPI_XSDT_GPA, xsdt_hpa, ept::mmap::attr_type::read_only);
     m_ept_map.map_4k(ACPI_MADT_GPA, madt_hpa, ept::mmap::attr_type::read_only);
     m_ept_map.map_4k(ACPI_FADT_GPA, fadt_hpa, ept::mmap::attr_type::read_only);
+    m_ept_map.map_4k(ACPI_DSDT_GPA, dsdt_hpa, ept::mmap::attr_type::read_only);
 }
 
 void

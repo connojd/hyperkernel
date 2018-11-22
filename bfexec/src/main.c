@@ -29,7 +29,9 @@
 
 #include <hypercall.h>
 #include <gpa_layout.h>
+
 #include <hve/arch/intel_x64/xen/public/xen.h>
+#include <hve/arch/intel_x64/xen/public/elfnote.h>
 
 #include "xen/start_info.h"
 
@@ -192,6 +194,85 @@ domain_op__map_buffer(
 /* vCPU Functions                                                             */
 /* -------------------------------------------------------------------------- */
 
+static const struct bfelf_shdr *
+find_note_section(const struct bfelf_file_t *ef)
+{
+    int i;
+    for (i = 0; i < ef->ehdr->e_shnum; i++) {
+        const struct bfelf_shdr *shdr = &(ef->shdrtab[i]);
+        const char *name = &ef->shstrtab[shdr->sh_name];
+        if (strncmp(name, ".notes", 7)) {
+            continue;
+        }
+        break;
+    }
+
+    if (i == ef->ehdr->e_shnum) {
+        return NULL;
+    }
+
+    const struct bfelf_shdr *shdr = &(ef->shdrtab[i]);
+    if ((shdr->sh_size & 0x3) != 0) {
+        BFALERT("vmlinux: invalid .notes section size: %d\n", shdr->sh_size);
+        return NULL;
+    }
+
+    return shdr;
+}
+
+static status_t
+set_vm_entry(const struct bfelf_binary_t *bin, uintptr_t *entry)
+{
+    if (!bin) {
+        return FAILURE;
+    }
+
+    const struct bfelf_file_t *ef = (const struct bfelf_file_t *)&bin->ef;
+    if (!ef) {
+        return FAILURE;
+    }
+
+    const struct bfelf_shdr *shdr = find_note_section(ef);
+    if (!shdr) {
+        return FAILURE;
+    }
+
+    const uint32_t *hay = (const uint32_t *)(bin->file + shdr->sh_offset);
+    const uint32_t dwords = shdr->sh_size / 4;
+    const uint32_t needle[4] = {
+        0x4U, /* namesz */
+        0x8U, /* descsz */
+        0x12U, /* type */
+        0x006e6558U /* "Xen\0" */
+    };
+
+    for (int i = 0; (i + 5) < dwords; i++) {
+        if (hay[i] != needle[0]) {
+            continue;
+        }
+        if (hay[i + 1] != needle[1]) {
+            i++;
+            continue;
+        }
+        if (hay[i + 2] != needle[2]) {
+            i += 2;
+            continue;
+        }
+        if (hay[i + 3] != needle[3]) {
+            i += 3;
+            continue;
+        }
+
+        uint64_t *addr = (uint64_t *)&hay[i + 4];
+        *entry = *addr;
+        printf("PHYS32 entry: %p\n", *entry);
+
+        return SUCCESS;
+    }
+
+    return FAILURE;
+}
+
 status_t
 vcpu_op__create_vcpu(void)
 {
@@ -203,13 +284,11 @@ vcpu_op__create_vcpu(void)
         return FAILURE;
     }
 
-//
-// REMOVE ME
-//
-g_vm.entry = (void *)0x1000370;
-//
-// REMOVE ME
-//
+    ret = set_vm_entry(&g_vm.bfelf_binary, (uintptr_t *)&g_vm.entry);
+    if (ret != BF_SUCCESS) {
+        BFALERT("set_vm_entry: 0x%016" PRIx64 "\n", ret);
+        return FAILURE;
+    }
 
     ret = __vcpu_op__set_rip(g_vm.vcpuid, (uint64_t)g_vm.entry);
     if (ret != SUCCESS) {
@@ -332,17 +411,19 @@ typedef struct {
 
 typedef struct {
     char rm_trampoline[REAL_MODE_SIZE];
-} reserved_9000_t;
+} reserved_A000_t;
 
 reserved_4000_t *g_reserved_4000 = 0;   /* Xen start info */
 reserved_5000_t *g_reserved_5000 = 0;   /* Xen cmdline */
 reserved_6000_t *g_reserved_6000 = 0;   /* Xen shared info page */
 reserved_7000_t *g_reserved_7000 = 0;   /* Xen console */
 reserved_8000_t *g_reserved_8000 = 0;   /* Xen store */
-reserved_9000_t *g_reserved_9000 = 0;   /* Real-mode trampoline */
+//reserved_9000_t *g_reserved_9000 = 0;   /* 4K hole for DSDT */
+reserved_A000_t *g_reserved_A000 = 0;   /* Real-mode trampoline */
 
+// TODO: sanity check this size against the size of vmlinux
 uint64_t g_ram_addr = 0x1000000;
-uint64_t g_ram_size = 0x8000000;
+uint64_t g_ram_size = 0x3F0 << 20;
 
 void *g_zero_page;
 
@@ -414,6 +495,18 @@ setup_e820_map()
     ret = __domain_op__add_e820_entry(
         g_vm.domainid,
         0x9000,
+        0x1000,
+        XEN_HVM_MEMMAP_TYPE_RAM
+    );
+
+    if (ret != SUCCESS) {
+        BFALERT("__domain_op__add_e820_entry failed\n");
+        return FAILURE;
+    }
+
+    ret = __domain_op__add_e820_entry(
+        g_vm.domainid,
+        0xA000,
         REAL_MODE_SIZE,
         XEN_HVM_MEMMAP_TYPE_RAM
     );
@@ -425,8 +518,8 @@ setup_e820_map()
 
     ret = __domain_op__add_e820_entry(
         g_vm.domainid,
-        0x9000 + REAL_MODE_SIZE,
-        g_ram_addr - (0x9000 + REAL_MODE_SIZE),
+        0xA000 + REAL_MODE_SIZE,
+        g_ram_addr - (0xA000 + REAL_MODE_SIZE),
         XEN_HVM_MEMMAP_TYPE_UNUSABLE
     );
 
@@ -580,7 +673,7 @@ status_t
 setup_xen_cmdline()
 {
     status_t ret;
-    const char *cmdline = "console=uart,io,0x3f8,115200n8 apic=debug show_lapic=all audit=0";
+    const char *cmdline = "console=uart,io,0x3f8,115200n8 init=/hello";
 
     /**
      * TODO:
@@ -671,13 +764,13 @@ setup_rm_trampoline()
     status_t ret;
     int size = REAL_MODE_SIZE;
 
-    g_reserved_9000 = (reserved_9000_t *)alloc_buffer(size);
-    if (g_reserved_9000 == 0) {
-        BFALERT("g_reserved_9000 alloc failed: %s\n", strerror(errno));
+    g_reserved_A000 = (reserved_A000_t *)alloc_buffer(size);
+    if (g_reserved_A000 == 0) {
+        BFALERT("g_reserved_A000 alloc failed: %s\n", strerror(errno));
         return FAILURE;
     }
 
-    ret = domain_op__map_buffer((uint64_t)g_reserved_9000, 0x9000, size, MAP_RWE);
+    ret = domain_op__map_buffer((uint64_t)g_reserved_A000, 0xA000, size, MAP_RWE);
     if (ret != BF_SUCCESS) {
         BFALERT("__domain_op__map_buffer failed\n");
         return FAILURE;
@@ -780,9 +873,17 @@ main(int argc, const char *argv[])
         return EXIT_FAILURE;
     }
 
-    platform_init();
+    /**
+     * Note that affinity *must* be set before any VM-bound resources are
+     * allocated. Failure to do so can (and will) result in the kernel mapping
+     * in memory on a core that is different from the one bareflank maps on. In
+     * this case, bareflank's mmap will walk an invalid CR3, resulting in (at
+     * best) an EPT violation when the guest starts to run.
+     */
     set_affinity(0);
+
     setup_kill_signal_handler();
+    platform_init();
 
     ret = domain_op__create_domain();
     if (ret != SUCCESS) {
@@ -806,6 +907,12 @@ main(int argc, const char *argv[])
     if (ret != SUCCESS) {
         BFALERT("load_binary failed\n");
         goto CLEANUP_DOMAIN;
+    }
+
+    ret = set_vm_entry(&g_vm.bfelf_binary, (uintptr_t *)&g_vm.entry);
+    if (ret != SUCCESS) {
+        BFALERT("set_vm_entry failed\n");
+        return EXIT_FAILURE;
     }
 
     ret = vcpu_op__create_vcpu();

@@ -44,7 +44,7 @@ typedef struct {
     uint32_t                oemrevision;                ///< OEM revision number
     char                    aslcompilerid[4];           ///< ASCII ASL compiler vendor ID
     uint32_t                aslcompilerrevision;        ///< ASL compiler version
-} acpi_header_t;
+} __attribute__((packed)) acpi_header_t;
 
 // -----------------------------------------------------------------------------
 // ACPI Subtable Header
@@ -53,7 +53,7 @@ typedef struct {
 typedef struct {
     uint8_t                 type;                       ///< Table type
     uint8_t                 length;                     ///< Length of table in bytes, including this header
-} acpi_subtable_header_t;
+} __attribute__((packed)) acpi_subtable_header_t;
 
 // -----------------------------------------------------------------------------
 // GAS - Generic Address Structure v2
@@ -65,7 +65,7 @@ typedef struct {
     uint8_t                 BitOffset;                  ///< Bit offset within the register
     uint8_t                 AccessWidth;                ///< Minimum Access size (ACPI 3.0)
     uint64_t                Address;                    ///< 64-bit address of struct or register
-} acpi_generic_address_t;
+} __attribute__((packed)) acpi_generic_address_t;
 
 // -----------------------------------------------------------------------------
 // RSDP - Root System Description Pointer v2
@@ -81,7 +81,7 @@ typedef struct {
     uint64_t                xsdtphysicaladdress;        ///< 64-bit physical address of the XSDT (ACPI 2.0+)
     uint8_t                 extendedchecksum;           ///< Checksum of entire table (ACPI 2.0+)
     uint8_t                 reserved[3];                ///< Reserved, must be zero
-} rsdp_t;
+} __attribute__((packed)) rsdp_t;
 
 // -----------------------------------------------------------------------------
 // XSDT - Extended Root System Description Tables v1
@@ -90,7 +90,7 @@ typedef struct {
 typedef struct {
     acpi_header_t           header;                     ///< Common ACPI table header
     uint64_t                entries[2];                 ///< Array of pointers to ACPI tables
-} xsdt_t;
+} __attribute__((packed)) xsdt_t;
 
 // -----------------------------------------------------------------------------
 // MADT - Multiple APIC Description Table v3
@@ -121,14 +121,14 @@ typedef struct {
     uint8_t                 processorid;
     uint8_t                 id;
     uint32_t                flags;
-} acpi_madt_local_apic_t;
+} __attribute__((packed)) acpi_madt_local_apic_t;
 
 typedef struct {
     acpi_header_t           header;                 ///< Common ACPI table header
     uint32_t                address;                ///< Physical address of local APIC
     uint32_t                flags;                  ///< MADT flags (0 == No PIC)
     acpi_madt_local_apic_t  lapic;                  ///< Local APIC settings
-} madt_t;
+} __attribute__((packed)) madt_t;
 
 // -----------------------------------------------------------------------------
 // MADT - Multiple APIC Description Table v6
@@ -191,7 +191,11 @@ typedef struct {
     acpi_generic_address_t  sleepcontrol;           ///< 64-bit Sleep Control register (ACPI 5.0)
     acpi_generic_address_t  sleepstatus;            ///< 64-bit Sleep Status register (ACPI 5.0)
     uint64_t                hypervisorid;           ///< Hypervisor Vendor ID (ACPI 6.0)
-} fadt_t;
+} __attribute__((packed)) fadt_t;
+
+typedef struct {
+    acpi_header_t header;
+} __attribute__((packed)) dsdt_t;
 
 // -----------------------------------------------------------------------------
 // ACPI Checksum

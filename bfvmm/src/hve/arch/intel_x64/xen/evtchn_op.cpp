@@ -68,8 +68,11 @@ evtchn_op::set_callback_via(uint64_t via)
     // to inject whenever an upcall is pending.
     //
     m_cb_via = via;
-//    m_vcpu->queue_external_interrupt(via);
 }
+
+void
+evtchn_op::expand_array(gsl::not_null<evtchn_expand_array_t *> arr)
+{ this->make_word_page(arr); }
 
 evtchn_op::port_t
 evtchn_op::bind_console()
@@ -79,65 +82,31 @@ evtchn_op::bind_console()
     return port;
 }
 
-evtchn_op::port_t
-evtchn_op::bind_store()
-{
-    auto port = this->bind_reserved();
-    bfdebug_nhex(0, "bound store:", port);
-    return port;
-}
-
-
-//void
-//evtchn_op::bind_virq(gsl::not_null<evtchn_bind_virq_t *> bind)
-//{
-//    expects(bind->vcpu == 0);
-//    expects(m_virq_to_port.at(bind->virq) == null_port);
-//
-//    switch (bind->virq) {
-//        case VIRQ_TIMER:
-//            this->bind_virq_timer(bind);
-//            break;
-//
-//        default:
-//            throw std::runtime_error("unhandled bind VIRQ: " +
-//                                     std::to_string(bind->virq));
-//    }
-//}
-
 void
-evtchn_op::expand_array(gsl::not_null<evtchn_expand_array_t *> arr)
-{ this->make_word_page(arr); }
+evtchn_op::alloc_unbound(gsl::not_null<evtchn_alloc_unbound_t *> arg)
+{
+    expects(arg->dom == DOMID_SELF);
+    expects(arg->remote_dom == DOMID_SELF);
 
-//void
-//evtchn_op::set_priority(const gsl::not_null<evtchn_set_priority_t *> pri)
-//{
-//    expects(pri->priority < m_queues.size());
-//
-//    auto chan = this->port_to_chan(pri->port);
-//    expects(chan != nullptr);
-//
-//    chan->set_prev_vcpuid(chan->vcpuid());
-//    chan->set_prev_priority(chan->priority());
-//    chan->set_priority(pri->priority);
-//}
+    auto port = this->make_new_port();
+    auto chan = this->port_to_chan(port);
 
-//void
-//evtchn_op::unmask(gsl::not_null<evtchn_unmask_t *> arg)
-//{
-//    auto word = this->port_to_word(arg->port);
-//    this->word_clear_masked(word);
-//
-//    if (this->word_is_pending(word)) {
-//        this->set_pending(this->port_to_chan(arg->port));
-//    }
-//}
+    chan->set_port(port);
+    chan->set_state(evtchn::state_unbound);
+
+    arg->port = port;
+}
 
 void
 evtchn_op::send(gsl::not_null<evtchn_send_t *> arg)
 {
+    bfdebug_nhex(0, "send port", arg->port);
     this->set_pending(this->port_to_chan(arg->port));
 }
+
+evtchn_op::port_t
+evtchn_op::bind_store()
+{ return this->bind_reserved(); }
 
 // =============================================================================
 // Initialization
@@ -192,24 +161,6 @@ evtchn_op::bind_reserved()
     chan->set_state(evtchn::state_reserved);
 
     return port;
-}
-
-void
-evtchn_op::bind_virq_timer(gsl::not_null<evtchn_bind_virq_t *> bind)
-{
-    const auto virq = bind->virq;
-    const auto vcpu = bind->vcpu;
-    const auto port = this->make_new_port();
-
-    auto chan = this->port_to_chan(port);
-
-    chan->set_port(port);
-    chan->set_state(evtchn::state_virq);
-    chan->set_vcpuid(bind->vcpu);
-    chan->set_virq(bind->virq);
-
-    m_virq_to_port[virq] = port;
-    bind->port = port;
 }
 
 bool

@@ -132,6 +132,8 @@ private:
     // CPUID
     // -------------------------------------------------------------------------
 
+    bool cpuid_ack_handler(
+        gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::cpuid_handler::info_t &info);
     bool cpuid_zero_handler(
         gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::cpuid_handler::info_t &info);
     bool cpuid_pass_through_handler(
@@ -198,11 +200,9 @@ private:
     void HVMOP_pagetable_dying_handler(gsl::not_null<vcpu *> vcpu);
 
     bool HYPERVISOR_event_channel_op(gsl::not_null<vcpu *> vcpu);
-    void EVTCHNOP_bind_virq_handler(gsl::not_null<vcpu *> vcpu);
     void EVTCHNOP_init_control_handler(gsl::not_null<vcpu *> vcpu);
     void EVTCHNOP_expand_array_handler(gsl::not_null<vcpu *> vcpu);
-    void EVTCHNOP_set_priority_handler(gsl::not_null<vcpu *> vcpu);
-    void EVTCHNOP_unmask_handler(gsl::not_null<vcpu *> vcpu);
+    void EVTCHNOP_alloc_unbound_handler(gsl::not_null<vcpu *> vcpu);
     void EVTCHNOP_send_handler(gsl::not_null<vcpu *> vcpu);
 
     bool HYPERVISOR_sched_op(gsl::not_null<vcpu *> vcpu);
@@ -240,12 +240,28 @@ private:
 
 private:
 
+#ifndef MIN_TSC_TICKS
+#define MIN_TSC_TICKS 20000
+#endif
+
+#ifndef MIN_EXIT_TICKS
+#define MIN_EXIT_TICKS 16000
+#endif
+
+    static constexpr auto min_tsc_ticks = MIN_TSC_TICKS;
+    static constexpr auto min_exit_ticks = MIN_EXIT_TICKS;
+
     bfn::once_flag m_tsc_once_flag{};
 
     uint64_t m_apic_base{};
-    uint64_t m_pet_shift{};
+
     uint64_t m_tsc_freq_khz{};
-    uint64_t m_timer_vector{};
+    uint64_t m_tsc_vector{};
+    uint64_t m_tsc_exit{0};
+    uint64_t m_tsc_lost{0};
+
+    uint64_t m_pet_shift{};
+    uint64_t m_pet_ticks{};
 
     std::unordered_map<uint32_t, uint64_t> m_msrs;
     std::unordered_map<uint64_t, eapis::x64::unique_map<uint8_t>> m_xapic_rip_cache;

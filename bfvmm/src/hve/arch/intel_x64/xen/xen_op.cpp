@@ -157,6 +157,8 @@ xen_op_handler::xen_op_handler(
         return;
     }
 
+    primary_processor_based_vm_execution_controls::use_tsc_offsetting::enable();
+
     vcpu->pass_through_msr_access(::x64::msrs::ia32_pat::addr);
     vcpu->pass_through_msr_access(::intel_x64::msrs::ia32_efer::addr);
     vcpu->pass_through_msr_access(::intel_x64::msrs::ia32_fs_base::addr);
@@ -170,6 +172,9 @@ xen_op_handler::xen_op_handler(
     // We effectively pass this through to the guest already
     // through the eapis::intel_x64::timer::tsc_freq_MHz
     vcpu->pass_through_msr_access(::intel_x64::msrs::platform_info::addr);
+
+    EMULATE_RDMSR(0x34, rdmsr_zero_handler);
+    EMULATE_RDMSR(0x64E, rdmsr_zero_handler);
 
     EMULATE_RDMSR(::intel_x64::msrs::ia32_apic_base::addr,
                   ia32_apic_base_rdmsr_handler);
@@ -206,6 +211,8 @@ xen_op_handler::xen_op_handler(
     ADD_CPUID_HANDLER(0x80000008, cpuid_pass_through_handler);      // TODO: 0 reserved bits
 
     EMULATE_IO_INSTRUCTION(0xCF8, io_ones_handler, io_ignore_handler);
+    EMULATE_IO_INSTRUCTION(0xCFA, io_ones_handler, io_ignore_handler);
+    EMULATE_IO_INSTRUCTION(0xCFB, io_ones_handler, io_ignore_handler);
     EMULATE_IO_INSTRUCTION(0xCFC, io_ones_handler, io_ignore_handler);
     EMULATE_IO_INSTRUCTION(0xCFD, io_ones_handler, io_ignore_handler);
     EMULATE_IO_INSTRUCTION(0xCFE, io_ones_handler, io_ignore_handler);
@@ -218,6 +225,9 @@ xen_op_handler::xen_op_handler(
     /// NMI assertion
     EMULATE_IO_INSTRUCTION(0x70, io_zero_handler, io_ignore_handler);
     EMULATE_IO_INSTRUCTION(0x71, io_zero_handler, io_ignore_handler);
+
+    /// TODO: figure out what this one is for
+    EMULATE_IO_INSTRUCTION(0x3fe, io_zero_handler, io_ignore_handler);
 
     /// Ports used for TSC calibration against the PIT. See
     /// arch/x86/kernel/tsc.c:pit_calibrate_tsc for detail.
@@ -245,6 +255,7 @@ xen_op_handler::xen_op_handler(
     vcpu->pass_through_io_accesses(0x3fd);
 
     ADD_EPT_WRITE_HANDLER(xapic_handle_write);
+    EMULATE_CPUID(0xBF00, cpuid_ack_handler);
 
     m_pet_shift = ::intel_x64::msrs::ia32_vmx_misc::preemption_timer_decrement::get();
 }
@@ -311,7 +322,7 @@ xen_op_handler::handle_vmx_pet(gsl::not_null<vcpu_t *> vcpu)
 {
     bfignored(vcpu);
 
-    m_vcpu->queue_external_interrupt(m_timer_vector);
+    m_vcpu->queue_external_interrupt(m_tsc_vector);
     m_vcpu->disable_vmx_preemption_timer();
 
     return true;
@@ -325,8 +336,6 @@ xen_op_handler::run_delegate(bfobject *obj)
     // Note that this function is executed on every entry, so we want to
     // limit what we are doing here. This is an expensive function to
     // execute.
-
-    this->update_vcpu_time_info();
 
     // Note:
     //
@@ -365,6 +374,14 @@ xen_op_handler::run_delegate(bfobject *obj)
             ::x64::msrs::set(msr.first, msr.second);
         }
     }
+
+    // TODO: must reset tsc state on resume etc.
+    // this assumes this vcpu is pinned and that lost_ticks > 0
+    //
+    if (GSL_LIKELY(m_tsc_exit)) {
+        m_tsc_lost += ::x64::read_tsc::get() - m_tsc_exit + min_exit_ticks;
+        ::intel_x64::vmcs::tsc_offset::set(m_tsc_lost * -1);
+    }
 }
 
 bool
@@ -380,7 +397,11 @@ xen_op_handler::exit_handler(
     // Should we add this to the exit/entry asm glue? - CD
 
     using namespace ::x64::msrs;
+    using namespace ::intel_x64::vmcs;
+
     m_msrs[ia32_kernel_gs_base::addr] = ia32_kernel_gs_base::get();
+    m_tsc_exit = ::x64::read_tsc::get();
+    m_tsc_lost += min_exit_ticks;
 
     // Ignored
     return false;
@@ -497,14 +518,12 @@ xen_op_handler::xapic_handle_write_lvt_timer(uint64_t val)
     switch (mode) {
         case lvt::timer::mode::one_shot:
             m_vcpu->lapic_write(lvt::timer::indx, val);
-            bfalert_info(0, "Timer: one_shot");
             break;
 
         case lvt::timer::mode::tsc_deadline:
             m_vcpu->lapic_write(lvt::timer::indx, val);
+            m_tsc_vector = lvt::timer::vector::get(val);
             ADD_VMX_PET_HANDLER(handle_vmx_pet);
-            m_timer_vector = lvt::timer::vector::get(val);
-            bfalert_info(0, "Timer: tsc_deadline");
             break;
 
         default:
@@ -573,7 +592,6 @@ xen_op_handler::xapic_handle_write(
         case initial_count::indx:
             this->xapic_handle_write_init_count(val);
             break;
-
 
         case icr_high::indx:
         case id::indx:
@@ -792,19 +810,16 @@ bool
 xen_op_handler::handle_tsc_deadline(
     gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::wrmsr_handler::info_t &info)
 {
-    auto next = info.val;
-    auto curr = ::x64::read_tsc::get();
-    expects(next - curr > (1ULL << m_pet_shift));
+    auto vtsc = ::x64::read_tsc::get() - m_tsc_lost;
+    auto vtsc_deadline = info.val;
 
-    auto diff = next - curr;
-    auto pet_ticks = diff >> m_pet_shift;
+    if (vtsc_deadline - vtsc > min_tsc_ticks) {
+        m_pet_ticks = (vtsc_deadline - vtsc) >> m_pet_shift;
+    } else {
+        m_pet_ticks = min_tsc_ticks >> m_pet_shift;
+    }
 
-//    bfdebug_nhex(0, "next", next);
-//    bfdebug_nhex(0, "curr", curr);
-//    bfdebug_nhex(0, "diff", diff);
-//    bfdebug_nhex(0, "pet_ticks", pet_ticks);
-
-    m_vcpu->set_vmx_preemption_timer(pet_ticks);
+    m_vcpu->set_vmx_preemption_timer(m_pet_ticks);
     m_vcpu->enable_vmx_preemption_timer();
 
     return true;
@@ -813,6 +828,14 @@ xen_op_handler::handle_tsc_deadline(
 // -----------------------------------------------------------------------------
 // CPUID
 // -----------------------------------------------------------------------------
+
+bool
+xen_op_handler::cpuid_ack_handler(
+    gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::cpuid_handler::info_t &info)
+{
+    bfdebug_nhex(0, "ack received", vcpu->rax());
+    return true;
+}
 
 bool
 xen_op_handler::cpuid_zero_handler(
@@ -861,6 +884,8 @@ xen_op_handler::cpuid_leaf1_handler(
     info.rcx &= ~::intel_x64::cpuid::feature_information::ecx::vmx::mask;
     info.rcx &= ~::intel_x64::cpuid::feature_information::ecx::tm2::mask;
     info.rcx &= ~::intel_x64::cpuid::feature_information::ecx::sdbg::mask;
+    info.rcx &= ~::intel_x64::cpuid::feature_information::ecx::xsave::mask;
+    info.rcx &= ~::intel_x64::cpuid::feature_information::ecx::osxsave::mask;
 
     info.rdx &= ~::intel_x64::cpuid::feature_information::edx::vme::mask;
     info.rdx &= ~::intel_x64::cpuid::feature_information::edx::de::mask;
@@ -1371,10 +1396,6 @@ xen_op_handler::HYPERVISOR_vcpu_op(gsl::not_null<vcpu *> vcpu)
             this->VCPUOP_stop_singleshot_timer_handler(vcpu);
             return true;
 
-        case VCPUOP_set_singleshot_timer:
-            this->VCPUOP_set_singleshot_timer_handler(vcpu);
-            return true;
-
         default:
             break;
     };
@@ -1393,40 +1414,6 @@ void
 xen_op_handler::VCPUOP_stop_singleshot_timer_handler(gsl::not_null<vcpu *> vcpu)
 {
     vcpu->set_rax(SUCCESS);
-}
-
-void
-xen_op_handler::VCPUOP_set_singleshot_timer_handler(gsl::not_null<vcpu *> vcpu)
-{
-    try {
-        expects(vcpu->rsi() == 0);
-
-        auto arg = vcpu->map_arg<vcpu_set_singleshot_timer_t>(vcpu->rdx());
-        auto deadline = arg->timeout_abs_ns;
-        auto tsc = ::x64::read_tsc::get();
-        auto now = this->tsc_to_sys_time(tsc);
-
-//        if ((arg->flags & VCPU_SSHOTTMR_future) && deadline < now) {
-//            vcpu->set_rax(FAILURE);
-//            return;
-//        }
-
-        auto us = (deadline - now) / 1000U;
-        auto tsc_ticks = us * (m_tsc_freq_khz / 1000U);
-        auto pet_ticks = tsc_ticks >> m_pet_shift;
-
-//        bfdebug_nhex(0, "deadline", deadline);
-//        bfdebug_nhex(0, "now", now);
-//        bfdebug_ndec(0, "tsc_ticks", tsc_ticks);
-//        bfdebug_ndec(0, "pet_ticks", pet_ticks);
-
-        m_vcpu->set_vmx_preemption_timer(pet_ticks);
-        m_vcpu->enable_vmx_preemption_timer();
-
-        vcpu->set_rax(SUCCESS);
-    } catchall ({
-        vcpu->set_rax(FAILURE);
-    });
 }
 
 void
@@ -1518,10 +1505,6 @@ xen_op_handler::HYPERVISOR_event_channel_op(gsl::not_null<vcpu *> vcpu)
     }
 
     switch (vcpu->rdi()) {
-//        case EVTCHNOP_bind_virq:
-//            this->EVTCHNOP_bind_virq_handler(vcpu);
-//            return true;
-
         case EVTCHNOP_init_control:
             this->EVTCHNOP_init_control_handler(vcpu);
             return true;
@@ -1530,13 +1513,9 @@ xen_op_handler::HYPERVISOR_event_channel_op(gsl::not_null<vcpu *> vcpu)
             this->EVTCHNOP_expand_array_handler(vcpu);
             return true;
 
-//        case EVTCHNOP_set_priority:
-//            this->EVTCHNOP_set_priority_handler(vcpu);
-//            return true;
-
-//        case EVTCHNOP_unmask:
-//            this->EVTCHNOP_unmask_handler(vcpu);
-//            return true;
+        case EVTCHNOP_alloc_unbound:
+            this->EVTCHNOP_alloc_unbound_handler(vcpu);
+            return true;
 
         case EVTCHNOP_send:
             this->EVTCHNOP_send_handler(vcpu);
@@ -1549,19 +1528,6 @@ xen_op_handler::HYPERVISOR_event_channel_op(gsl::not_null<vcpu *> vcpu)
     throw std::runtime_error("unknown HYPERVISOR_event_channel_op: " +
                              std::to_string(vcpu->rdi()));
 }
-
-//void
-//xen_op_handler::EVTCHNOP_bind_virq_handler(gsl::not_null<vcpu *> vcpu)
-//{
-//    try {
-//        auto arg = vcpu->map_arg<evtchn_bind_virq_t>(vcpu->rsi());
-//        m_evtchn_op->bind_virq(arg.get());
-//        vcpu->set_rax(SUCCESS);
-//    }
-//    catchall ({
-//        vcpu->set_rax(FAILURE);
-//    })
-//}
 
 void
 xen_op_handler::EVTCHNOP_init_control_handler(
@@ -1590,39 +1556,12 @@ xen_op_handler::EVTCHNOP_expand_array_handler(gsl::not_null<vcpu *> vcpu)
     })
 }
 
-//void
-//xen_op_handler::EVTCHNOP_set_priority_handler(gsl::not_null<vcpu *> vcpu)
-//{
-//    try {
-//        auto arg = vcpu->map_arg<evtchn_set_priority_t>(vcpu->rsi());
-//        m_evtchn_op->set_priority(arg.get());
-//        vcpu->set_rax(SUCCESS);
-//    }
-//    catchall({
-//        vcpu->set_rax(FAILURE);
-//    })
-//}
-//
-//void
-//xen_op_handler::EVTCHNOP_unmask_handler(gsl::not_null<vcpu *> vcpu)
-//{
-//    try {
-//        auto arg = vcpu->map_arg<evtchn_unmask_t>(vcpu->rsi());
-//        m_evtchn_op->unmask(arg.get());
-//        vcpu->set_rax(SUCCESS);
-//    }
-//    catchall({
-//        vcpu->set_rax(FAILURE);
-//    })
-//}
-
 void
-xen_op_handler::EVTCHNOP_send_handler(gsl::not_null<vcpu *> vcpu)
+xen_op_handler::EVTCHNOP_alloc_unbound_handler(gsl::not_null<vcpu *> vcpu)
 {
     try {
-        auto arg = vcpu->map_arg<evtchn_send_t>(vcpu->rsi());
-//        m_evtchn_op->send(arg.get());
-//        vcpu->set_rax(SUCCESS);
+        auto arg = vcpu->map_arg<evtchn_alloc_unbound_t>(vcpu->rsi());
+        m_evtchn_op->alloc_unbound(arg.get());
         vcpu->set_rax(SUCCESS);
     }
     catchall({
@@ -1630,6 +1569,18 @@ xen_op_handler::EVTCHNOP_send_handler(gsl::not_null<vcpu *> vcpu)
     })
 }
 
+void
+xen_op_handler::EVTCHNOP_send_handler(gsl::not_null<vcpu *> vcpu)
+{
+    try {
+        auto arg = vcpu->map_arg<evtchn_send_t>(vcpu->rsi());
+        m_evtchn_op->send(arg.get());
+        vcpu->set_rax(SUCCESS);
+    }
+    catchall({
+        vcpu->set_rax(FAILURE);
+    })
+}
 
 // -----------------------------------------------------------------------------
 // HYPERVISOR_hvm_op
@@ -1733,11 +1684,11 @@ xen_op_handler::HVMOP_get_param_handler(gsl::not_null<vcpu *> vcpu)
                 arg->value = m_evtchn_op->bind_store();
                 break;
 
-            case HVM_PARAM_STORE_PFN: {
-                m_store = vcpu->map_gpa_4k<uint8_t>(STORE_GPA);
-                arg->value = STORE_GPA >> x64::pt::page_shift;
-                break;
-            }
+//            case HVM_PARAM_STORE_PFN: {
+//                m_store = vcpu->map_gpa_4k<uint8_t>(STORE_GPA);
+//                arg->value = STORE_GPA >> x64::pt::page_shift;
+//                break;
+//            }
 
             default: {
                 bfdebug_info(0, "HVMOP_get_param: unknown");

@@ -113,17 +113,9 @@ public:
     ///
     void expand_array(gsl::not_null<evtchn_expand_array_t *> arr);
 
-    /// Set priority
+    /// Alloc unbound
     ///
-    void set_priority(const gsl::not_null<evtchn_set_priority_t *> pri);
-
-    /// Bind virq
-    ///
-    void bind_virq(gsl::not_null<evtchn_bind_virq_t *> bind);
-
-    /// Unmask
-    ///
-    void unmask(gsl::not_null<evtchn_unmask_t *> arg);
+    void alloc_unbound(gsl::not_null<evtchn_alloc_unbound_t *> arg);
 
     /// Send
     ///

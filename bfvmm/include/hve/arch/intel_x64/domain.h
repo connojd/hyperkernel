@@ -290,6 +290,7 @@ private:
     page_ptr<xsdt_t> m_xsdt;
     page_ptr<madt_t> m_madt;
     page_ptr<fadt_t> m_fadt;
+    page_ptr<dsdt_t> m_dsdt;
 
 public:
 
