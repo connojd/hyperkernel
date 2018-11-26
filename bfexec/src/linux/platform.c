@@ -24,6 +24,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include <sys/mman.h>
 #include <sys/resource.h>
@@ -138,3 +139,16 @@ platform_memset(void *ptr, char value, uint64_t num)
 void *
 platform_memcpy(void *dst, const void *src, uint64_t num)
 { return memcpy(dst, src, num); }
+
+void platform_sleep(long usec)
+{
+    struct timespec ts;
+
+    ts.tv_sec = 0;
+    ts.tv_nsec = usec;
+
+    int err = nanosleep(&ts, NULL);
+    if (err) {
+        printf("nanosleep failed: %s\n", strerror(errno));
+    }
+}

@@ -68,6 +68,7 @@ private:
     void vcpu_op__set_rbx(gsl::not_null<vcpu *> vcpu);
     void vcpu_op__hlt_vcpu(gsl::not_null<vcpu *> vcpu);
     void vcpu_op__destroy_vcpu(gsl::not_null<vcpu *> vcpu);
+    void vcpu_op__wake_vcpu(gsl::not_null<vcpu *> vcpu);
 
     bool dispatch(gsl::not_null<vcpu *> vcpu);
 

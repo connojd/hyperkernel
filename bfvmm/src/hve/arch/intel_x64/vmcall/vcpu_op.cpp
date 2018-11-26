@@ -128,6 +128,25 @@ vmcall_vcpu_op_handler::vcpu_op__destroy_vcpu(
     })
 }
 
+void
+vmcall_vcpu_op_handler::vcpu_op__wake_vcpu(gsl::not_null<vcpu *> vcpu)
+{
+    try {
+        if (m_child_vcpu == nullptr || m_child_vcpu->id() != vcpu->rcx()) {
+            m_child_vcpu = get_vcpu(vcpu->rcx());
+        }
+
+        expects(m_child_vcpu->is_asleep());
+
+        m_child_vcpu->load();
+        m_child_vcpu->wake(&world_switch);
+        vcpu->set_rax(SUCCESS);
+    }
+    catchall({
+        vcpu->set_rax(FAILURE);
+    })
+}
+
 bool
 vmcall_vcpu_op_handler::dispatch(
     gsl::not_null<vcpu *> vcpu)
@@ -159,6 +178,10 @@ vmcall_vcpu_op_handler::dispatch(
 
         case __enum_vcpu_op__destroy_vcpu:
             this->vcpu_op__destroy_vcpu(vcpu);
+            return true;
+
+        case __enum_vcpu_op__wake_vcpu:
+            this->vcpu_op__wake_vcpu(vcpu);
             return true;
 
         default:

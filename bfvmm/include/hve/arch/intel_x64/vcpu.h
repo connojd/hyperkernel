@@ -204,6 +204,18 @@ public:
     ///
     VIRTUAL void return_and_continue();
 
+    /// Return and sleep
+    ///
+    /// Return to the parent vCPU (i.e. resume the parent), and tell the parent
+    /// to put the child vCPU asleep for the specified number of microseconds
+    ///
+    /// @expects
+    /// @ensures
+    ///
+    /// @param us the number of microseconds to sleep
+    ///
+    VIRTUAL void return_and_sleep(uint64_t us);
+
     //--------------------------------------------------------------------------
     // Control
     //--------------------------------------------------------------------------
@@ -216,6 +228,24 @@ public:
     /// @ensures
     ///
     VIRTUAL void kill();
+
+    /// Sleep
+    ///
+    /// Tells the vCPU to enter the sleep state
+    ///
+    /// @expects
+    /// @ensures
+    ///
+    VIRTUAL void sleep();
+
+    /// Wake
+    ///
+    /// Tells the vCPU to enter the wake state
+    ///
+    /// @expects
+    /// @ensures
+    ///
+    VIRTUAL void wake(bfobject *obj);
 
     /// Is Alive
     ///
@@ -234,6 +264,24 @@ public:
     /// @return returns true if the vCPU has been killed, false otherwise
     ///
     VIRTUAL bool is_killed() const;
+
+    /// Is Asleep
+    ///
+    /// @expects
+    /// @ensures
+    ///
+    /// @return returns true iff the vCPU is in the sleep state
+    ///
+    VIRTUAL bool is_asleep() const;
+
+    /// Is Awake
+    ///
+    /// @expects
+    /// @ensures
+    ///
+    /// @return returns true only iff the vCPU is in the wake state
+    ///
+    VIRTUAL bool is_awake() const;
 
     //--------------------------------------------------------------------------
     // LAPIC
@@ -272,6 +320,18 @@ public:
     ///
     VIRTUAL void lapic_write(uint32_t indx, uint32_t val);
 
+    /// Set timer vector
+    ///
+    /// @param vector the vector of the timer interrupt
+    ///
+    VIRTUAL void set_timer_vector(uint64_t vector);
+
+    /// Queue timer interrupt
+    ///
+    /// Queue the timer interrupt for injection into the guest
+    ///
+    VIRTUAL void queue_timer_interrupt();
+
     //--------------------------------------------------------------------------
     // Resources
     //--------------------------------------------------------------------------
@@ -305,7 +365,10 @@ private:
     xen_op_handler m_xen_op_handler;
 
     bool m_killed{};
+    bool m_asleep{};
+
     vcpu *m_parent_vcpu{};
+    uint64_t m_timer_vector{};
 };
 
 }

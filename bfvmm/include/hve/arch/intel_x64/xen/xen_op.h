@@ -33,6 +33,7 @@
 #include "sched_op.h"
 
 #include <eapis/hve/arch/intel_x64/vmexit/cpuid.h>
+#include <eapis/hve/arch/intel_x64/vmexit/mwait.h>
 #include <eapis/hve/arch/intel_x64/vmexit/wrmsr.h>
 #include <eapis/hve/arch/intel_x64/vmexit/rdmsr.h>
 #include <eapis/hve/arch/intel_x64/vmexit/io_instruction.h>
@@ -88,6 +89,7 @@ private:
 
     void run_delegate(bfobject *obj);
     bool exit_handler(gsl::not_null<vcpu_t *> vcpu);
+    bool handle_hlt(gsl::not_null<vcpu_t *> vcpu);
 
     // -------------------------------------------------------------------------
     // MSRS

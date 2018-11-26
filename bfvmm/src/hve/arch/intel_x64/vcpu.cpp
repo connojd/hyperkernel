@@ -273,13 +273,16 @@ vcpu::return_and_continue()
     this->run(&world_switch);
 }
 
+void
+vcpu::return_and_sleep(uint64_t usec)
+{
+    this->set_rax((usec << 16U) | VCPU_OP__RUN_SLEEP);
+    this->run(&world_switch);
+}
+
 //------------------------------------------------------------------------------
 // Control
 //------------------------------------------------------------------------------
-
-void
-vcpu::kill()
-{ m_killed = true; }
 
 bool
 vcpu::is_alive() const
@@ -288,6 +291,46 @@ vcpu::is_alive() const
 bool
 vcpu::is_killed() const
 { return m_killed; }
+
+bool
+vcpu::is_asleep() const
+{ return m_asleep; }
+
+bool
+vcpu::is_awake() const
+{ return !m_asleep; }
+
+void
+vcpu::kill()
+{ m_killed = true; }
+
+void
+vcpu::sleep()
+{ m_asleep = true; }
+
+void
+vcpu::wake(bfobject *obj)
+{
+    /// We clear Linux's sti blocking because we are waking from
+    /// a hlt instruction. Linux does sti right before the hlt, so
+    /// blocking_by_sti is set. If we don't clear it and try to inject
+    /// anyway, VM-entry will fail.
+    ///
+
+    ::intel_x64::vmcs::guest_interruptibility_state::blocking_by_sti::disable();
+    m_asleep = false;
+
+    this->queue_external_interrupt(m_timer_vector);
+    this->run(obj);
+}
+
+void
+vcpu::set_timer_vector(uint64_t vector)
+{ m_timer_vector = vector; }
+
+void
+vcpu::queue_timer_interrupt()
+{ this->queue_external_interrupt(m_timer_vector); }
 
 //------------------------------------------------------------------------------
 // LAPIC

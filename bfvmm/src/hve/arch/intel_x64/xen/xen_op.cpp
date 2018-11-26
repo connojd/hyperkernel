@@ -97,6 +97,9 @@ constexpr auto MHz = 1000000ULL;
 #define ADD_VMX_PET_HANDLER(b) \
     m_vcpu->add_vmx_preemption_timer_handler(make_delegate(vmx_preemption_timer_handler, b))
 
+#define ADD_MWAIT_HANDLER(b) \
+    m_vcpu->add_mwait_handler(make_delegate(mwait_handler, b))
+
 // =============================================================================
 // Implementation
 // =============================================================================
@@ -156,8 +159,6 @@ xen_op_handler::xen_op_handler(
     if (vcpu->is_dom0()) {
         return;
     }
-
-    primary_processor_based_vm_execution_controls::use_tsc_offsetting::enable();
 
     vcpu->pass_through_msr_access(::x64::msrs::ia32_pat::addr);
     vcpu->pass_through_msr_access(::intel_x64::msrs::ia32_efer::addr);
@@ -259,6 +260,13 @@ xen_op_handler::xen_op_handler(
     EMULATE_CPUID(0xBF00, cpuid_ack_handler);
 
     m_pet_shift = ::intel_x64::msrs::ia32_vmx_misc::preemption_timer_decrement::get();
+    m_tsc_freq_khz = tsc_frequency();
+
+    primary_processor_based_vm_execution_controls::use_tsc_offsetting::enable();
+    m_vcpu->add_handler(
+        exit_reason::basic_exit_reason::hlt,
+        ::handler_delegate_t::create<xen_op_handler, &xen_op_handler::handle_hlt>(this)
+    );
 }
 
 static uint64_t
@@ -318,14 +326,43 @@ tsc_frequency(void)
     return freq * numerator / denominator;
 }
 
+// -----------------------------------------------------------------------------
+// PET
+// -----------------------------------------------------------------------------
+
 bool
 xen_op_handler::handle_vmx_pet(gsl::not_null<vcpu_t *> vcpu)
 {
     bfignored(vcpu);
 
-    m_vcpu->queue_external_interrupt(m_tsc_vector);
+    m_vcpu->queue_timer_interrupt();
     m_vcpu->disable_vmx_preemption_timer();
 
+    return true;
+}
+
+// -----------------------------------------------------------------------------
+// HLT
+// -----------------------------------------------------------------------------
+
+bool
+xen_op_handler::handle_hlt(gsl::not_null<vcpu_t *> vcpu)
+{
+    expects(m_tsc_freq_khz > 1000U);
+    advance(vcpu);
+
+    const auto pet_ticks = m_vcpu->get_vmx_preemption_timer();
+    const auto tsc_ticks = pet_ticks << m_pet_shift;
+    const auto usec = tsc_ticks / (m_tsc_freq_khz / 1000U);
+
+    m_vcpu->disable_vmx_preemption_timer();
+    m_vcpu->sleep();
+
+    auto parent = m_vcpu->parent_vcpu();
+    parent->load();
+    parent->return_and_sleep(usec);
+
+    // Unreachable
     return true;
 }
 
@@ -412,44 +449,6 @@ xen_op_handler::exit_handler(
 // xAPIC
 // -----------------------------------------------------------------------------
 
-//bool
-//xen_op_handler::xapic_handle_read(
-//    gsl::not_null<vcpu_t *> vcpu,
-//    eapis::intel_x64::ept_violation_handler::info_t &info)
-//{
-////    auto hkv = vcpu_cast(vcpu);
-////    if (bfn::upper(info.gpa) != hkv->lapic_base()) {
-////        return false;
-////    }
-////
-////    auto idx = bfn::lower(info.gpa) >> 2;
-////    bfdebug_nhex(0, "xapic read", idx << 2);
-////    bfdebug_subnhex(0, "val", m_vcpu->lapic_read(idx));
-////
-////    const auto len = ::intel_x64::vmcs::vm_exit_instruction_length::get();
-////    const auto rip = ::intel_x64::vmcs::guest_rip::get();
-////
-////    auto itr = m_xapic_rip_cache.find(rip);
-////    if (itr == m_xapic_rip_cache.end()) {
-////        auto ump = hkv->map_gva_4k<uint8_t>(rip, len);
-////        if (!ump) {
-////            throw std::runtime_error("handle_xapic_write::map_gva_4k failed");
-////        }
-////
-////        m_xapic_rip_cache[rip] = std::move(ump);
-////        itr = m_xapic_rip_cache.find(rip);
-////    }
-////
-////    const auto buf = itr->second.get();
-////    printf("received xapic insn: ");
-////    for (auto i = 0; i < len; i++) {
-////        printf("%02x", buf[i]);
-////    }
-////    printf("\n");
-//
-//    return false;
-//}
-
 uint64_t
 src_op_value(gsl::not_null<vcpu_t *> vcpu, int64_t src_op)
 {
@@ -523,7 +522,8 @@ xen_op_handler::xapic_handle_write_lvt_timer(uint64_t val)
 
         case lvt::timer::mode::tsc_deadline:
             m_vcpu->lapic_write(lvt::timer::indx, val);
-            m_tsc_vector = lvt::timer::vector::get(val);
+            m_vcpu->set_timer_vector(lvt::timer::vector::get(val));
+
             ADD_VMX_PET_HANDLER(handle_vmx_pet);
             break;
 
@@ -882,6 +882,7 @@ xen_op_handler::cpuid_leaf1_handler(
 {
     bfignored(vcpu);
 
+    info.rcx &= ~::intel_x64::cpuid::feature_information::ecx::monitor::mask;
     info.rcx &= ~::intel_x64::cpuid::feature_information::ecx::vmx::mask;
     info.rcx &= ~::intel_x64::cpuid::feature_information::ecx::tm2::mask;
     info.rcx &= ~::intel_x64::cpuid::feature_information::ecx::sdbg::mask;
@@ -1419,27 +1420,27 @@ xen_op_handler::VCPUOP_stop_singleshot_timer_handler(gsl::not_null<vcpu *> vcpu)
     vcpu->set_rax(SUCCESS);
 }
 
-void
-xen_op_handler::VCPUOP_register_vcpu_time_memory_area_handler(
-    gsl::not_null<vcpu *> vcpu)
-{
-    try {
-        expects(m_tsc_freq_khz > 0);
-        expects(vcpu->rsi() == 0);
-
-        auto arg = vcpu->map_arg<vcpu_register_time_memory_area_t>(vcpu->rdx());
-        m_time_info = vcpu->map_arg<vcpu_time_info_t>(arg->addr.v);
-
-        m_time_info->flags = XEN_PVCLOCK_TSC_STABLE_BIT;
-        m_time_info->tsc_to_system_mul = (GHz << 32U) / (m_tsc_freq_khz * 1000U);
-        m_time_info->tsc_shift = 0;
-        m_time_info->version = 0;
-
-        vcpu->set_rax(SUCCESS);
-    } catchall ({
-        vcpu->set_rax(FAILURE);
-    })
-}
+//void
+//xen_op_handler::VCPUOP_register_vcpu_time_memory_area_handler(
+//    gsl::not_null<vcpu *> vcpu)
+//{
+//    try {
+//        expects(m_tsc_freq_khz > 0);
+//        expects(vcpu->rsi() == 0);
+//
+//        auto arg = vcpu->map_arg<vcpu_register_time_memory_area_t>(vcpu->rdx());
+//        m_time_info = vcpu->map_arg<vcpu_time_info_t>(arg->addr.v);
+//
+//        m_time_info->flags = XEN_PVCLOCK_TSC_STABLE_BIT;
+//        m_time_info->tsc_to_system_mul = (GHz << 32U) / (m_tsc_freq_khz * 1000U);
+//        m_time_info->tsc_shift = 0;
+//        m_time_info->version = 0;
+//
+//        vcpu->set_rax(SUCCESS);
+//    } catchall ({
+//        vcpu->set_rax(FAILURE);
+//    })
+//}
 
 void
 xen_op_handler::VCPUOP_register_vcpu_info_handler(
@@ -1465,23 +1466,23 @@ xen_op_handler::VCPUOP_register_vcpu_info_handler(
 }
 
 
-void
-xen_op_handler::VCPUOP_register_runstate_memory_area_handler(
-    gsl::not_null<vcpu *> vcpu)
-{
-    try {
-        expects(vcpu->rsi() == 0);
-
-        auto arg = vcpu->map_arg<vcpu_register_runstate_memory_area_t>(vcpu->rdx());
-        m_runstate_info = vcpu->map_arg<vcpu_runstate_info_t>(arg->addr.v);
-        m_runstate_info->state = RUNSTATE_running;
-        m_runstate_info->time[RUNSTATE_running] = 0;
-
-        vcpu->set_rax(SUCCESS);
-    } catchall ({
-        vcpu->set_rax(FAILURE);
-    })
-}
+//void
+//xen_op_handler::VCPUOP_register_runstate_memory_area_handler(
+//    gsl::not_null<vcpu *> vcpu)
+//{
+//    try {
+//        expects(vcpu->rsi() == 0);
+//
+//        auto arg = vcpu->map_arg<vcpu_register_runstate_memory_area_t>(vcpu->rdx());
+//        m_runstate_info = vcpu->map_arg<vcpu_runstate_info_t>(arg->addr.v);
+//        m_runstate_info->state = RUNSTATE_running;
+//        m_runstate_info->time[RUNSTATE_running] = 0;
+//
+//        vcpu->set_rax(SUCCESS);
+//    } catchall ({
+//        vcpu->set_rax(FAILURE);
+//    })
+//}
 
 // -----------------------------------------------------------------------------
 // HYPERVISOR_sched_op

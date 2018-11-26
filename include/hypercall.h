@@ -156,10 +156,13 @@ __domain_op__add_e820_entry(
 #define __enum_vcpu_op__run_vcpu 0x101
 #define __enum_vcpu_op__hlt_vcpu 0x102
 #define __enum_vcpu_op__destroy_vcpu 0x103
+#define __enum_vcpu_op__wake_vcpu 0x104
 #define __enum_vcpu_op__set_rip 0x110
 #define __enum_vcpu_op__set_rbx 0x111
 
 #define VCPU_OP__RUN_CONTINUE 0xBF01
+#define VCPU_OP__RUN_SLEEP 0xBF02
+#define VCPU_OP__SLEEP_USEC 0xFFFFFFFFFFFF0000
 
 static inline vcpuid_t
 __vcpu_op__create_vcpu(domainid_t domainid)
@@ -200,6 +203,17 @@ __vcpu_op__destroy_vcpu(vcpuid_t vcpuid)
     return _vmcall(
         __enum_vcpu_op,
         __enum_vcpu_op__destroy_vcpu,
+        vcpuid,
+        0
+    );
+}
+
+static inline status_t
+__vcpu_op__wake_vcpu(vcpuid_t vcpuid)
+{
+    return _vmcall(
+        __enum_vcpu_op,
+        __enum_vcpu_op__wake_vcpu,
         vcpuid,
         0
     );

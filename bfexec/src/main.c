@@ -299,6 +299,14 @@ vcpu_op__create_vcpu(void)
     return SUCCESS;
 }
 
+static inline status_t vcpu_run_code(status_t s)
+{ return s & ~VCPU_OP__SLEEP_USEC; }
+
+static inline long vcpu_sleep_usec(status_t s)
+{ return (s & VCPU_OP__SLEEP_USEC) >> 16; }
+
+void platform_sleep(long usec);
+
 void *
 vcpu_op__run_vcpu(void *arg)
 {
@@ -307,7 +315,7 @@ vcpu_op__run_vcpu(void *arg)
 
     while (1) {
         ret = __vcpu_op__run_vcpu(g_vm.vcpuid);
-        switch(ret) {
+        switch(vcpu_run_code(ret)) {
             case SUCCESS:
                 return 0;
 
@@ -319,8 +327,13 @@ vcpu_op__run_vcpu(void *arg)
             case VCPU_OP__RUN_CONTINUE:
                 continue;
 
+            case VCPU_OP__RUN_SLEEP:
+                platform_sleep(vcpu_sleep_usec(ret));
+                __vcpu_op__wake_vcpu(g_vm.vcpuid);
+                continue;
+
             default:
-                BFALERT("unknown return code: \n", ret);
+                BFALERT("unknown run_vcpu return code: %d\n", ret);
                 return 0;
         }
     }
