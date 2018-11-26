@@ -194,6 +194,7 @@ xen_op_handler::xen_op_handler(
     ADD_CPUID_HANDLER(0x7, cpuid_leaf7_handler);
 
     EMULATE_CPUID(0xA, cpuid_zero_handler);
+    EMULATE_CPUID(0xB, cpuid_zero_handler);
     EMULATE_CPUID(0xD, cpuid_zero_handler);
     EMULATE_CPUID(0xF, cpuid_zero_handler);
     EMULATE_CPUID(0x10, cpuid_zero_handler);
@@ -1353,17 +1354,19 @@ xen_op_handler::HYPERVISOR_vm_assist(gsl::not_null<vcpu *> vcpu)
     // Comments in linux/arch/x86/xen/setup.c suggest that these are not
     // used for HVMs. But we are PVH so are we PV too in this case?
     //
-    vcpu->set_rax(FAILURE);
+   // vcpu->set_rax(FAILURE);
 
-    //switch (vcpu->rdi()) {
-    //    case VMASST_CMD_enable:
-    //        vcpu->set_rax(SUCCESS);
-    //        break;
+    switch (vcpu->rdi()) {
+        case VMASST_CMD_enable:
+            bfdebug_info(0, "VMASST_CMD_enable");
+            vcpu->set_rax(FAILURE);
+            break;
 
-    //    default:
-    //        vcpu->set_rax(FAILURE);
-    //        return false;
-    //}
+        default:
+            vcpu->set_rax(FAILURE);
+            bfdebug_nhex(0, "VMASST_CMD:", vcpu->rdi());
+            return false;
+    }
 
     return true;
 }
@@ -1384,12 +1387,12 @@ xen_op_handler::HYPERVISOR_vcpu_op(gsl::not_null<vcpu *> vcpu)
             this->VCPUOP_stop_periodic_timer_handler(vcpu);
             return true;
 
-        case VCPUOP_register_vcpu_time_memory_area:
-            this->VCPUOP_register_vcpu_time_memory_area_handler(vcpu);
-            return true;
+//        case VCPUOP_register_vcpu_time_memory_area:
+//            this->VCPUOP_register_vcpu_time_memory_area_handler(vcpu);
+//            return true;
 
-        case VCPUOP_register_runstate_memory_area:
-            this->VCPUOP_register_runstate_memory_area_handler(vcpu);
+        case VCPUOP_register_vcpu_info:
+            this->VCPUOP_register_vcpu_info_handler(vcpu);
             return true;
 
         case VCPUOP_stop_singleshot_timer:
@@ -1437,6 +1440,30 @@ xen_op_handler::VCPUOP_register_vcpu_time_memory_area_handler(
         vcpu->set_rax(FAILURE);
     })
 }
+
+void
+xen_op_handler::VCPUOP_register_vcpu_info_handler(
+    gsl::not_null<vcpu *> vcpu)
+{
+    try {
+        expects(m_shared_info);
+        expects(vcpu->rsi() == 0);
+
+        auto arg = vcpu->map_arg<vcpu_register_vcpu_info_t>(vcpu->rdx());
+        expects(arg->offset <= ::x64::pt::page_size - sizeof(vcpu_info_t));
+
+        auto gpa = arg->mfn << ::x64::pt::page_shift;
+        m_vcpu_info_ump = vcpu->map_gpa_4k<uint8_t>(gpa);
+
+        uint8_t *base = m_vcpu_info_ump.get() + arg->offset;
+        m_vcpu_info = reinterpret_cast<vcpu_info_t *>(base);
+
+        vcpu->set_rax(SUCCESS);
+    } catchall ({
+        vcpu->set_rax(FAILURE);
+    })
+}
+
 
 void
 xen_op_handler::VCPUOP_register_runstate_memory_area_handler(
@@ -1517,6 +1544,18 @@ xen_op_handler::HYPERVISOR_event_channel_op(gsl::not_null<vcpu *> vcpu)
             this->EVTCHNOP_alloc_unbound_handler(vcpu);
             return true;
 
+        case EVTCHNOP_bind_ipi:
+            this->EVTCHNOP_bind_ipi_handler(vcpu);
+            return true;
+
+        case EVTCHNOP_bind_virq:
+            this->EVTCHNOP_bind_virq_handler(vcpu);
+            return true;
+
+        case EVTCHNOP_bind_vcpu:
+            this->EVTCHNOP_bind_vcpu_handler(vcpu);
+            return true;
+
         case EVTCHNOP_send:
             this->EVTCHNOP_send_handler(vcpu);
             return true;
@@ -1528,6 +1567,46 @@ xen_op_handler::HYPERVISOR_event_channel_op(gsl::not_null<vcpu *> vcpu)
     throw std::runtime_error("unknown HYPERVISOR_event_channel_op: " +
                              std::to_string(vcpu->rdi()));
 }
+
+void
+xen_op_handler::EVTCHNOP_bind_ipi_handler(gsl::not_null<vcpu *> vcpu)
+{
+    try {
+        auto arg = vcpu->map_arg<evtchn_bind_ipi_t>(vcpu->rsi());
+        m_evtchn_op->bind_ipi(arg.get());
+        vcpu->set_rax(SUCCESS);
+    }
+    catchall({
+        vcpu->set_rax(FAILURE);
+    })
+}
+
+void
+xen_op_handler::EVTCHNOP_bind_virq_handler(gsl::not_null<vcpu *> vcpu)
+{
+    try {
+        auto arg = vcpu->map_arg<evtchn_bind_virq_t>(vcpu->rsi());
+        m_evtchn_op->bind_virq(arg.get());
+        vcpu->set_rax(SUCCESS);
+    }
+    catchall({
+        vcpu->set_rax(FAILURE);
+    })
+}
+
+void
+xen_op_handler::EVTCHNOP_bind_vcpu_handler(gsl::not_null<vcpu *> vcpu)
+{
+    try {
+        auto arg = vcpu->map_arg<evtchn_bind_vcpu_t>(vcpu->rsi());
+        m_evtchn_op->bind_vcpu(arg.get());
+        vcpu->set_rax(SUCCESS);
+    }
+    catchall({
+        vcpu->set_rax(FAILURE);
+    })
+}
+
 
 void
 xen_op_handler::EVTCHNOP_init_control_handler(

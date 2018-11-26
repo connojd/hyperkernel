@@ -121,6 +121,18 @@ public:
     ///
     void send(gsl::not_null<evtchn_send_t *> arg);
 
+    /// Bind IPI
+    ///
+    void bind_ipi(gsl::not_null<evtchn_bind_ipi_t *> arg);
+
+    /// Bind VIRQ
+    ///
+    void bind_virq(gsl::not_null<evtchn_bind_virq_t *> arg);
+
+    /// Bind VCPU
+    ///
+    void bind_vcpu(gsl::not_null<evtchn_bind_vcpu_t *> arg);
+
     /// Bind console
     ///
     port_t bind_console();
@@ -135,8 +147,7 @@ public:
 
 private:
 
-    port_t bind_reserved();
-    void bind_virq_timer(gsl::not_null<evtchn_bind_virq_t *> bind);
+    port_t bind(evtchn::state_t state);
 
     // Static constants
     //

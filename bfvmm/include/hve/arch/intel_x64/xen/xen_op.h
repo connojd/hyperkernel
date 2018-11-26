@@ -188,9 +188,8 @@ private:
     bool HYPERVISOR_vm_assist(gsl::not_null<vcpu *> vcpu);
 
     bool HYPERVISOR_vcpu_op(gsl::not_null<vcpu *> vcpu);
+    void VCPUOP_register_vcpu_info_handler(gsl::not_null<vcpu *> vcpu);
     void VCPUOP_stop_periodic_timer_handler(gsl::not_null<vcpu *> vcpu);
-    void VCPUOP_register_vcpu_time_memory_area_handler(gsl::not_null<vcpu *> vcpu);
-    void VCPUOP_register_runstate_memory_area_handler(gsl::not_null<vcpu *> vcpu);
     void VCPUOP_stop_singleshot_timer_handler(gsl::not_null<vcpu *> vcpu);
     void VCPUOP_set_singleshot_timer_handler(gsl::not_null<vcpu *> vcpu);
 
@@ -204,6 +203,9 @@ private:
     void EVTCHNOP_expand_array_handler(gsl::not_null<vcpu *> vcpu);
     void EVTCHNOP_alloc_unbound_handler(gsl::not_null<vcpu *> vcpu);
     void EVTCHNOP_send_handler(gsl::not_null<vcpu *> vcpu);
+    void EVTCHNOP_bind_ipi_handler(gsl::not_null<vcpu *> vcpu);
+    void EVTCHNOP_bind_virq_handler(gsl::not_null<vcpu *> vcpu);
+    void EVTCHNOP_bind_vcpu_handler(gsl::not_null<vcpu *> vcpu);
 
     bool HYPERVISOR_sched_op(gsl::not_null<vcpu *> vcpu);
     void SCHEDOP_yield_handler(gsl::not_null<vcpu *> vcpu);
@@ -269,12 +271,14 @@ private:
 private:
 
     vcpu *m_vcpu;
+    vcpu_info_t *m_vcpu_info;
 
     uint64_t m_hypercall_page_gpa{};
 
     eapis::x64::unique_map<vcpu_runstate_info_t> m_runstate_info;
     eapis::x64::unique_map<vcpu_time_info_t> m_time_info;
     eapis::x64::unique_map<shared_info_t> m_shared_info;
+    eapis::x64::unique_map<uint8_t> m_vcpu_info_ump;
     eapis::x64::unique_map<uint8_t> m_console;
     eapis::x64::unique_map<uint8_t> m_store;
 

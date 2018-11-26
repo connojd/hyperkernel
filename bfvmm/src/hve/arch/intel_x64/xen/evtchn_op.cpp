@@ -74,14 +74,6 @@ void
 evtchn_op::expand_array(gsl::not_null<evtchn_expand_array_t *> arr)
 { this->make_word_page(arr); }
 
-evtchn_op::port_t
-evtchn_op::bind_console()
-{
-    auto port = this->bind_reserved();
-    bfdebug_nhex(0, "bound console:", port);
-    return port;
-}
-
 void
 evtchn_op::alloc_unbound(gsl::not_null<evtchn_alloc_unbound_t *> arg)
 {
@@ -106,7 +98,46 @@ evtchn_op::send(gsl::not_null<evtchn_send_t *> arg)
 
 evtchn_op::port_t
 evtchn_op::bind_store()
-{ return this->bind_reserved(); }
+{ return this->bind(evtchn::state_reserved); }
+
+evtchn_op::port_t
+evtchn_op::bind_console()
+{ return this->bind(evtchn::state_reserved); }
+
+void
+evtchn_op::bind_ipi(gsl::not_null<evtchn_bind_ipi_t *> arg)
+{
+    expects(arg->vcpu == 0);
+
+    const auto port = this->bind(evtchn::state_ipi);
+    arg->port = port;
+}
+
+void
+evtchn_op::bind_virq(gsl::not_null<evtchn_bind_virq_t *> arg)
+{
+    expects(arg->vcpu == 0);
+
+    const auto port = this->bind(evtchn::state_virq);
+    auto chan = this->port_to_chan(port);
+
+    bfdebug_nhex(0, "bound virq:", arg->virq);
+
+    chan->set_virq(arg->virq);
+    arg->port = port;
+}
+
+void
+evtchn_op::bind_vcpu(gsl::not_null<evtchn_bind_vcpu_t *> arg)
+{
+    expects(arg->vcpu == 0);
+
+    auto chan = this->port_to_chan(arg->port);
+    auto prev = chan->vcpuid();
+
+    chan->set_vcpuid(arg->vcpu);
+    chan->set_prev_vcpuid(prev);
+}
 
 // =============================================================================
 // Initialization
@@ -137,28 +168,16 @@ evtchn_op::setup_ports()
 
     this->make_chan_page(null_port);
     this->port_to_chan(null_port)->set_state(evtchn::state_reserved);
-
-//    for (auto p = 1; p < chans_per_page; p++) {
-//        auto arr = m_xen_op->shared_info()->evtchn_pending;
-//        auto idx = p / bits_per_xen_ulong;
-//        auto bit = p % bits_per_xen_ulong;
-//        auto val = arr[idx];
-//
-//        if (is_bit_set(bit, val)) {
-//            this->port_to_chan(p)->set_pending();
-//        }
-//    }
 }
 
 evtchn_op::port_t
-evtchn_op::bind_reserved()
+evtchn_op::bind(evtchn::state_t state)
 {
     const auto port = this->make_new_port();
     auto chan = this->port_to_chan(port);
 
-    //TODO
     chan->set_port(port);
-    chan->set_state(evtchn::state_reserved);
+    chan->set_state(state);
 
     return port;
 }

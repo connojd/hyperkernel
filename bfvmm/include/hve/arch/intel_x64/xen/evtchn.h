@@ -59,6 +59,8 @@ public:
         state_ipi
     };
 
+    using state_t = enum state;
+
     ///
     /// @expects
     /// @ensures
