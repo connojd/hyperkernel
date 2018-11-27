@@ -97,9 +97,6 @@ constexpr auto MHz = 1000000ULL;
 #define ADD_VMX_PET_HANDLER(b) \
     m_vcpu->add_vmx_preemption_timer_handler(make_delegate(vmx_preemption_timer_handler, b))
 
-#define ADD_MWAIT_HANDLER(b) \
-    m_vcpu->add_mwait_handler(make_delegate(mwait_handler, b))
-
 // =============================================================================
 // Implementation
 // =============================================================================
@@ -167,8 +164,6 @@ xen_op_handler::xen_op_handler(
     vcpu->pass_through_msr_access(::intel_x64::msrs::ia32_sysenter_cs::addr);
     vcpu->pass_through_msr_access(::intel_x64::msrs::ia32_sysenter_eip::addr);
     vcpu->pass_through_msr_access(::intel_x64::msrs::ia32_sysenter_esp::addr);
-
-    vcpu->pass_through_msr_access(0x140); // Pass-through user-mode montior/mwait
 
     // We effectively pass this through to the guest already
     // through the eapis::intel_x64::timer::tsc_freq_MHz

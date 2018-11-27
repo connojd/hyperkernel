@@ -33,7 +33,6 @@
 #include "sched_op.h"
 
 #include <eapis/hve/arch/intel_x64/vmexit/cpuid.h>
-#include <eapis/hve/arch/intel_x64/vmexit/mwait.h>
 #include <eapis/hve/arch/intel_x64/vmexit/wrmsr.h>
 #include <eapis/hve/arch/intel_x64/vmexit/rdmsr.h>
 #include <eapis/hve/arch/intel_x64/vmexit/io_instruction.h>
