@@ -30,7 +30,6 @@
 
 #include "evtchn_op.h"
 #include "gnttab_op.h"
-#include "sched_op.h"
 
 #include <eapis/hve/arch/intel_x64/vmexit/cpuid.h>
 #include <eapis/hve/arch/intel_x64/vmexit/wrmsr.h>
@@ -89,6 +88,7 @@ private:
     void run_delegate(bfobject *obj);
     bool exit_handler(gsl::not_null<vcpu_t *> vcpu);
     bool handle_hlt(gsl::not_null<vcpu_t *> vcpu);
+    bool handle_vmx_pet(gsl::not_null<vcpu_t *> vcpu);
 
     // -------------------------------------------------------------------------
     // MSRS
@@ -186,8 +186,6 @@ private:
     void GNTTABOP_query_size_handler(gsl::not_null<vcpu *> vcpu);
     void GNTTABOP_set_version_handler(gsl::not_null<vcpu *> vcpu);
 
-    bool HYPERVISOR_vm_assist(gsl::not_null<vcpu *> vcpu);
-
     bool HYPERVISOR_vcpu_op(gsl::not_null<vcpu *> vcpu);
     void VCPUOP_register_vcpu_info_handler(gsl::not_null<vcpu *> vcpu);
     void VCPUOP_stop_periodic_timer_handler(gsl::not_null<vcpu *> vcpu);
@@ -208,9 +206,6 @@ private:
     void EVTCHNOP_bind_virq_handler(gsl::not_null<vcpu *> vcpu);
     void EVTCHNOP_bind_vcpu_handler(gsl::not_null<vcpu *> vcpu);
 
-    bool HYPERVISOR_sched_op(gsl::not_null<vcpu *> vcpu);
-    void SCHEDOP_yield_handler(gsl::not_null<vcpu *> vcpu);
-
     // -------------------------------------------------------------------------
     // Local APIC
     // -------------------------------------------------------------------------
@@ -221,19 +216,12 @@ private:
 
     void xapic_handle_write_icr(uint64_t icr_low);
     void xapic_handle_write_lvt_timer(uint64_t timer);
-    void xapic_handle_write_init_count(uint64_t val);
 
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
 
     bool local_xenstore() const;
-    uint64_t tsc_to_sys_time() const;
-    uint64_t tsc_to_sys_time(uint64_t tsc) const;
-    void reset_vcpu_time_info();
-    void update_vcpu_time_info();
-
-    bool handle_vmx_pet(gsl::not_null<vcpu_t *> vcpu);
 
     // -------------------------------------------------------------------------
     // Quirks
@@ -243,28 +231,10 @@ private:
 
 private:
 
-#ifndef MIN_TSC_TICKS
-#define MIN_TSC_TICKS 20000
-#endif
-
-#ifndef MIN_EXIT_TICKS
-#define MIN_EXIT_TICKS 16000
-#endif
-
-    static constexpr auto min_tsc_ticks = MIN_TSC_TICKS;
-    static constexpr auto min_exit_ticks = MIN_EXIT_TICKS;
-
-    bfn::once_flag m_tsc_once_flag{};
-
     uint64_t m_apic_base{};
-
-    uint64_t m_tsc_freq_khz{};
-    uint64_t m_tsc_vector{};
-    uint64_t m_tsc_exit{0};
-    uint64_t m_tsc_lost{0};
-
     uint64_t m_pet_shift{};
     uint64_t m_pet_ticks{};
+    uint64_t m_tsc_freq_khz{};
 
     std::unordered_map<uint32_t, uint64_t> m_msrs;
     std::unordered_map<uint64_t, eapis::x64::unique_map<uint8_t>> m_xapic_rip_cache;
@@ -281,11 +251,9 @@ private:
     eapis::x64::unique_map<shared_info_t> m_shared_info;
     eapis::x64::unique_map<uint8_t> m_vcpu_info_ump;
     eapis::x64::unique_map<uint8_t> m_console;
-    eapis::x64::unique_map<uint8_t> m_store;
 
     std::unique_ptr<hyperkernel::intel_x64::evtchn_op> m_evtchn_op;
     std::unique_ptr<hyperkernel::intel_x64::gnttab_op> m_gnttab_op;
-    std::unique_ptr<hyperkernel::intel_x64::sched_op> m_sched_op;
 
 public:
 

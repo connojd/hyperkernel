@@ -31,7 +31,6 @@
 #include <hve/arch/intel_x64/xen/public/arch-x86/cpuid.h>
 
 #include <hve/arch/intel_x64/xen/xen_op.h>
-#include <hve/arch/intel_x64/xen/sched_op.h>
 #include <hve/arch/intel_x64/xen/evtchn_op.h>
 #include "../../../../../../include/gpa_layout.h"
 
@@ -45,9 +44,6 @@
 constexpr auto xen_msr_hypercall_page   = 0xC0000500;
 constexpr auto xen_msr_debug_ndec       = 0xC0000600;
 constexpr auto xen_msr_debug_nhex       = 0xC0000700;
-
-constexpr auto GHz = 1000000000ULL;
-constexpr auto MHz = 1000000ULL;
 
 // =============================================================================
 // Macros
@@ -91,9 +87,6 @@ constexpr auto MHz = 1000000ULL;
 #define ADD_EPT_WRITE_HANDLER(b)                                                                    \
     m_vcpu->add_ept_write_violation_handler(make_delegate(ept_violation_handler, b))
 
-#define ADD_EPT_READ_HANDLER(b)                                                                     \
-    m_vcpu->add_ept_read_violation_handler(make_delegate(ept_violation_handler, b))
-
 #define ADD_VMX_PET_HANDLER(b) \
     m_vcpu->add_vmx_preemption_timer_handler(make_delegate(vmx_preemption_timer_handler, b))
 
@@ -135,11 +128,9 @@ xen_op_handler::xen_op_handler(
     ADD_VMCALL_HANDLER(HYPERVISOR_memory_op);
     ADD_VMCALL_HANDLER(HYPERVISOR_xen_version);
     ADD_VMCALL_HANDLER(HYPERVISOR_grant_table_op);
-    ADD_VMCALL_HANDLER(HYPERVISOR_vm_assist);
     ADD_VMCALL_HANDLER(HYPERVISOR_hvm_op);
     ADD_VMCALL_HANDLER(HYPERVISOR_event_channel_op);
     ADD_VMCALL_HANDLER(HYPERVISOR_vcpu_op);
-    // ADD_VMCALL_HANDLER(HYPERVISOR_sched_op);
 
     if (vcpu->is_domU()) {
         vcpu->trap_on_all_io_instruction_accesses();
@@ -227,7 +218,7 @@ xen_op_handler::xen_op_handler(
     EMULATE_IO_INSTRUCTION(0x71, io_zero_handler, io_ignore_handler);
 
     /// TODO: figure out what this one is for
-    EMULATE_IO_INSTRUCTION(0x3fe, io_zero_handler, io_ignore_handler);
+    EMULATE_IO_INSTRUCTION(0x3FE, io_zero_handler, io_ignore_handler);
 
     /// Ports used for TSC calibration against the PIT. See
     /// arch/x86/kernel/tsc.c:pit_calibrate_tsc for detail.
@@ -260,7 +251,6 @@ xen_op_handler::xen_op_handler(
     m_pet_shift = ::intel_x64::msrs::ia32_vmx_misc::preemption_timer_decrement::get();
     m_tsc_freq_khz = tsc_frequency();
 
-    primary_processor_based_vm_execution_controls::use_tsc_offsetting::enable();
     m_vcpu->add_handler(
         exit_reason::basic_exit_reason::hlt,
         ::handler_delegate_t::create<xen_op_handler, &xen_op_handler::handle_hlt>(this)
@@ -307,14 +297,7 @@ tsc_frequency(void)
     auto [denominator, numerator, freq, ignore] =
         ::x64::cpuid::get(0x15, 0, 0, 0);
 
-
-    if (denominator == 0 || numerator == 0) {
-        auto bus = eapis::intel_x64::time::bus_freq_MHz();
-        auto tsc = eapis::intel_x64::time::tsc_freq_MHz(bus);
-        return tsc * 1000;
-    }
-
-    if (freq == 0) {
+    if (denominator == 0 || numerator == 0 || freq == 0) {
         auto bus = eapis::intel_x64::time::bus_freq_MHz();
         auto tsc = eapis::intel_x64::time::tsc_freq_MHz(bus);
         return tsc * 1000;
@@ -353,12 +336,10 @@ xen_op_handler::handle_hlt(gsl::not_null<vcpu_t *> vcpu)
     const auto tsc_ticks = pet_ticks << m_pet_shift;
     const auto usec = tsc_ticks / (m_tsc_freq_khz / 1000U);
 
-    m_vcpu->disable_vmx_preemption_timer();
     m_vcpu->sleep();
-
-    auto parent = m_vcpu->parent_vcpu();
-    parent->load();
-    parent->return_and_sleep(usec);
+    m_vcpu->disable_vmx_preemption_timer();
+    m_vcpu->parent_vcpu()->load();
+    m_vcpu->parent_vcpu()->return_and_sleep(usec);
 
     // Unreachable
     return true;
@@ -410,14 +391,6 @@ xen_op_handler::run_delegate(bfobject *obj)
             ::x64::msrs::set(msr.first, msr.second);
         }
     }
-
-    // TODO: must reset tsc state on resume etc.
-    // this assumes this vcpu is pinned and that lost_ticks > 0
-    //
-    if (GSL_LIKELY(m_tsc_exit)) {
-        m_tsc_lost += ::x64::read_tsc::get() - m_tsc_exit + min_exit_ticks;
-        ::intel_x64::vmcs::tsc_offset::set(m_tsc_lost * -1);
-    }
 }
 
 bool
@@ -430,14 +403,11 @@ xen_op_handler::exit_handler(
     // limit what we are doing here. This is an expensive function to
     // execute.
     //
-    // Should we add this to the exit/entry asm glue? - CD
 
     using namespace ::x64::msrs;
     using namespace ::intel_x64::vmcs;
 
     m_msrs[ia32_kernel_gs_base::addr] = ia32_kernel_gs_base::get();
-    m_tsc_exit = ::x64::read_tsc::get();
-    m_tsc_lost += min_exit_ticks;
 
     // Ignored
     return false;
@@ -488,7 +458,6 @@ xen_op_handler::xapic_handle_write_icr(uint64_t low)
     switch (dlm) {
         case icr_low::delivery_mode::fixed:
             break;
-
         default:
             bfalert_nhex(0, "unsupported delivery mode:", dlm);
             return;
@@ -500,7 +469,6 @@ xen_op_handler::xapic_handle_write_icr(uint64_t low)
             m_vcpu->queue_external_interrupt(icr_low::vector::get(low));
             m_vcpu->lapic_write(icr_low::indx, low);
             break;
-
         default:
             bfalert_nhex(0, "unsupported dest shorthand: ", dsh);
             break;
@@ -512,30 +480,20 @@ xen_op_handler::xapic_handle_write_lvt_timer(uint64_t val)
 {
     using namespace eapis::intel_x64::lapic;
 
-    auto mode = lvt::timer::mode::get(val);
+    const auto mode = lvt::timer::mode::get(val);
     switch (mode) {
         case lvt::timer::mode::one_shot:
-            m_vcpu->lapic_write(lvt::timer::indx, val);
             break;
-
         case lvt::timer::mode::tsc_deadline:
-            m_vcpu->lapic_write(lvt::timer::indx, val);
             m_vcpu->set_timer_vector(lvt::timer::vector::get(val));
-
             ADD_VMX_PET_HANDLER(handle_vmx_pet);
             break;
-
         default:
             throw std::runtime_error("Unsupported LVT timer mode: " +
                                      std::to_string(mode));
     }
-}
 
-void
-xen_op_handler::xapic_handle_write_init_count(uint64_t val)
-{
-    using namespace eapis::intel_x64::lapic;
-    m_vcpu->lapic_write(initial_count::indx, val);
+    m_vcpu->lapic_write(lvt::timer::indx, val);
 }
 
 bool
@@ -545,8 +503,7 @@ xen_op_handler::xapic_handle_write(
 {
     using namespace eapis::intel_x64::lapic;
 
-    auto hkv = vcpu_cast(vcpu);
-    if (bfn::upper(info.gpa) != hkv->lapic_base()) {
+    if (bfn::upper(info.gpa) != m_vcpu->lapic_base()) {
         return false;
     }
 
@@ -558,10 +515,9 @@ xen_op_handler::xapic_handle_write(
 
     const auto len = ::intel_x64::vmcs::vm_exit_instruction_length::get();
     const auto rip = ::intel_x64::vmcs::guest_rip::get();
-
     auto itr = m_xapic_rip_cache.find(rip);
     if (itr == m_xapic_rip_cache.end()) {
-        auto ump = hkv->map_gva_4k<uint8_t>(rip, len);
+        auto ump = m_vcpu->map_gva_4k<uint8_t>(rip, len);
         if (!ump) {
             throw std::runtime_error("handle_xapic_write::map_gva_4k failed");
         }
@@ -570,28 +526,15 @@ xen_op_handler::xapic_handle_write(
         itr = m_xapic_rip_cache.find(rip);
     }
 
-    const auto buf = itr->second.get();
-
-//    printf("xapic_write: ");
-//    print_insn(buf, len);
-
-    hyperkernel::intel_x64::insn_decoder dec(buf, len);
+    hyperkernel::intel_x64::insn_decoder dec(itr->second.get(), len);
     const auto val = src_op_value(vcpu, dec.src_op());
-//    printf(" value: 0x%08lx\n", val);
-
     switch (idx) {
         case icr_low::indx:
             this->xapic_handle_write_icr(val);
             break;
-
         case lvt::timer::indx:
             this->xapic_handle_write_lvt_timer(val);
             break;
-
-        case initial_count::indx:
-            this->xapic_handle_write_init_count(val);
-            break;
-
         case icr_high::indx:
         case id::indx:
         case tpr::indx:
@@ -602,9 +545,9 @@ xen_op_handler::xapic_handle_write(
         case lvt::lint1::indx:
         case lvt::error::indx:
         case esr::indx:
+        case initial_count::indx:
             m_vcpu->lapic_write(idx, val);
             break;
-
         default:
             bfalert_nhex(0, "unhandled xapic write indx:", idx);
             return false;
@@ -807,20 +750,26 @@ xen_op_handler::xen_debug_nhex_wrmsr_handler(
 
 bool
 xen_op_handler::handle_tsc_deadline(
-    gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::wrmsr_handler::info_t &info)
+    gsl::not_null<vcpu_t *> vcpu,
+    eapis::intel_x64::wrmsr_handler::info_t &info)
 {
-    auto vtsc = ::x64::read_tsc::get() - m_tsc_lost;
-    auto vtsc_deadline = info.val;
+    bfignored(vcpu);
+    m_pet_ticks = 0;
 
-    if (vtsc_deadline - vtsc > min_tsc_ticks) {
-        m_pet_ticks = (vtsc_deadline - vtsc) >> m_pet_shift;
-    } else {
-        m_pet_ticks = min_tsc_ticks >> m_pet_shift;
+    const auto tick = ::x64::read_tsc::get();
+    const auto next = info.val;
+
+    if (next - tick > (1ULL << m_pet_shift)) {
+        m_pet_ticks = (next - tick) >> m_pet_shift;
+        m_vcpu->set_vmx_preemption_timer(m_pet_ticks);
+        m_vcpu->enable_vmx_preemption_timer();
+        return true;
     }
 
-    m_vcpu->set_vmx_preemption_timer(m_pet_ticks);
-    m_vcpu->enable_vmx_preemption_timer();
+    // Here we have a deadline that is in the
+    // past, so we queue the interrupt immediately
 
+    m_vcpu->queue_timer_interrupt();
     return true;
 }
 
@@ -1040,7 +989,7 @@ xen_op_handler::xen_cpuid_leaf5_handler(
 
     info.rax = 0U;
     info.rax |= XEN_HVM_CPUID_APIC_ACCESS_VIRT;
-    info.rax |= XEN_HVM_CPUID_X2APIC_VIRT;           // Need to support emulated VT-d first
+    info.rax |= XEN_HVM_CPUID_X2APIC_VIRT;
     // info.rax |= XEN_HVM_CPUID_IOMMU_MAPPINGS;        // Need to support emulated VT-d first
     info.rax |= XEN_HVM_CPUID_VCPU_ID_PRESENT;
     info.rax |= XEN_HVM_CPUID_DOMID_PRESENT;
@@ -1340,37 +1289,6 @@ xen_op_handler::GNTTABOP_set_version_handler(gsl::not_null<vcpu *> vcpu)
 }
 
 // -----------------------------------------------------------------------------
-// HYPERVISOR_vm_assist
-// -----------------------------------------------------------------------------
-
-bool
-xen_op_handler::HYPERVISOR_vm_assist(gsl::not_null<vcpu *> vcpu)
-{
-    if (vcpu->rax() != __HYPERVISOR_vm_assist) {
-        return false;
-    }
-
-    // Comments in linux/arch/x86/xen/setup.c suggest that these are not
-    // used for HVMs. But we are PVH so are we PV too in this case?
-    //
-   // vcpu->set_rax(FAILURE);
-
-    switch (vcpu->rdi()) {
-        case VMASST_CMD_enable:
-            bfdebug_info(0, "VMASST_CMD_enable");
-            vcpu->set_rax(FAILURE);
-            break;
-
-        default:
-            vcpu->set_rax(FAILURE);
-            bfdebug_nhex(0, "VMASST_CMD:", vcpu->rdi());
-            return false;
-    }
-
-    return true;
-}
-
-// -----------------------------------------------------------------------------
 // HYPERVISOR_vcpu_op
 // -----------------------------------------------------------------------------
 
@@ -1385,10 +1303,6 @@ xen_op_handler::HYPERVISOR_vcpu_op(gsl::not_null<vcpu *> vcpu)
         case VCPUOP_stop_periodic_timer:
             this->VCPUOP_stop_periodic_timer_handler(vcpu);
             return true;
-
-//        case VCPUOP_register_vcpu_time_memory_area:
-//            this->VCPUOP_register_vcpu_time_memory_area_handler(vcpu);
-//            return true;
 
         case VCPUOP_register_vcpu_info:
             this->VCPUOP_register_vcpu_info_handler(vcpu);
@@ -1418,28 +1332,6 @@ xen_op_handler::VCPUOP_stop_singleshot_timer_handler(gsl::not_null<vcpu *> vcpu)
     vcpu->set_rax(SUCCESS);
 }
 
-//void
-//xen_op_handler::VCPUOP_register_vcpu_time_memory_area_handler(
-//    gsl::not_null<vcpu *> vcpu)
-//{
-//    try {
-//        expects(m_tsc_freq_khz > 0);
-//        expects(vcpu->rsi() == 0);
-//
-//        auto arg = vcpu->map_arg<vcpu_register_time_memory_area_t>(vcpu->rdx());
-//        m_time_info = vcpu->map_arg<vcpu_time_info_t>(arg->addr.v);
-//
-//        m_time_info->flags = XEN_PVCLOCK_TSC_STABLE_BIT;
-//        m_time_info->tsc_to_system_mul = (GHz << 32U) / (m_tsc_freq_khz * 1000U);
-//        m_time_info->tsc_shift = 0;
-//        m_time_info->version = 0;
-//
-//        vcpu->set_rax(SUCCESS);
-//    } catchall ({
-//        vcpu->set_rax(FAILURE);
-//    })
-//}
-
 void
 xen_op_handler::VCPUOP_register_vcpu_info_handler(
     gsl::not_null<vcpu *> vcpu)
@@ -1462,62 +1354,6 @@ xen_op_handler::VCPUOP_register_vcpu_info_handler(
         vcpu->set_rax(FAILURE);
     })
 }
-
-
-//void
-//xen_op_handler::VCPUOP_register_runstate_memory_area_handler(
-//    gsl::not_null<vcpu *> vcpu)
-//{
-//    try {
-//        expects(vcpu->rsi() == 0);
-//
-//        auto arg = vcpu->map_arg<vcpu_register_runstate_memory_area_t>(vcpu->rdx());
-//        m_runstate_info = vcpu->map_arg<vcpu_runstate_info_t>(arg->addr.v);
-//        m_runstate_info->state = RUNSTATE_running;
-//        m_runstate_info->time[RUNSTATE_running] = 0;
-//
-//        vcpu->set_rax(SUCCESS);
-//    } catchall ({
-//        vcpu->set_rax(FAILURE);
-//    })
-//}
-
-// -----------------------------------------------------------------------------
-// HYPERVISOR_sched_op
-// -----------------------------------------------------------------------------
-
-bool
-xen_op_handler::HYPERVISOR_sched_op(gsl::not_null<vcpu *> vcpu)
-{
-//    if (vcpu->rax() != __HYPERVISOR_sched_op) {
-//        return false;
-//    }
-//
-//    switch (vcpu->rdi()) {
-//        case SCHEDOP_yield:
-//            this->SCHEDOP_yield_handler(vcpu);
-//            return true;
-//
-//        default:
-//            break;
-//    };
-
-    throw std::runtime_error(
-        "unknown HYPERVISOR_sched_op: " + std::to_string(vcpu->rdi()));
-}
-
-//void
-//xen_op_handler::SCHEDOP_yield_handler(gsl::not_null<vcpu *> vcpu)
-//{
-//    try {
-//        m_sched_op->handle_yield(vcpu);
-//        vcpu->set_rax(SUCCESS);
-//        m_vcpu->return_and_continue();
-//    }
-//    catchall({
-//        vcpu->set_rax(FAILURE);
-//    })
-//}
 
 // -----------------------------------------------------------------------------
 // HYPERVISOR_event_channel_op
@@ -1722,12 +1558,11 @@ xen_op_handler::HVMOP_set_param_handler(gsl::not_null<vcpu *> vcpu)
             case HVM_PARAM_CALLBACK_IRQ:
                 verify_callback_via(arg->value);
                 m_evtchn_op->set_callback_via(arg->value & 0xFFU);
-                bfalert_nhex(0, "callback via", arg->value);
                 vcpu->set_rax(SUCCESS);
                 break;
 
             default:
-                bfalert_info(0, "Unsupported HVM param:");
+                bfalert_info(0, "Unsupported HVM set_param:");
                 bfalert_subnhex(0, "domid", arg->domid);
                 bfalert_subnhex(0, "index", arg->index);
                 bfalert_subnhex(0, "value", arg->value);
@@ -1744,38 +1579,28 @@ void
 xen_op_handler::HVMOP_get_param_handler(gsl::not_null<vcpu *> vcpu)
 {
     try {
-        auto arg =
-            vcpu->map_arg<xen_hvm_param_t>(vcpu->rsi());
+        auto arg = vcpu->map_arg<xen_hvm_param_t>(vcpu->rsi());
 
         switch (arg->index) {
             case HVM_PARAM_CONSOLE_EVTCHN:
                 arg->value = m_evtchn_op->bind_console();
                 break;
 
-            case HVM_PARAM_CONSOLE_PFN: {
+            case HVM_PARAM_CONSOLE_PFN:
                 m_console = vcpu->map_gpa_4k<uint8_t>(CONSOLE_GPA);
                 arg->value = CONSOLE_GPA >> x64::pt::page_shift;
                 break;
-            }
 
             case HVM_PARAM_STORE_EVTCHN:
                 arg->value = m_evtchn_op->bind_store();
                 break;
 
-//            case HVM_PARAM_STORE_PFN: {
-//                m_store = vcpu->map_gpa_4k<uint8_t>(STORE_GPA);
-//                arg->value = STORE_GPA >> x64::pt::page_shift;
-//                break;
-//            }
-
-            default: {
-                bfdebug_info(0, "HVMOP_get_param: unknown");
+            default:
+                bfdebug_info(0, "Unsupported HVM get_param:");
                 bfdebug_subnhex(0, "domid", arg->domid);
                 bfdebug_subnhex(0, "index", arg->index);
-
                 vcpu->set_rax(FAILURE);
                 return;
-            }
         }
 
         vcpu->set_rax(SUCCESS);
@@ -1795,111 +1620,6 @@ xen_op_handler::HVMOP_pagetable_dying_handler(
 // -----------------------------------------------------------------------------
 // Helpers
 // -----------------------------------------------------------------------------
-
-uint64_t
-xen_op_handler::tsc_to_sys_time() const
-{
-    auto mul = m_shared_info->vcpu_info[0].time.tsc_to_system_mul;
-    return (::x64::read_tsc::get() * mul) >> 32U;
-}
-
-uint64_t
-xen_op_handler::tsc_to_sys_time(uint64_t tsc) const
-{
-    auto mul = m_shared_info->vcpu_info[0].time.tsc_to_system_mul;
-    return (tsc * mul) >> 32U;
-}
-
-void
-xen_op_handler::reset_vcpu_time_info()
-{
-    expects(m_shared_info);
-    m_tsc_freq_khz = tsc_frequency();
-
-    /// The equation for tsc_to_system_mul is the following:
-    /// - tsc_to_system_mul = (10^9 << 32) / (CPU freq Hz)
-    ///
-    /// This can be found in xen.h. In the vcpu_info page. tsc_shift and
-    /// tsc_to_system_mul are related if you work the formula out. As one
-    /// increases, the other must decrease, which is used for handling
-    /// drifting in time and preventing resolution issues with the TSC.
-    /// Since we require an invarinat TSC, this shift is not needed so it is
-    /// set to 0.
-    ///
-    /// Note that system_time is in nanoseconds and is updated by the guest.
-    /// There are nice alternative explanations for this structure sprinkled
-    /// throughout the KVM code. See Documentation/virtual/kvm/msr.txt for
-    /// more info.
-    ///
-
-    auto &info = m_shared_info->vcpu_info[0].time;
-
-    info.version = 0;
-    info.flags = XEN_PVCLOCK_TSC_STABLE_BIT;
-    info.tsc_to_system_mul = (GHz << 32U) / (m_tsc_freq_khz * 1000U);
-    info.tsc_shift = 0;
-    info.tsc_timestamp = ::x64::read_tsc::get();
-    info.system_time = this->tsc_to_sys_time(info.tsc_timestamp);
-}
-
-static void update_time_info(gsl::not_null<vcpu_time_info_t *> info)
-{
-    // The xen.h comments suggest that we need to flip the version to prevent
-    // races. Since we only have one vCPU right now, we don't really need to,
-    // but once we have multiple vCPUs, another vCPU may try to read this
-    // while we are updating.
-    //
-    // Note that we do our calculations using MHz and not kHz. The reason is
-    // even with a 64bit number, we run the risk of overflowing with kHz.
-    // The issue with using MHz is the CPU frequency is cut off, which could
-    // result in a small amount of drift, since the CPU frequency likely
-    // granularity extends to the kHz level.
-    //
-
-    info->version++;
-    ::intel_x64::barrier::wmb();
-
-    const uint64_t tsc_mul = info->tsc_to_system_mul;
-    const uint64_t tsc_pre = info->tsc_timestamp;
-    const uint64_t tsc_now = ::x64::read_tsc::get();
-
-    info->tsc_timestamp = tsc_now;
-    info->system_time += (((tsc_now - tsc_pre) * tsc_mul) >> 32U);
-
-    ::intel_x64::barrier::wmb();
-    info->version++;
-}
-
-void
-xen_op_handler::update_vcpu_time_info()
-{
-    if (GSL_UNLIKELY(!m_shared_info)) {
-        return;
-    }
-
-    // TODO: we will need to calculate the offset into
-    // vcpu_info once we support multiple vcpus per domain
-    auto time = &m_shared_info->vcpu_info[0].time;
-    update_time_info(time);
-
-    if (GSL_LIKELY(m_time_info)) {
-        m_time_info->version++;
-        ::intel_x64::barrier::wmb();
-
-        m_time_info->tsc_timestamp = time->tsc_timestamp;
-        m_time_info->system_time = time->system_time;
-
-        ::intel_x64::barrier::wmb();
-        m_time_info->version--;
-    }
-
-    if (GSL_LIKELY(m_runstate_info)) {
-        auto &info = m_runstate_info;
-        info->state_entry_time = time->system_time;
-        info->time[info->state] = time->system_time;
-        ::intel_x64::barrier::wmb();
-    }
-}
 
 shared_info_t *
 xen_op_handler::shared_info()
