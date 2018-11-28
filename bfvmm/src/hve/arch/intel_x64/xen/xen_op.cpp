@@ -172,6 +172,9 @@ xen_op_handler::xen_op_handler(
     EMULATE_RDMSR(0x34, rdmsr_zero_handler);
     EMULATE_RDMSR(0x64E, rdmsr_zero_handler);
 
+    EMULATE_RDMSR(0x140, rdmsr_zero_handler);
+    EMULATE_WRMSR(0x140, wrmsr_ignore_handler);
+
     EMULATE_RDMSR(::intel_x64::msrs::ia32_apic_base::addr,
                   ia32_apic_base_rdmsr_handler);
 
