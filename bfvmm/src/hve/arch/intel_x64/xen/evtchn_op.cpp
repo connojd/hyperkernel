@@ -87,22 +87,31 @@ evtchn_op::alloc_unbound(gsl::not_null<evtchn_alloc_unbound_t *> arg)
     chan->set_state(evtchn::state_unbound);
 
     arg->port = port;
+    bfdebug_nhex(0, "alloc unbound", port);
 }
 
 void
 evtchn_op::send(gsl::not_null<evtchn_send_t *> arg)
 {
-    bfdebug_nhex(0, "send port", arg->port);
+//    bfdebug_nhex(0, "send port", arg->port);
     this->set_pending(this->port_to_chan(arg->port));
 }
 
 evtchn_op::port_t
 evtchn_op::bind_store()
-{ return this->bind(evtchn::state_reserved); }
+{
+    auto port = this->bind(evtchn::state_reserved);
+    bfdebug_nhex(0, "bound store:", port);
+    return port;
+}
 
 evtchn_op::port_t
 evtchn_op::bind_console()
-{ return this->bind(evtchn::state_reserved); }
+{
+    auto port = this->bind(evtchn::state_reserved);
+    bfdebug_nhex(0, "bound console:", port);
+    return port;
+}
 
 void
 evtchn_op::bind_ipi(gsl::not_null<evtchn_bind_ipi_t *> arg)
@@ -111,6 +120,7 @@ evtchn_op::bind_ipi(gsl::not_null<evtchn_bind_ipi_t *> arg)
 
     const auto port = this->bind(evtchn::state_ipi);
     arg->port = port;
+    bfdebug_nhex(0, "bound ipi:", port);
 }
 
 void
@@ -134,6 +144,9 @@ evtchn_op::bind_vcpu(gsl::not_null<evtchn_bind_vcpu_t *> arg)
 
     auto chan = this->port_to_chan(arg->port);
     auto prev = chan->vcpuid();
+
+    bfdebug_nhex(0, "bound vcpu:", arg->vcpu);
+    bfdebug_subnhex(0, "port:", arg->port);
 
     chan->set_vcpuid(arg->vcpu);
     chan->set_prev_vcpuid(prev);
@@ -209,12 +222,10 @@ evtchn_op::set_pending(chan_t *chan)
         return;
     }
 
-//    const auto was_pending = this->word_test_and_set_pending(new_word);
-//    if (this->word_is_masked(new_word) || this->word_is_linked(new_word)) {
-//        bfalert_nhex(0, "word_is_masked", this->word_is_masked(new_word));
-//        bfalert_nhex(0, "word_is_linked", this->word_is_linked(new_word));
-//        return;
-//    }
+    const auto was_pending = this->word_test_and_set_pending(new_word);
+    if (this->word_is_masked(new_word) || this->word_is_linked(new_word)) {
+        return;
+    }
 
     this->word_set_pending(new_word);
     auto p = chan->priority();
@@ -229,14 +240,8 @@ evtchn_op::set_pending(chan_t *chan)
         ::intel_x64::barrier::wmb();
         m_vcpu->queue_external_interrupt(m_cb_via);
 
-//        bfalert_nhex(0, "q @ p empty, p:", p);
-//        bfalert_nhex(0, "new_port:", new_port);
-//        bfalert_nhex(0, "ready:", m_ctl_blk->ready);
-
         return;
     }
-
-    bfalert_nhex(0, "q @ p NON empty, p:", p);
 
     auto tail_word = this->port_to_word(q->tail);
     auto tail_val = tail_word->load();
@@ -375,14 +380,6 @@ evtchn_op::make_word_page(gsl::not_null<evtchn_expand_array_t *> expand)
 
     m_event_words.push_back(std::move(page));
     m_allocated_words += words_per_page;
-
-    //for (auto p = prev; p < m_allocated_words; p++) {
-    //    auto chan = this->port_to_chan(p);
-    //    if (!chan || !chan->is_pending()) {
-    //        continue;
-    //    }
-    //    this->set_pending(chan);
-    //}
 }
 
 bool evtchn_op::word_is_pending(word_t *word) const

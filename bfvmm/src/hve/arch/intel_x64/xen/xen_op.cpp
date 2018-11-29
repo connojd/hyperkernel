@@ -1490,6 +1490,25 @@ xen_op_handler::EVTCHNOP_send_handler(gsl::not_null<vcpu *> vcpu)
         auto arg = vcpu->map_arg<evtchn_send_t>(vcpu->rsi());
         m_evtchn_op->send(arg.get());
         vcpu->set_rax(SUCCESS);
+
+        static int count = 0;
+        if (!count) {
+            auto ptr = m_console.get();
+            for (auto i = 0; i < 64; i++) {
+                printf("%02x", ptr[i]);
+            }
+            printf("\n");
+            count++;
+        }
+
+        if (count == 1) {
+            auto ptr = m_console.get();
+            for (auto i = 0; i < 64; i++) {
+                printf("%02x", ptr[i]);
+            }
+            printf("\n");
+            count++;
+        }
     }
     catchall({
         vcpu->set_rax(FAILURE);
@@ -1584,6 +1603,7 @@ xen_op_handler::HVMOP_get_param_handler(gsl::not_null<vcpu *> vcpu)
         switch (arg->index) {
             case HVM_PARAM_CONSOLE_EVTCHN:
                 arg->value = m_evtchn_op->bind_console();
+                vcpu->set_rax(FAILURE);
                 break;
 
             case HVM_PARAM_CONSOLE_PFN:
@@ -1591,9 +1611,9 @@ xen_op_handler::HVMOP_get_param_handler(gsl::not_null<vcpu *> vcpu)
                 arg->value = CONSOLE_GPA >> x64::pt::page_shift;
                 break;
 
-            case HVM_PARAM_STORE_EVTCHN:
-                arg->value = m_evtchn_op->bind_store();
-                break;
+//            case HVM_PARAM_STORE_EVTCHN:
+//                arg->value = m_evtchn_op->bind_store();
+//                break;
 
             default:
                 bfdebug_info(0, "Unsupported HVM get_param:");

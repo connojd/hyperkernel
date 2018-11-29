@@ -686,7 +686,8 @@ status_t
 setup_xen_cmdline()
 {
     status_t ret;
-    const char *cmdline = "console=uart,io,0x3f8,115200n8 init=/hello";
+    const char *cmdline = "console=uart,io,0x3f8,115200n8 console=hvc0";
+//    const char *cmdline = "console=hvc0";
 
     /**
      * TODO:
