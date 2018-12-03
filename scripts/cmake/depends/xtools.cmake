@@ -16,44 +16,39 @@
 # License along with this library; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-# ------------------------------------------------------------------------------
-# Project includes
-# ------------------------------------------------------------------------------
-
-include(${CMAKE_CURRENT_LIST_DIR}/scripts/cmake/config/default.cmake)
-
-# ------------------------------------------------------------------------------
-# Optional components
-# ------------------------------------------------------------------------------
-
-# Build a bootable guest image
-#
-if(HK_BUILD_GUEST)
-    include(${HK_ERB_DIR}/CMakeLists.txt)
-endif()
-
-
-# Build the hyperkernel vmm
-#
-if(ENABLE_BUILD_VMM)
-    eapis_vmm_extension(
-        hyperkernel_bfvmm
-        SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/bfvmm/src
-    )
-
-    eapis_vmm_extension(
-        hyperkernel_bfvmm_main
-        DEPENDS hyperkernel_bfvmm
-        SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/bfvmm/src/main
-    )
+if(WIN32 OR CYGWIN)
+    return()
 endif()
 
 # ------------------------------------------------------------------------------
-# bfexec
+# Cross-compiler variables
 # ------------------------------------------------------------------------------
 
-userspace_extension(
-    bfexec
-    SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/bfexec
-    DEPENDS bfintrinsics
+set(ERB_TOOLS_URL "https://github.com/connojd/xtools/releases/download/v0.1.0/${ERB_TUPLE}_sdk-buildroot.tar.gz"
+    CACHE INTERNAL FORCE
+    "Cross-compiler URL"
+)
+
+set(ERB_TOOLS_URL_MD5 "affbdbc49d1c4b1dbb6ad7d27e918d69"
+    CACHE INTERNAL FORCE
+    "Cross-compiler URL MD5 hash"
+)
+
+# ------------------------------------------------------------------------------
+# Download
+# ------------------------------------------------------------------------------
+
+message(STATUS "Including dependency: xtools (${ERB_TUPLE})")
+
+download_dependency(
+    xtools
+    URL     ${ERB_TOOLS_URL}
+    URL_MD5 ${ERB_TOOLS_URL_MD5}
+)
+
+add_dependency(
+    xtools userspace
+    CONFIGURE_COMMAND ${CMAKE_COMMAND} -E chdir ${CACHE_DIR}/xtools ./relocate-sdk.sh
+    BUILD_COMMAND     ${CMAKE_COMMAND} -E touch_nocreate kludge
+    INSTALL_COMMAND   ${CMAKE_COMMAND} -E touch_nocreate kludge
 )
