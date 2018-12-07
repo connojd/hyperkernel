@@ -173,6 +173,31 @@ private:
     bool io_ignore_handler(
         gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::io_instruction_handler::info_t &info);
 
+    bool handle_cf8_in(
+         gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::io_instruction_handler::info_t &info);
+    bool handle_cf8_out(
+         gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::io_instruction_handler::info_t &info);
+
+    bool handle_cfb_in(
+         gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::io_instruction_handler::info_t &info);
+    bool handle_cfb_out(
+         gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::io_instruction_handler::info_t &info);
+
+    bool handle_cfc_in(
+         gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::io_instruction_handler::info_t &info);
+    bool handle_cfc_out(
+         gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::io_instruction_handler::info_t &info);
+
+    bool handle_cfd_in(
+         gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::io_instruction_handler::info_t &info);
+    bool handle_cfd_out(
+         gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::io_instruction_handler::info_t &info);
+
+    bool handle_cfe_in(
+         gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::io_instruction_handler::info_t &info);
+    bool handle_cfe_out(
+         gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::io_instruction_handler::info_t &info);
+
     // -------------------------------------------------------------------------
     // VMCalls
     // -------------------------------------------------------------------------
@@ -258,6 +283,8 @@ private:
     vcpu_info_t *m_vcpu_info;
 
     uint64_t m_hypercall_page_gpa{};
+    uint32_t m_cf8{0xFFFFFFFF};
+    uint32_t m_own_pci_dev{};
 
     eapis::x64::unique_map<vcpu_runstate_info_t> m_runstate_info;
     eapis::x64::unique_map<vcpu_time_info_t> m_time_info;

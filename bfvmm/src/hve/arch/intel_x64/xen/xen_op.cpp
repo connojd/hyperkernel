@@ -17,8 +17,10 @@
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 #include <iostream>
+#include <hve/arch/x64/pci.h>
 #include <hve/arch/intel_x64/vcpu.h>
 #include <hve/arch/intel_x64/lapic.h>
+#include <hve/arch/intel_x64/vtd/vtd_sandbox.h>
 #include <eapis/hve/arch/intel_x64/time.h>
 
 #include <hve/arch/intel_x64/xen/public/xen.h>
@@ -201,13 +203,11 @@ xen_op_handler::xen_op_handler(
     ADD_CPUID_HANDLER(0x80000007, cpuid_pass_through_handler);      // TODO: 0 reserved bits
     ADD_CPUID_HANDLER(0x80000008, cpuid_pass_through_handler);      // TODO: 0 reserved bits
 
-    EMULATE_IO_INSTRUCTION(0xCF8, io_ones_handler, io_ignore_handler);
-    EMULATE_IO_INSTRUCTION(0xCFA, io_ones_handler, io_ignore_handler);
-    EMULATE_IO_INSTRUCTION(0xCFB, io_ones_handler, io_ignore_handler);
-    EMULATE_IO_INSTRUCTION(0xCFC, io_ones_handler, io_ignore_handler);
-    EMULATE_IO_INSTRUCTION(0xCFD, io_ones_handler, io_ignore_handler);
-    EMULATE_IO_INSTRUCTION(0xCFE, io_ones_handler, io_ignore_handler);
-    EMULATE_IO_INSTRUCTION(0xCFF, io_ones_handler, io_ignore_handler);
+    EMULATE_IO_INSTRUCTION(0xCF8, handle_cf8_in, handle_cf8_out);
+    EMULATE_IO_INSTRUCTION(0xCFB, handle_cfb_in, handle_cfb_out);
+    EMULATE_IO_INSTRUCTION(0xCFC, handle_cfc_in, handle_cfc_out);
+    EMULATE_IO_INSTRUCTION(0xCFD, handle_cfd_in, handle_cfd_out);
+    EMULATE_IO_INSTRUCTION(0xCFE, handle_cfe_in, handle_cfe_out);
 
     /// ACPI SCI interrupt trigger mode
     EMULATE_IO_INSTRUCTION(0x4D0, io_zero_handler, io_ignore_handler);
@@ -484,7 +484,11 @@ xen_op_handler::xapic_handle_write_icr(uint64_t low)
         case icr_low::delivery_mode::fixed:
             break;
         default:
+            if (icr_low::level::is_disabled(low)) {
+                return;
+            }
             bfalert_nhex(0, "unsupported delivery mode:", dlm);
+            icr_low::dump(0, low);
             return;
     }
 
@@ -626,6 +630,7 @@ xen_op_handler::ioapic_handle_write(
                                         std::to_string(info.gpa));
     }
 
+    bfdebug_nhex(0, "IOAPIC write: gpa:", info.gpa);
     info.ignore_advance = false;
     return true;
 }
@@ -1129,6 +1134,219 @@ xen_op_handler::io_ignore_handler(
     bfignored(info);
 
     return true;
+}
+
+static bool own_pci_dev(::x64::pci::addr_t cf8)
+{
+    using namespace vtd_sandbox::hidden_nic;
+
+    uint32_t addr = (cf8 | 0x80000000UL) & ~0xFFUL;
+    ::x64::portio::outd(0xCF8, addr);
+
+    return ::x64::portio::ind(0xCFC) == vendor_device;
+}
+
+static bool pci_config_in(
+    ::x64::pci::addr_t cf8,
+    ::x64::portio::port_addr_type port,
+    eapis::intel_x64::io_instruction_handler::info_t &info)
+{
+    using namespace ::x64::portio;
+    namespace io = vmcs_n::exit_qualification::io_instruction;
+
+    ::x64::portio::outd(0xCF8, cf8);
+
+    switch (info.size_of_access) {
+        case io::size_of_access::one_byte:  info.val = inb(port); break;
+        case io::size_of_access::two_byte:  info.val = inw(port); break;
+        case io::size_of_access::four_byte: info.val = ind(port); break;
+        default: bfdebug_nhex(0,
+            "invalid portio in size:", info.size_of_access);
+            return false;
+    }
+
+    return true;
+}
+
+static bool pci_config_out(
+    ::x64::pci::addr_t cf8,
+    ::x64::portio::port_addr_type port,
+    eapis::intel_x64::io_instruction_handler::info_t &info)
+{
+    using namespace ::x64::portio;
+    namespace io = vmcs_n::exit_qualification::io_instruction;
+
+    ::x64::portio::outd(0xCF8, cf8);
+
+    switch (info.size_of_access) {
+        case io::size_of_access::one_byte:  outb(port, info.val); break;
+        case io::size_of_access::two_byte:  outw(port, info.val); break;
+        case io::size_of_access::four_byte: outd(port, info.val); break;
+        default: bfdebug_nhex(0,
+            "invalid portio in size:", info.size_of_access);
+            return false;
+    }
+
+    return true;
+}
+
+bool
+xen_op_handler::handle_cf8_out(
+        gsl::not_null<vcpu_t *> vcpu,
+        eapis::intel_x64::io_instruction_handler::info_t &info)
+{
+    bfignored(vcpu);
+
+    m_cf8 = info.val;
+    m_own_pci_dev = own_pci_dev(info.val);
+
+    return true;
+}
+
+bool
+xen_op_handler::handle_cf8_in(
+    gsl::not_null<vcpu_t *> vcpu,
+    eapis::intel_x64::io_instruction_handler::info_t &info)
+{
+    bfignored(vcpu);
+
+    info.val = m_cf8;
+    return true;
+}
+
+bool
+xen_op_handler::handle_cfd_in(
+    gsl::not_null<vcpu_t *> vcpu,
+    eapis::intel_x64::io_instruction_handler::info_t &info)
+{
+    bfignored(vcpu);
+
+    if (m_own_pci_dev) {
+        return pci_config_in(m_cf8, 0xCFD, info);
+    }
+
+    return false;
+}
+
+bool
+xen_op_handler::handle_cfb_in(
+    gsl::not_null<vcpu_t *> vcpu,
+    eapis::intel_x64::io_instruction_handler::info_t &info)
+{
+    bfignored(vcpu);
+
+    if (m_own_pci_dev) {
+        return pci_config_in(m_cf8, 0xCFB, info);
+    }
+
+    if (!::x64::pci::valid_bridge(m_cf8)) {
+        return this->io_ones_handler(vcpu, info);
+    }
+
+    return pci_config_in(m_cf8, 0xCFB, info);
+}
+
+bool
+xen_op_handler::handle_cfb_out(
+    gsl::not_null<vcpu_t *> vcpu,
+    eapis::intel_x64::io_instruction_handler::info_t &info)
+{
+    bfignored(vcpu);
+
+    if (m_own_pci_dev) {
+        return pci_config_out(m_cf8, 0xCFB, info);
+    }
+
+    if (!::x64::pci::valid_bridge(m_cf8)) {
+        return this->io_ones_handler(vcpu, info);
+    }
+
+    return pci_config_out(m_cf8, 0xCFB, info);
+}
+
+bool
+xen_op_handler::handle_cfc_out(
+    gsl::not_null<vcpu_t *> vcpu,
+    eapis::intel_x64::io_instruction_handler::info_t &info)
+{
+    bfignored(vcpu);
+
+    if (m_own_pci_dev) {
+        return pci_config_out(m_cf8, 0xCFC, info);
+    }
+
+    bferror_info(0, "CFC out for non-NIC");
+    return false;
+}
+
+bool
+xen_op_handler::handle_cfc_in(
+    gsl::not_null<vcpu_t *> vcpu,
+    eapis::intel_x64::io_instruction_handler::info_t &info)
+{
+    bfignored(vcpu);
+    using namespace ::x64::portio;
+    namespace io = vmcs_n::exit_qualification::io_instruction;
+
+    if (m_own_pci_dev) {
+        return pci_config_in(m_cf8, 0xCFC, info);
+    }
+
+    if (!::x64::pci::valid_bridge(m_cf8)) {
+        return this->io_ones_handler(vcpu, info);
+    }
+
+    return pci_config_in(m_cf8, 0xCFC, info);
+}
+
+bool
+xen_op_handler::handle_cfe_in(
+    gsl::not_null<vcpu_t *> vcpu,
+    eapis::intel_x64::io_instruction_handler::info_t &info)
+{
+    bfignored(vcpu);
+    using namespace ::x64::portio;
+    namespace io = vmcs_n::exit_qualification::io_instruction;
+
+    if (m_own_pci_dev) {
+        return pci_config_in(m_cf8, 0xCFE, info);
+    }
+
+    if (!::x64::pci::valid_bridge(m_cf8)) {
+        return this->io_ones_handler(vcpu, info);
+    }
+
+    return pci_config_in(m_cf8, 0xCFE, info);
+}
+
+bool
+xen_op_handler::handle_cfd_out(
+    gsl::not_null<vcpu_t *> vcpu,
+    eapis::intel_x64::io_instruction_handler::info_t &info)
+{
+    bfignored(vcpu);
+
+    if (m_own_pci_dev) {
+        return pci_config_out(m_cf8, 0xCFD, info);
+    }
+
+    bferror_info(0, "CFD out for non-NIC");
+    return false;
+}
+
+bool
+xen_op_handler::handle_cfe_out(
+    gsl::not_null<vcpu_t *> vcpu,
+    eapis::intel_x64::io_instruction_handler::info_t &info)
+{
+    bfignored(vcpu);
+
+    if (m_own_pci_dev) {
+        return pci_config_out(m_cf8, 0xCFE, info);
+    }
+
+    bferror_info(0, "CFE out for non-NIC");
+    return false;
 }
 
 // -----------------------------------------------------------------------------

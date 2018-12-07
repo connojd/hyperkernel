@@ -123,15 +123,15 @@ void
 vcpu::write_dom0_guest_state(domain *domain)
 {
     this->set_eptp(domain->ept());
-    vtd_sandbox::visr_device::enable(this);
-    vtd_sandbox::interrupt_remapping::enable(this);
-    vtd_sandbox::hidden_nic::enable(this);
-    vtd_sandbox::dma_remapping::map_bus(0, 0, domain->ept());
-    vtd_sandbox::dma_remapping::map_bus(1, 0, domain->ept());
-    vtd_sandbox::dma_remapping::map_bus(3, 0, domain->ept());
-    vtd_sandbox::dma_remapping::map_bus(4, 0, domain->ept());
-    vtd_sandbox::dma_remapping::map_bus(5, 0, domain->ept());
-    vtd_sandbox::dma_remapping::enable(this);
+//    vtd_sandbox::visr_device::enable(this);
+//    vtd_sandbox::interrupt_remapping::enable(this);
+//    vtd_sandbox::hidden_nic::enable(this);
+//    vtd_sandbox::dma_remapping::map_bus(0, 0, domain->ept());
+//    vtd_sandbox::dma_remapping::map_bus(1, 0, domain->ept());
+//    vtd_sandbox::dma_remapping::map_bus(3, 0, domain->ept());
+//    vtd_sandbox::dma_remapping::map_bus(4, 0, domain->ept());
+//    vtd_sandbox::dma_remapping::map_bus(5, 0, domain->ept());
+//    vtd_sandbox::dma_remapping::enable(this);
 }
 
 void

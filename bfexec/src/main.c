@@ -717,7 +717,7 @@ status_t
 setup_xen_cmdline()
 {
     status_t ret;
-    const char *cmdline = "console=uart,io,0x3F8,115200n8 init=/hello";
+    const char *cmdline = "console=uart,io,0x3F8,115200n8 pci=earlydump,lastbus=2,nocrs r8169.debug=16 init=/hello";
 
     /**
      * TODO:
