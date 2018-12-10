@@ -36,7 +36,6 @@ set(BR_URL_MD5 "1c140382fb8778b6c4458014e1fef4fb"
 
 set(BR_SRC_DIR ${CACHE_DIR}/buildroot CACHE INTERNAL "")
 set(BR_BIN_DIR ${DEPENDS_DIR}/buildroot/${USERSPACE_PREFIX}/build/${ERB_IMAGE} CACHE INTERNAL "")
-
 set(BR_CONFIG_IN ${HK_ERB_DIR}/image/${ERB_IMAGE}/buildroot.config.in CACHE INTERNAL "")
 set(BR_CONFIG_OUT ${BR_BIN_DIR}/.config CACHE INTERNAL "")
 set(BR_CONFIG_LINUX_IN ${HK_ERB_DIR}/image/${ERB_IMAGE}/linux.config.in CACHE INTERNAL "")

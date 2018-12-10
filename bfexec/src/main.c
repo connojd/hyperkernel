@@ -449,13 +449,17 @@ typedef struct {
     char store[0x1000];
 } reserved_8000_t;
 
+typedef struct {
+    char mp_fltptr[0x1000];
+} reserved_A000_t;
+
 #ifndef REAL_MODE_SIZE
 #define REAL_MODE_SIZE (6 * 0x1000)
 #endif
 
 typedef struct {
     char rm_trampoline[REAL_MODE_SIZE];
-} reserved_A000_t;
+} reserved_B000_t;
 
 reserved_4000_t *g_reserved_4000 = 0;   /* Xen start info */
 reserved_5000_t *g_reserved_5000 = 0;   /* Xen cmdline */
@@ -463,7 +467,8 @@ reserved_6000_t *g_reserved_6000 = 0;   /* Xen shared info page */
 reserved_7000_t *g_reserved_7000 = 0;   /* Xen console */
 reserved_8000_t *g_reserved_8000 = 0;   /* Xen store */
 //reserved_9000_t *g_reserved_9000 = 0;   /* 4K hole for DSDT */
-reserved_A000_t *g_reserved_A000 = 0;   /* Real-mode trampoline */
+reserved_A000_t *g_reserved_A000 = 0;   /* MP table */
+reserved_B000_t *g_reserved_B000 = 0;   /* Real-mode trampoline */
 
 // TODO: this should be a setting that is filled in from the command line.
 uint64_t g_ram_addr = 0x1000000;
@@ -551,6 +556,18 @@ setup_e820_map()
     ret = __domain_op__add_e820_entry(
         g_vm.domainid,
         0xA000,
+        0x1000,
+        XEN_HVM_MEMMAP_TYPE_RESERVED
+    );
+
+    if (ret != SUCCESS) {
+        BFALERT("__domain_op__add_e820_entry failed\n");
+        return FAILURE;
+    }
+
+    ret = __domain_op__add_e820_entry(
+        g_vm.domainid,
+        0xB000,
         REAL_MODE_SIZE,
         XEN_HVM_MEMMAP_TYPE_RAM
     );
@@ -562,8 +579,8 @@ setup_e820_map()
 
     ret = __domain_op__add_e820_entry(
         g_vm.domainid,
-        0xA000 + REAL_MODE_SIZE,
-        g_ram_addr - (0xA000 + REAL_MODE_SIZE),
+        0xB000 + REAL_MODE_SIZE,
+        g_ram_addr - (0xB000 + REAL_MODE_SIZE),
         XEN_HVM_MEMMAP_TYPE_UNUSABLE
     );
 
@@ -717,7 +734,7 @@ status_t
 setup_xen_cmdline()
 {
     status_t ret;
-    const char *cmdline = "console=uart,io,0x3F8,115200n8 pci=earlydump,lastbus=2,nocrs r8169.debug=16 init=/hello";
+    const char *cmdline = "console=uart,io,0x3F8,115200n8 pci=earlydump,lastbus=2,nocrs apic=debug r8169.debug=16 init=/hello";
 
     /**
      * TODO:
@@ -803,18 +820,39 @@ setup_xen_store()
 }
 
 status_t
-setup_rm_trampoline()
+setup_mp_table()
 {
     status_t ret;
-    uint32_t size = REAL_MODE_SIZE;
 
-    g_reserved_A000 = (reserved_A000_t *)alloc_buffer(size);
+    g_reserved_A000 = (reserved_A000_t *)alloc_page();
     if (g_reserved_A000 == 0) {
         BFALERT("g_reserved_A000 alloc failed: %s\n", strerror(errno));
         return FAILURE;
     }
 
-    ret = domain_op__map_buffer((uint64_t)g_reserved_A000, 0xA000, size, MAP_RWE);
+    ret = domain_op__map_gpa((uint64_t)g_reserved_A000, MP_FLTPTR_GPA, MAP_RO);
+    if (ret != BF_SUCCESS) {
+        BFALERT("__domain_op__map_buffer failed\n");
+        return FAILURE;
+    }
+
+    return SUCCESS;
+
+}
+
+status_t
+setup_rm_trampoline()
+{
+    status_t ret;
+    uint32_t size = REAL_MODE_SIZE;
+
+    g_reserved_B000 = (reserved_B000_t *)alloc_buffer(size);
+    if (g_reserved_B000 == 0) {
+        BFALERT("g_reserved_B000 alloc failed: %s\n", strerror(errno));
+        return FAILURE;
+    }
+
+    ret = domain_op__map_buffer((uint64_t)g_reserved_B000, 0xB000, size, MAP_RWE);
     if (ret != BF_SUCCESS) {
         BFALERT("__domain_op__map_buffer failed\n");
         return FAILURE;
@@ -888,11 +926,11 @@ setup_xen_disabled()
     //
 
     /* MP Table */
-    ret = domain_op__map_gpa_single_gva((uint64_t)g_zero_page, 0x9F000, 0x1000, MAP_RO);
-    if (ret != BF_SUCCESS) {
-        BFALERT("domain_op__map_gpa_single_gva failed\n");
-        return FAILURE;
-    }
+//    ret = domain_op__map_gpa_single_gva((uint64_t)g_zero_page, 0x9F000, 0x1000, MAP_RO);
+//    if (ret != BF_SUCCESS) {
+//        BFALERT("domain_op__map_gpa_single_gva failed\n");
+//        return FAILURE;
+//    }
 
     return SUCCESS;
 }

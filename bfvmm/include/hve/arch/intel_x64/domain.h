@@ -23,6 +23,7 @@
 
 #include "acpi.h"
 #include "../../../domain/domain.h"
+#include "../x64/mptable.h"
 
 #include <eapis/hve/arch/intel_x64/vcpu.h>
 #include <bfvmm/memory_manager/arch/x64/cr3.h>
@@ -266,6 +267,7 @@ private:
     void setup_domU();
 
     void setup_acpi();
+    void setup_nic();
 
 private:
 
@@ -291,6 +293,11 @@ private:
     page_ptr<madt_t> m_madt;
     page_ptr<fadt_t> m_fadt;
     page_ptr<dsdt_t> m_dsdt;
+    page_ptr<x64::mpfp_t> m_mpfp;
+
+    static_assert(
+        sizeof(x64::mpfp_t) + sizeof(x64::mp_table_t) < x64::pt::page_size
+    );
 
 public:
 

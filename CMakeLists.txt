@@ -36,9 +36,29 @@ endif()
 # Build the hyperkernel vmm
 #
 if(ENABLE_BUILD_VMM)
+
+    # Note we start INTx at 0 rather than 1 per Appendix D.3 of the MP spec
+    #
+    set(PCI_INTA 0)
+    set(PCI_INTB 1)
+    set(PCI_INTC 2)
+    set(PCI_INTD 3)
+
+    if(${ERB_IMAGE} STREQUAL ndvm-iwlwifi)
+        set(C_FLAGS   "-DNDVM_NIC_BUS=2 -DNDVM_NIC_DEV=0 -DNDVM_NIC_PIN=${PCI_INTA} -DNDVM_NIC_INTIN=19 -DNDVM_IOAPIC_ID=2")
+        set(CXX_FLAGS "-DNDVM_NIC_BUS=2 -DNDVM_NIC_DEV=0 -DNDVM_NIC_PIN=${PCI_INTA} -DNDVM_NIC_INTIN=19 -DNDVM_IOAPIC_ID=2")
+    endif()
+
+    if(${ERB_IMAGE} STREQUAL ndvm-r8169)
+        set(C_FLAGS   "-DNDVM_NIC_BUS=2 -DNDVM_NIC_DEV=0 -DNDVM_NIC_PIN=${PCI_INTA} -DNDVM_NIC_INTIN=16 -DNDVM_IOAPIC_ID=2")
+        set(CXX_FLAGS "-DNDVM_NIC_BUS=2 -DNDVM_NIC_DEV=0 -DNDVM_NIC_PIN=${PCI_INTA} -DNDVM_NIC_INTIN=16 -DNDVM_IOAPIC_ID=2")
+    endif()
+
     eapis_vmm_extension(
         hyperkernel_bfvmm
         SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/bfvmm/src
+        C_FLAGS ${C_FLAGS}
+        CXX_FLAGS ${CXX_FLAGS}
     )
 
     eapis_vmm_extension(

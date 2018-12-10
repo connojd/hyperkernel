@@ -41,12 +41,15 @@ void ioapic::init()
 
     this->select(ioapic_n::version::indx);
     this->write(ioapic_n::version::reset_val);
-}
 
-uint32_t ioapic::id()
-{
+#ifdef NDVM_IOAPIC_ID
+    uint32_t id = 0;
+    ::intel_x64::ioapic::id::set(id, NDVM_IOAPIC_ID);
     this->select(ioapic_n::id::indx);
-    return this->read();
+    this->write(id);
+#else
+    #error "NDVM_IOAPIC_ID not defined"
+#endif
 }
 
 uint32_t ioapic::base() const
