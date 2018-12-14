@@ -17,7 +17,9 @@
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 #include <hve/arch/intel_x64/vcpu.h>
+#include <eapis/hve/arch/intel_x64/vcpu.h>
 #include <hve/arch/intel_x64/vmexit/external_interrupt.h>
+#include "../../../../../include/hve/arch/intel_x64/vtd/vtd_sandbox.h"
 
 namespace hyperkernel::intel_x64
 {
@@ -47,6 +49,14 @@ external_interrupt_handler::handle(
     eapis::intel_x64::external_interrupt_handler::info_t &info)
 {
     bfignored(vcpu);
+
+    if(info.vector == vtd_sandbox::g_visr_vector) {
+        bfdebug_info(0, "Passing-through NIC interrupt -> NDVM");
+        auto my_vcpu = vcpu_cast(vcpu);
+        my_vcpu->queue_external_interrupt(vtd_sandbox::g_ndvm_vector);
+        return true;
+    }
+
     auto parent_vcpu = m_vcpu->parent_vcpu();
 
     parent_vcpu->load();

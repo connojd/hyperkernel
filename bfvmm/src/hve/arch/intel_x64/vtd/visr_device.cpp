@@ -5,6 +5,8 @@
 #include "hve/arch/intel_x64/vtd/vtd_sandbox.h"
 
 #include "hve/arch/intel_x64/vtd/ioapic.h"
+#include "hve/arch/intel_x64/vcpu.h"
+#include <bfvmm/vcpu/vcpu_manager.h>
 
 namespace vtd_sandbox
 {
@@ -39,10 +41,6 @@ const uint32_t cap_offset = cap_ptr / sizeof(uint32_t);
 uint64_t g_bus = 0;
 uint64_t g_device = 0;
 uint64_t g_function = 0;
-
-// The two interrupt vectors to be remapped to/from each other
-static volatile uint64_t g_visr_vector = 0;
-static volatile uint64_t g_ndvm_vector = 0;
 
 bool
 handle_cfc_in(
@@ -397,8 +395,8 @@ receive_vector_from_windows(
     bfignored(vcpu);
     bfignored(info);
 
-    g_visr_vector = vcpu->rcx();
-    bfdebug_nhex(0, "Recieved vector from VISR driver:", g_visr_vector);
+    vtd_sandbox::g_visr_vector = vcpu->rcx();
+    bfdebug_nhex(0, "Recieved vector from VISR driver:", vtd_sandbox::g_visr_vector);
 
     return true;
 }
@@ -414,9 +412,13 @@ forward_interrupt_to_ndvm(
 
     bfdebug_info(0, "Forwarding interrupt: VISR -> NDVM");
 
-    // TODO: Inject the interrupt into the NDVM
-    // auto ndvm_vcpu = ?;
-    // ndvm_vcpu->queue_external_interrupt(g_ndvm_vector);
+    auto ndvm_vcpu = reinterpret_cast<hyperkernel::intel_x64::vcpu *>(
+            get_vcpu(vtd_sandbox::ndvm_vcpu_id).get());
+
+    ndvm_vcpu->load();
+    ndvm_vcpu->queue_external_interrupt(g_ndvm_vector);
+
+    vcpu->load();
 
     return true;
 }
