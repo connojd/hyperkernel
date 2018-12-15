@@ -118,20 +118,11 @@ domain::setup_acpi()
     m_madt->header.aslcompilerrevision = ASLCOMPILERREVISION;
     m_madt->address = LAPIC_GPA;
     m_madt->flags = 0;
-
     m_madt->lapic.header.type = ICS_TYPE_LOCAL_APIC;
     m_madt->lapic.header.length = 8;
     m_madt->lapic.processorid = 0;      // TODO: This should be generated from the vCPUs
     m_madt->lapic.id = 0;               // TODO: This should be generated from the vCPUs
     m_madt->lapic.flags = 1;
-
-    m_madt->ioapic.header.type = ICS_TYPE_IO_APIC;
-    m_madt->ioapic.header.length = sizeof(ics_ioapic_t);
-    m_madt->ioapic.id = 0;
-    m_madt->ioapic.reserved = 0;
-    m_madt->ioapic.address = IOAPIC_GPA;
-    m_madt->ioapic.gsi_base = 0;
-
     m_madt->header.checksum = acpi_checksum(m_madt.get(), m_madt->header.length);
 
     std::strncpy(m_fadt->header.signature, "FACP", sizeof(m_fadt->header.signature));

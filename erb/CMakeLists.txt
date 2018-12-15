@@ -103,11 +103,11 @@ endif()
 set(LINUX_BIN_DIR ${BR_BIN_DIR}/build/linux-${SUFFIX})
 
 add_custom_target(lmc
-    COMMAND ${HK_UTIL_DIR}/menuconfig.sh ${LINUX_BIN_DIR} ${BR_CONFIG_LINUX_IN}
+    COMMAND ${HK_SOURCE_UTIL_DIR}/menuconfig.sh ${LINUX_BIN_DIR} ${BR_CONFIG_LINUX_IN}
     USES_TERMINAL
 )
 add_custom_target(bmc
-    COMMAND ${HK_UTIL_DIR}/menuconfig.sh ${BR_BIN_DIR} ${BR_CONFIG_IN}
+    COMMAND ${HK_SOURCE_UTIL_DIR}/menuconfig.sh ${BR_BIN_DIR} ${BR_CONFIG_IN}
     USES_TERMINAL
 )
 

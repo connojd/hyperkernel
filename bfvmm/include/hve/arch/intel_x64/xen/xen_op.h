@@ -172,14 +172,39 @@ private:
         gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::io_instruction_handler::info_t &info);
     bool io_cf8_out(
         gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::io_instruction_handler::info_t &info);
-
+    // Note: Linux should only write to CFB the value 1, one time, and
+    // it should never read from CFB. The direct probe code writes here first
+    // in order to determine type 1 config access.
+    //
+    bool io_cfb_in(
+        gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::io_instruction_handler::info_t &info);
+    bool io_cfb_out(
+        gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::io_instruction_handler::info_t &info);
     bool io_cfc_in(
         gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::io_instruction_handler::info_t &info);
     bool io_cfc_out(
         gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::io_instruction_handler::info_t &info);
+    bool io_cfd_in(
+        gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::io_instruction_handler::info_t &info);
+    bool io_cfd_out(
+        gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::io_instruction_handler::info_t &info);
+    bool io_cfe_in(
+        gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::io_instruction_handler::info_t &info);
+    bool io_cfe_out(
+        gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::io_instruction_handler::info_t &info);
 
-    bool pci_normal_in(eapis::intel_x64::io_instruction_handler::info_t &info);
-    bool pci_bridge_in(eapis::intel_x64::io_instruction_handler::info_t &info);
+    bool pci_in(eapis::intel_x64::io_instruction_handler::info_t &info);
+    bool pci_hdr_pci_bridge_in(eapis::intel_x64::io_instruction_handler::info_t &info);
+    bool pci_hdr_normal_in(eapis::intel_x64::io_instruction_handler::info_t &info);
+    bool pci_owned_in(eapis::intel_x64::io_instruction_handler::info_t &info);
+    bool pci_host_bridge_in(eapis::intel_x64::io_instruction_handler::info_t &info);
+    bool pci_msix_cap_prev_in(eapis::intel_x64::io_instruction_handler::info_t &info);
+
+    bool pci_out(eapis::intel_x64::io_instruction_handler::info_t &info);
+    bool pci_hdr_pci_bridge_out(eapis::intel_x64::io_instruction_handler::info_t &info);
+    bool pci_hdr_normal_out(eapis::intel_x64::io_instruction_handler::info_t &info);
+    bool pci_owned_out(eapis::intel_x64::io_instruction_handler::info_t &info);
+    bool pci_host_bridge_out(eapis::intel_x64::io_instruction_handler::info_t &info);
 
     // -------------------------------------------------------------------------
     // VMCalls
@@ -237,6 +262,7 @@ private:
     // -------------------------------------------------------------------------
 
     bool local_xenstore() const;
+    void pci_init_caps();
 
     // -------------------------------------------------------------------------
     // Quirks
@@ -263,10 +289,10 @@ private:
     vcpu_info_t *m_vcpu_info;
     uint64_t m_hypercall_page_gpa{};
     uint32_t m_cf8{};
-    uint32_t m_msi_cap_addr{};
-    uint32_t m_msix_cap_addr{};
-    uint32_t m_msix_cap_addr_prev{};
-    uint32_t m_msix_cap_addr_next{};
+    uint32_t m_msi_cap{};
+    uint32_t m_msix_cap{};
+    uint32_t m_msix_cap_prev{};
+    uint32_t m_msix_cap_next{};
 
     eapis::x64::unique_map<vcpu_runstate_info_t> m_runstate_info;
     eapis::x64::unique_map<vcpu_time_info_t> m_time_info;

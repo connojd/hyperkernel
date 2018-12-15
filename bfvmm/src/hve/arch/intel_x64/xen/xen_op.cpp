@@ -205,10 +205,10 @@ xen_op_handler::xen_op_handler(
 
     EMULATE_IO_INSTRUCTION(0xCF8, io_cf8_in, io_cf8_out);
     //EMULATE_IO_INSTRUCTION(0xCFA, io_ones_handler, io_ignore_handler);
-    //EMULATE_IO_INSTRUCTION(0xCFB, io_ones_handler, io_ignore_handler);
+    EMULATE_IO_INSTRUCTION(0xCFB, io_cfb_in, io_cfb_out);
     EMULATE_IO_INSTRUCTION(0xCFC, io_cfc_in, io_cfc_out);
-    //EMULATE_IO_INSTRUCTION(0xCFD, io_ones_handler, io_ignore_handler);
-    //EMULATE_IO_INSTRUCTION(0xCFE, io_ones_handler, io_ignore_handler);
+    EMULATE_IO_INSTRUCTION(0xCFD, io_cfd_in, io_cfd_out);
+    EMULATE_IO_INSTRUCTION(0xCFE, io_cfe_in, io_cfe_out);
     //EMULATE_IO_INSTRUCTION(0xCFF, io_ones_handler, io_ignore_handler);
 
     /// ACPI SCI interrupt trigger mode
@@ -229,7 +229,6 @@ xen_op_handler::xen_op_handler(
 
     this->register_unplug_quirk();
 
-
     ADD_EPT_WRITE_HANDLER(xapic_handle_write);
 
     m_pet_shift = ::intel_x64::msrs::ia32_vmx_misc::preemption_timer_decrement::get();
@@ -239,15 +238,20 @@ xen_op_handler::xen_op_handler(
         exit_reason::basic_exit_reason::hlt,
         ::handler_delegate_t::create<xen_op_handler, &xen_op_handler::handle_hlt>(this)
     );
+
+    this->pci_init_caps();
 }
 
-#define NIC_BUS 2
+#define NIC_BUS 0x3a
 #define NIC_DEV 0
 #define NIC_FUN 0
-#define NIC_ADDR ((1UL << 31) | NIC_BUS | NIC_DEV | NIC_FUN)
 
 using namespace ::x64::portio;
+using namespace eapis::intel_x64;
 namespace io = vmcs_n::exit_qualification::io_instruction;
+
+inline bool cf8_is_enabled(uint32_t cf8)
+{ return ((cf8 & 0x80000000UL) >> 31) != 0; }
 
 inline uint32_t cf8_to_bus(uint32_t cf8)
 { return (cf8 & 0x00FF0000UL) >> 16; }
@@ -276,10 +280,105 @@ inline uint32_t bdf_to_cf8(uint32_t b, uint32_t d, uint32_t f)
     return (1UL << 31) | (b << 16) | (d << 11) | (f << 8);
 }
 
+inline bool domU_owned_cf8(uint32_t cf8)
+{
+    return cf8_to_bus(cf8) == NIC_BUS &&
+           cf8_to_dev(cf8) == NIC_DEV &&
+           cf8_to_fun(cf8) == NIC_FUN;
+}
+
+void
+xen_op_handler::pci_init_caps()
+{
+    const auto cf8 = bdf_to_cf8(NIC_BUS, NIC_DEV, NIC_FUN);
+    if ((cf8_read_reg(cf8, 0x1) & 0x0010'0000) == 0) {
+        printf("NIC: capability list empty\n");
+        return;
+    }
+
+    const auto ptr = cf8_read_reg(cf8, 0xD) & 0xFF;
+    auto reg = ptr >> 2U;
+    auto prev = 0xD;
+
+    while (reg != 0) {
+        constexpr auto id_msi = 0x05;
+        constexpr auto id_msix = 0x11;
+
+        const auto cap = cf8_read_reg(cf8, reg);
+        const auto id = cap & 0xFF;
+
+        if (id == id_msi) {
+            m_msi_cap = reg;
+            prev = reg;
+            reg = (cap & 0xFF00) >> (8 + 2);
+            continue;
+        }
+
+        if (id != id_msix) {
+            prev = reg;
+            reg = (cap & 0xFF00) >> (8 + 2);
+            continue;
+        }
+
+        // We don't update prev here like in the other cases because
+        // the only reason prev is around is to set m_msix_cap_prev
+        //
+        m_msix_cap = reg;
+        m_msix_cap_prev = prev;
+        m_msix_cap_next = reg = (cap & 0xFF00) >> (8 + 2);
+    }
+
+    ensures(m_msi_cap != 0);
+
+    printf("NIC: capability found: msi at byte 0x%x, reg 0x%x\n",
+           m_msi_cap << 2,
+           m_msi_cap);
+
+    if (m_msix_cap != 0) {
+        printf("NIC: capability found: msi-x at byte 0x%x, reg 0x%x\n",
+               m_msix_cap << 2,
+               m_msix_cap);
+    }
+}
+
 enum pci_header_t {
-    pci_hdr_normal,
-    pci_hdr_pci_bridge,
-    pci_hdr_cardbus_bridge
+    pci_hdr_normal               = 0x00,
+    pci_hdr_pci_bridge           = 0x01,
+    pci_hdr_cardbus_bridge       = 0x02,
+    pci_hdr_normal_multi         = 0x80 | pci_hdr_normal,
+    pci_hdr_pci_bridge_multi     = 0x80 | pci_hdr_pci_bridge,
+    pci_hdr_cardbus_bridge_multi = 0x80 | pci_hdr_cardbus_bridge,
+    pci_hdr_nonexistant          = 0xFF
+};
+
+enum pci_class_code_t {
+    pci_cc_unclass = 0x00,
+    pci_cc_storage = 0x01,
+    pci_cc_network = 0x02,
+    pci_cc_display = 0x03,
+    pci_cc_multimedia = 0x04,
+    pci_cc_memory = 0x05,
+    pci_cc_bridge = 0x06,
+    pci_cc_simple_comms = 0x07,
+    pci_cc_input = 0x09,
+    pci_cc_processor = 0x0B,
+    pci_cc_serial_bus = 0x0C,
+    pci_cc_wireless = 0x0D
+};
+
+enum pci_subclass_bridge_t {
+    pci_sc_bridge_host = 0x00,
+    pci_sc_bridge_isa = 0x01,
+    pci_sc_bridge_eisa = 0x02,
+    pci_sc_bridge_mca = 0x03,
+    pci_sc_bridge_pci_decode = 0x04,
+    pci_sc_bridge_pcmcia = 0x05,
+    pci_sc_bridge_nubus = 0x06,
+    pci_sc_bridge_cardbus = 0x07,
+    pci_sc_bridge_raceway = 0x08,
+    pci_sc_bridge_pci_semi_trans = 0x09,
+    pci_sc_bridge_infiniband = 0x0A,
+    pci_sc_bridge_other = 0x80
 };
 
 inline uint32_t pci_header_type(uint32_t cf8)
@@ -303,17 +402,13 @@ uint32_t pci_phys_read(uint32_t addr, uint32_t dport, uint32_t size)
 }
 
 inline void
-pci_info_in(uint32_t cf8,
-            eapis::intel_x64::io_instruction_handler::info_t &info)
-{
-    info.val = pci_phys_read(cf8, info.port_number, info.size_of_access);
-}
-
+pci_info_in(uint32_t cf8, io_instruction_handler::info_t &info)
+{ info.val = pci_phys_read(cf8, info.port_number, info.size_of_access); }
 
 bool
 xen_op_handler::io_cf8_in(
     gsl::not_null<vcpu_t *> vcpu,
-    eapis::intel_x64::io_instruction_handler::info_t &info)
+    io_instruction_handler::info_t &info)
 {
     info.val = m_cf8;
     return true;
@@ -322,40 +417,120 @@ xen_op_handler::io_cf8_in(
 bool
 xen_op_handler::io_cf8_out(
     gsl::not_null<vcpu_t *> vcpu,
-    eapis::intel_x64::io_instruction_handler::info_t &info)
+    io_instruction_handler::info_t &info)
 {
     m_cf8 = info.val;
     return true;
 }
 
-// Normal -> not a PCI bridge -> config layout 0
-//
-bool
-xen_op_handler::pci_normal_in(
-    eapis::intel_x64::io_instruction_handler::info_t &info)
+inline bool is_host_bridge(uint32_t cf8)
 {
+    const auto val = cf8_read_reg(cf8, 2);
+    const auto cc = (val & 0xFF000000UL) >> 24;
+    const auto sc = (val & 0x00FF0000UL) >> 16;
+
+    return cc == pci_cc_bridge && sc == pci_sc_bridge_host;
+}
+
+bool
+xen_op_handler::pci_msix_cap_prev_in(io_instruction_handler::info_t &info)
+{
+    expects(m_msix_cap != 0);
+    expects(m_msix_cap_prev != 0);
+    expects(m_msix_cap_prev == cf8_to_reg(m_cf8));
+
+    const auto base = 0xD;
+    const auto size = info.size_of_access;
+    const auto port = info.port_number;
+    const auto curr = m_msix_cap_prev;
+    const auto next = m_msix_cap_next;
+
+    if (curr == base) {
+        info.val = (port == 0xCFC) ? next << 2 : 0;
+        return true;
+    }
+
+    pci_info_in(m_cf8, info);
+
+    switch (port) {
+    case 0xCFC:
+        if (size == io::size_of_access::one_byte) {
+            break;
+        }
+        info.val &= 0xFFFF00FF;
+        info.val |= next << (8 + 2);
+        break;
+
+    case 0xCFD:
+        info.val &= 0xFFFFFF00;
+        info.val |= next << 2;
+        break;
+
+    default:
+        break;
+    }
+
+    return true;
+}
+
+bool
+xen_op_handler::pci_owned_in(io_instruction_handler::info_t &info)
+{
+    if (m_msix_cap == 0) {
+        pci_info_in(m_cf8, info);
+        return true;
+    }
+
+    expects(m_msix_cap_prev != 0);
+    if (cf8_to_reg(m_cf8) == m_msix_cap_prev) {
+        return this->pci_msix_cap_prev_in(info);
+    }
+
+    if (cf8_to_reg(m_cf8) == m_msix_cap) {
+        bfalert_info(0, "Guest read from MSI-X capability register");
+    }
+
+    pci_info_in(m_cf8, info);
     return false;
 }
 
-// PCI bridge -> config layout 1
-//
 bool
-xen_op_handler::pci_bridge_in(
-    eapis::intel_x64::io_instruction_handler::info_t &info)
+xen_op_handler::pci_host_bridge_in(io_instruction_handler::info_t &info)
 {
-    const auto reg = cf8_to_reg(m_cf8);
-    switch (reg) {
+    switch (cf8_to_reg(m_cf8)) {
         case 0x00:
-        case 0x01:
         case 0x02:
         case 0x03:
-        case 0x06:
+        case 0x0B:
+        case 0x0D:
+        case 0x0F:
             pci_info_in(m_cf8, info);
             break;
-        case 0x07:
+
+        case 0x01:
             pci_info_in(m_cf8, info);
-            info.val &= 0xFFFF0000UL;
+            switch (info.size_of_access) {
+            case io::size_of_access::four_byte:
+                info.val |= 0x00000400; // Disable pin interrupt
+                info.val &= 0xFFEFFFFF; // Disable capability list
+                break;
+            case io::size_of_access::two_byte:
+                if (info.port_number == 0xCFC) {
+                    info.val |= 0x0400; // Disable pin interrupt
+                } else if (info.port_number == 0xCFE) {
+                    info.val &= 0xFFEF; // Disable capability list
+                }
+                break;
+            case io::size_of_access::one_byte:
+                if (info.port_number == 0xCFD) {
+                    info.val |= 0x04;   // Disable pin interrupt
+                } else if (info.port_number == 0xCFE) {
+                    info.val &= 0xEF;   // Disable capability list
+                }
+                break;
+            }
             break;
+
         default:
             info.val = 0;
             break;
@@ -364,33 +539,374 @@ xen_op_handler::pci_bridge_in(
     return true;
 }
 
+
+// Normal -> not a PCI bridge -> config layout 0
+//
+bool
+xen_op_handler::pci_hdr_normal_in(io_instruction_handler::info_t &info)
+{
+    printf("(normal) ");
+
+    if (domU_owned_cf8(m_cf8)) {
+        return this->pci_owned_in(info);
+    }
+
+    if (is_host_bridge(m_cf8)) {
+        return this->pci_host_bridge_in(info);
+    }
+
+    info.val = 0xFFFFFFFFUL;
+    return true;
+}
+
+// PCI bridge -> config layout 1
+//
+bool
+xen_op_handler::pci_hdr_pci_bridge_in(io_instruction_handler::info_t &info)
+{
+    printf("(bridge) ");
+
+    switch (cf8_to_reg(m_cf8)) {
+        case 0x00: // passthrough device/vendor register
+        case 0x02: // passthrough class register
+        case 0x03: // passthrough header type register
+        case 0x06: // passthrough secondary bus register
+        case 0x0F: // passthrough secondary cmd register
+            pci_info_in(m_cf8, info);
+            break;
+
+        case 0x01:
+            pci_info_in(m_cf8, info);
+            switch (info.size_of_access) {
+            case io::size_of_access::four_byte:
+                info.val |= 0x00000400; // Disable pin interrupt
+                info.val &= 0xFFEFFFFF; // Disable capability list
+                break;
+            case io::size_of_access::two_byte:
+                if (info.port_number == 0xCFC) {
+                    info.val |= 0x0400; // Disable pin interrupt
+                } else if (info.port_number == 0xCFE) {
+                    info.val &= 0xFFEF; // Disable capability list
+                }
+                break;
+            case io::size_of_access::one_byte:
+                if (info.port_number == 0xCFD) {
+                    info.val |= 0x04;   // Disable pin interrupt
+                } else if (info.port_number == 0xCFE) {
+                    info.val &= 0xEF;   // Disable capability list
+                }
+                break;
+            }
+            break;
+
+        case 0x07:
+            pci_info_in(m_cf8, info);
+            switch (info.size_of_access) {
+            case io::size_of_access::four_byte:
+                info.val &= 0xFFFF0000; // Passthrough secondary status
+                break;
+            case io::size_of_access::two_byte:
+                if (info.port_number == 0xCFC) {
+                    info.val = 0;       // Mask IO limit and base
+                }
+                break;
+            case io::size_of_access::one_byte:
+                if (info.port_number == 0xCFC || info.port_number == 0xCFD) {
+                    info.val = 0;       // Mask IO limit and base
+                }
+                break;
+            }
+            break;
+
+        default:
+            info.val = 0;
+            break;
+    }
+
+    return true;
+}
+
+void bferror_dump_cf8(int level, uint32_t cf8)
+{
+    bferror_subbool(level, "enabled", cf8_is_enabled(cf8));
+    bferror_subnhex(level, "bus", cf8_to_bus(cf8));
+    bferror_subnhex(level, "dev", cf8_to_dev(cf8));
+    bferror_subnhex(level, "fun", cf8_to_fun(cf8));
+    bferror_subnhex(level, "reg", cf8_to_reg(cf8));
+    bferror_subnhex(level, "off", cf8_to_off(cf8));
+}
+
+bool
+xen_op_handler::pci_in(io_instruction_handler::info_t &info)
+{
+    bool ret = false;
+
+    switch (pci_header_type(m_cf8)) {
+        case pci_hdr_normal:
+        case pci_hdr_normal_multi:
+            ret = this->pci_hdr_normal_in(info);
+            printf("data: %08lx\n", info.val);
+            break;
+
+        case pci_hdr_pci_bridge:
+        case pci_hdr_pci_bridge_multi:
+            ret = this->pci_hdr_pci_bridge_in(info);
+            printf("data: %08lx\n", info.val);
+            break;
+
+        case pci_hdr_nonexistant:
+            info.val = 0xFFFFFFFFUL;
+            //printf("(nexist) ");
+            ret = true;
+            break;
+
+        default:
+            bferror_nhex(0, "Unhandled PCI header:", pci_header_type(m_cf8));
+            bferror_nhex(0, "m_cf8:", m_cf8);
+            bferror_dump_cf8(0, m_cf8);
+            bferror_lnbr(0); {
+                const auto cf8 = ind(0xCF8);
+                bferror_nhex(0, "0xCF8:", cf8);
+                bferror_dump_cf8(0, cf8);
+                bferror_lnbr(0);
+            }
+            bferror_nhex(0, "0xCFC:", ind(0xCFC));
+            throw std::runtime_error("Unhandled PCI header");
+    }
+
+    //printf("data: %08lx\n", info.val);
+    return ret;
+}
+
+void debug_pci_in(uint32_t cf8, io_instruction_handler::info_t &info)
+{
+    const char *port = "";
+
+    switch (info.port_number) {
+        case 0xCFC: port = "CFC"; break;
+        case 0xCFD: port = "CFD"; break;
+        case 0xCFE: port = "CFE"; break;
+        case 0xCFF: port = "CFF"; break;
+        default:
+            bferror_nhex(0, "Invalid PCI in port:", info.port_number);
+            throw std::runtime_error("Invalid PCI in port");
+    }
+
+    switch (pci_header_type(cf8)) {
+        case pci_hdr_nonexistant:
+            break;
+
+        case pci_hdr_normal:
+        case pci_hdr_normal_multi:
+        case pci_hdr_pci_bridge:
+        case pci_hdr_pci_bridge_multi:
+            printf("%s in : %02x:%02x:%02x:%02x:%02x, size: %lu, ",
+                port, cf8_to_bus(cf8),
+                cf8_to_dev(cf8), cf8_to_fun(cf8),
+                cf8_to_reg(cf8), cf8_to_off(cf8),
+                info.size_of_access + 1);
+            break;
+    }
+}
+
 bool
 xen_op_handler::io_cfc_in(
     gsl::not_null<vcpu_t *> vcpu,
-    eapis::intel_x64::io_instruction_handler::info_t &info)
+    io_instruction_handler::info_t &info)
 {
     expects(info.port_number == 0xCFC);
 
-    printf("CFC in : %02x:%02x:%02x:%02x:%02x, size: %lu data %08lx\n",
-        cf8_to_bus(m_cf8), cf8_to_dev(m_cf8), cf8_to_fun(m_cf8),
-        cf8_to_reg(m_cf8), cf8_to_off(m_cf8), info.size_of_access + 1, info.val
-    );
+    debug_pci_in(m_cf8, info);
+    return this->pci_in(info);
+}
 
-    switch (pci_header_type(m_cf8)) {
-        case pci_hdr_normal: return this->pci_normal_in(info);
-        case pci_hdr_pci_bridge: return this->pci_bridge_in(info);
-        default: throw std::runtime_error("Unexpected PCI config header type");
+bool
+xen_op_handler::io_cfd_in(
+    gsl::not_null<vcpu_t *> vcpu,
+    io_instruction_handler::info_t &info)
+{
+    expects(info.port_number == 0xCFD);
+
+    debug_pci_in(m_cf8, info);
+    return this->pci_in(info);
+}
+
+bool
+xen_op_handler::io_cfe_in(
+    gsl::not_null<vcpu_t *> vcpu,
+    io_instruction_handler::info_t &info)
+{
+    expects(info.port_number == 0xCFE);
+
+    debug_pci_in(m_cf8, info);
+    return this->pci_in(info);
+}
+
+void debug_pci_out(uint32_t cf8, io_instruction_handler::info_t &info)
+{
+    const char *port = "";
+
+    switch (info.port_number) {
+        case 0xCFC: port = "CFC"; break;
+        case 0xCFD: port = "CFD"; break;
+        case 0xCFE: port = "CFE"; break;
+        case 0xCFF: port = "CFF"; break;
+        default:
+            bferror_nhex(0, "Invalid PCI out port:", info.port_number);
+            throw std::runtime_error("Invalid PCI out port");
+    }
+
+    switch (pci_header_type(cf8)) {
+        case pci_hdr_nonexistant:
+            break;
+
+        case pci_hdr_normal:
+        case pci_hdr_normal_multi:
+        case pci_hdr_pci_bridge:
+        case pci_hdr_pci_bridge_multi:
+            printf("%s out: %02x:%02x:%02x:%02x:%02x, size: %lu, ",
+                port, cf8_to_bus(cf8),
+                cf8_to_dev(cf8), cf8_to_fun(cf8),
+                cf8_to_reg(cf8), cf8_to_off(cf8),
+                info.size_of_access + 1);
+            break;
+
+        default:
+            bferror_nhex(0, "Unhandled PCI header:", pci_header_type(cf8));
+            bferror_nhex(0, "m_cf8:", cf8);
+            bferror_dump_cf8(0, cf8);
+            bferror_lnbr(0); {
+                const auto cur = ind(0xCF8);
+                bferror_nhex(0, "0xCF8:", cur);
+                bferror_dump_cf8(0, cur);
+                bferror_lnbr(0);
+            }
+            bferror_nhex(0, "0xCFC:", ind(0xCFC));
+            throw std::runtime_error("Unhandled PCI header");
+    }
+}
+
+bool
+xen_op_handler::pci_hdr_pci_bridge_out(io_instruction_handler::info_t &info)
+{
+    printf("(bridge) ");
+
+    return false;
+}
+
+bool
+xen_op_handler::pci_hdr_normal_out(io_instruction_handler::info_t &info)
+{
+    printf("(normal) ");
+
+    if (is_host_bridge(m_cf8)) {
+        return this->io_ignore_handler(m_vcpu, info);
     }
 
     return false;
 }
 
 bool
-xen_op_handler::io_cfc_out(
-    gsl::not_null<vcpu_t *> vcpu,
-    eapis::intel_x64::io_instruction_handler::info_t &info)
+xen_op_handler::pci_owned_out(io_instruction_handler::info_t &info)
 {
     return false;
+}
+
+bool
+xen_op_handler::pci_host_bridge_out(io_instruction_handler::info_t &info)
+{
+    return false;
+}
+
+bool
+xen_op_handler::pci_out(io_instruction_handler::info_t &info)
+{
+    bool ret = false;
+
+    switch (pci_header_type(m_cf8)) {
+        case pci_hdr_normal:
+        case pci_hdr_normal_multi:
+            ret = this->pci_hdr_normal_out(info);
+            printf("data: %08lx\n", info.val);
+            break;
+
+        case pci_hdr_pci_bridge:
+        case pci_hdr_pci_bridge_multi:
+            ret = this->pci_hdr_pci_bridge_out(info);
+            printf("data: %08lx\n", info.val);
+            break;
+
+        case pci_hdr_nonexistant:
+            //info.val = 0xFFFFFFFFUL;
+            //printf("(nexist) ");
+            ret = true;
+            break;
+
+        default:
+            bferror_nhex(0, "Unhandled PCI header:", pci_header_type(m_cf8));
+            bferror_nhex(0, "m_cf8:", m_cf8);
+            bferror_dump_cf8(0, m_cf8);
+            bferror_lnbr(0); {
+                const auto cf8 = ind(0xCF8);
+                bferror_nhex(0, "0xCF8:", cf8);
+                bferror_dump_cf8(0, cf8);
+                bferror_lnbr(0);
+            }
+            bferror_nhex(0, "0xCFC:", ind(0xCFC));
+            throw std::runtime_error("Unhandled PCI header");
+    }
+
+    //printf("data: %08lx\n", info.val);
+    return ret;
+}
+
+bool
+xen_op_handler::io_cfc_out(
+    gsl::not_null<vcpu_t *> vcpu,
+    io_instruction_handler::info_t &info)
+{
+    expects(info.port_number == 0xCFC);
+
+    debug_pci_out(m_cf8, info);
+    this->pci_out(info);
+    return true;
+}
+
+bool
+xen_op_handler::io_cfd_out(
+    gsl::not_null<vcpu_t *> vcpu,
+    io_instruction_handler::info_t &info)
+{
+    return false;
+}
+
+bool
+xen_op_handler::io_cfe_out(
+    gsl::not_null<vcpu_t *> vcpu,
+    io_instruction_handler::info_t &info)
+{
+    expects(info.port_number == 0xCFE);
+
+    debug_pci_out(m_cf8, info);
+    this->pci_out(info);
+    return true;
+}
+
+bool
+xen_op_handler::io_cfb_in(
+    gsl::not_null<vcpu_t *> vcpu,
+    io_instruction_handler::info_t &info)
+{
+    return false;
+}
+
+bool
+xen_op_handler::io_cfb_out(
+    gsl::not_null<vcpu_t *> vcpu,
+    io_instruction_handler::info_t &info)
+{
+    expects(info.val == 1);
+    return true;
 }
 
 static inline bool
@@ -1180,7 +1696,7 @@ xen_op_handler::xen_cpuid_leaf5_handler(
 
 bool
 xen_op_handler::io_zero_handler(
-    gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::io_instruction_handler::info_t &info)
+    gsl::not_null<vcpu_t *> vcpu, io_instruction_handler::info_t &info)
 {
     bfignored(vcpu);
 
@@ -1190,7 +1706,7 @@ xen_op_handler::io_zero_handler(
 
 bool
 xen_op_handler::io_ones_handler(
-    gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::io_instruction_handler::info_t &info)
+    gsl::not_null<vcpu_t *> vcpu, io_instruction_handler::info_t &info)
 {
     bfignored(vcpu);
 
@@ -1200,7 +1716,7 @@ xen_op_handler::io_ones_handler(
 
 bool
 xen_op_handler::io_ignore_handler(
-    gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::io_instruction_handler::info_t &info)
+    gsl::not_null<vcpu_t *> vcpu, io_instruction_handler::info_t &info)
 {
     bfignored(vcpu);
     bfignored(info);

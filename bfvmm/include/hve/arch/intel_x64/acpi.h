@@ -124,19 +124,10 @@ typedef struct {
 } __attribute__((packed)) ics_lapic_t;
 
 typedef struct {
-    acpi_subtable_header_t  header;
-    uint8_t                 id;
-    uint8_t                 reserved;
-    uint32_t                address;
-    uint32_t                gsi_base;
-} __attribute__((packed)) ics_ioapic_t;
-
-typedef struct {
     acpi_header_t           header;                 ///< Common ACPI table header
     uint32_t                address;                ///< Physical address of local APIC
     uint32_t                flags;                  ///< MADT flags (0 == No PIC)
     ics_lapic_t             lapic;                  ///< Local APIC ICS
-    ics_ioapic_t            ioapic;                 ///< IOAPIC ICS
 } __attribute__((packed)) madt_t;
 
 // -----------------------------------------------------------------------------
