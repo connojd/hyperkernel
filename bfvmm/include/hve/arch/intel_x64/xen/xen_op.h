@@ -178,10 +178,8 @@ private:
     bool io_cfc_out(
         gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::io_instruction_handler::info_t &info);
 
-    bool io_host_bridge_in(
-        gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::io_instruction_handler::info_t &info);
-
-
+    bool pci_normal_in(eapis::intel_x64::io_instruction_handler::info_t &info);
+    bool pci_bridge_in(eapis::intel_x64::io_instruction_handler::info_t &info);
 
     // -------------------------------------------------------------------------
     // VMCalls
@@ -227,10 +225,6 @@ private:
 
     uint8_t *map_rip(rip_cache_t &rc, uint64_t rip, uint64_t len);
 
-    bool ioapic_handle_write(
-        gsl::not_null<vcpu_t *> vcpu,
-        eapis::intel_x64::ept_violation_handler::info_t &info);
-
     bool xapic_handle_write(
         gsl::not_null<vcpu_t *> vcpu,
         eapis::intel_x64::ept_violation_handler::info_t &info);
@@ -260,7 +254,6 @@ private:
     std::unordered_map<uint32_t, uint64_t> m_msrs;
 
     rip_cache_t m_rc_xapic;
-    rip_cache_t m_rc_ioapic;
 
 private:
 
@@ -270,6 +263,10 @@ private:
     vcpu_info_t *m_vcpu_info;
     uint64_t m_hypercall_page_gpa{};
     uint32_t m_cf8{};
+    uint32_t m_msi_cap_addr{};
+    uint32_t m_msix_cap_addr{};
+    uint32_t m_msix_cap_addr_prev{};
+    uint32_t m_msix_cap_addr_next{};
 
     eapis::x64::unique_map<vcpu_runstate_info_t> m_runstate_info;
     eapis::x64::unique_map<vcpu_time_info_t> m_time_info;

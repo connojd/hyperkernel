@@ -99,6 +99,7 @@ add_config(
     OPTIONS "tiny"
     OPTIONS "xenstore"
     OPTIONS "ndvm-r8169"
+    OPTIONS "ndvm-brcmfmac"
 )
 
 add_config(
@@ -126,7 +127,7 @@ add_config(
 add_config(
     CONFIG_NAME ERB_ROOTFS_OVERLAY
     CONFIG_TYPE STRING
-    DEFAULT_VAL "${HK_SOURCE_ERB_DIR}/image/${ERB_IMAGE}/overlay"
+    DEFAULT_VAL "${HK_SOURCE_ERB_DIR}/overlay"
     DESCRIPTION "Directory to overlay onto the rootfs"
 )
 
@@ -136,4 +137,3 @@ add_config(
     DEFAULT_VAL ""
     DESCRIPTION "Script to execute in fakeroot context"
 )
-

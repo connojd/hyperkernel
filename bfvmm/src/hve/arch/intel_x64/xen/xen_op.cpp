@@ -230,7 +230,6 @@ xen_op_handler::xen_op_handler(
     this->register_unplug_quirk();
 
 
-    ADD_EPT_WRITE_HANDLER(ioapic_handle_write);
     ADD_EPT_WRITE_HANDLER(xapic_handle_write);
 
     m_pet_shift = ::intel_x64::msrs::ia32_vmx_misc::preemption_timer_decrement::get();
@@ -247,25 +246,28 @@ xen_op_handler::xen_op_handler(
 #define NIC_FUN 0
 #define NIC_ADDR ((1UL << 31) | NIC_BUS | NIC_DEV | NIC_FUN)
 
-inline uint32_t cf8_bus(uint32_t cf8)
+using namespace ::x64::portio;
+namespace io = vmcs_n::exit_qualification::io_instruction;
+
+inline uint32_t cf8_to_bus(uint32_t cf8)
 { return (cf8 & 0x00FF0000UL) >> 16; }
 
-inline uint32_t cf8_dev(uint32_t cf8)
+inline uint32_t cf8_to_dev(uint32_t cf8)
 { return (cf8 & 0x0000F800UL) >> 11; }
 
-inline uint32_t cf8_fun(uint32_t cf8)
+inline uint32_t cf8_to_fun(uint32_t cf8)
 { return (cf8 & 0x00000700UL) >> 8; }
 
-inline uint32_t cf8_reg(uint32_t cf8)
+inline uint32_t cf8_to_reg(uint32_t cf8)
 { return (cf8 & 0x000000FCUL) >> 2; }
 
-inline uint32_t cf8_off(uint32_t cf8)
+inline uint32_t cf8_to_off(uint32_t cf8)
 { return (cf8 & 0x00000003UL); }
 
 inline uint32_t cf8_read_reg(uint32_t cf8, uint32_t reg)
 {
-    auto addr = (cf8 & 0xFFFFFF03UL) | (reg << 2);
-    outd(0xcf8, addr);
+    const auto addr = (cf8 & 0xFFFFFF03UL) | (reg << 2);
+    outd(0xCF8, addr);
     return ind(0xCFC);
 }
 
@@ -274,41 +276,39 @@ inline uint32_t bdf_to_cf8(uint32_t b, uint32_t d, uint32_t f)
     return (1UL << 31) | (b << 16) | (d << 11) | (f << 8);
 }
 
-inline uint32_t is_host_bridge(uint32_t b, uint32_t d, uint32_t f)
-{
-    auto data = cf8_read_reg(bdf_to_cf8(b, d, f), 2);
-    auto cc = (data & 0xFF000000UL) >> 24;
-    auto sc = (data & 0x00FF0000UL) >> 16;
+enum pci_header_t {
+    pci_hdr_normal,
+    pci_hdr_pci_bridge,
+    pci_hdr_cardbus_bridge
+};
 
-    return cc == 0x6 && sc == 0x0;
+inline uint32_t pci_header_type(uint32_t cf8)
+{
+    const auto val = cf8_read_reg(cf8, 3);
+    return (val & 0x00FF0000UL) >> 16;
 }
 
-inline uint32_t is_host_bridge(uint32_t cf8)
+uint32_t pci_phys_read(uint32_t addr, uint32_t dport, uint32_t size)
 {
-    auto data = cf8_read_reg(cf8, 2);
-    auto cc = (data & 0xFF000000UL) >> 24;
-    auto sc = (data & 0x00FF0000UL) >> 16;
+    expects(dport >= 0xCFC && dport <= 0xCFF);
+    const auto p = gsl::narrow_cast<uint16_t>(dport);
+    outd(0xCF8, addr);
 
-    return cc == 0x6 && sc == 0x0;
+    switch (size) {
+        case io::size_of_access::one_byte:  return inb(p);
+        case io::size_of_access::two_byte:  return inw(p);
+        case io::size_of_access::four_byte: return ind(p);
+        default: throw std::runtime_error("Invalid PCI access size");
+    }
 }
 
-inline uint32_t is_pci_bridge(uint32_t b, uint32_t d, uint32_t f)
+inline void
+pci_info_in(uint32_t cf8,
+            eapis::intel_x64::io_instruction_handler::info_t &info)
 {
-    auto data = cf8_read_reg(bdf_to_cf8(b, d, f), 2);
-    auto cc = (data & 0xFF000000UL) >> 24;
-    auto sc = (data & 0x00FF0000UL) >> 16;
-
-    return cc == 0x6 && (sc == 0x4 || sc == 0x9);
+    info.val = pci_phys_read(cf8, info.port_number, info.size_of_access);
 }
 
-inline uint32_t is_pci_bridge(uint32_t cf8)
-{
-    auto data = cf8_read_reg(cf8, 2);
-    auto cc = (data & 0xFF000000UL) >> 24;
-    auto sc = (data & 0x00FF0000UL) >> 16;
-
-    return cc == 0x6 && (sc == 0x4 || sc == 0x9);
-}
 
 bool
 xen_op_handler::io_cf8_in(
@@ -328,6 +328,42 @@ xen_op_handler::io_cf8_out(
     return true;
 }
 
+// Normal -> not a PCI bridge -> config layout 0
+//
+bool
+xen_op_handler::pci_normal_in(
+    eapis::intel_x64::io_instruction_handler::info_t &info)
+{
+    return false;
+}
+
+// PCI bridge -> config layout 1
+//
+bool
+xen_op_handler::pci_bridge_in(
+    eapis::intel_x64::io_instruction_handler::info_t &info)
+{
+    const auto reg = cf8_to_reg(m_cf8);
+    switch (reg) {
+        case 0x00:
+        case 0x01:
+        case 0x02:
+        case 0x03:
+        case 0x06:
+            pci_info_in(m_cf8, info);
+            break;
+        case 0x07:
+            pci_info_in(m_cf8, info);
+            info.val &= 0xFFFF0000UL;
+            break;
+        default:
+            info.val = 0;
+            break;
+    }
+
+    return true;
+}
+
 bool
 xen_op_handler::io_cfc_in(
     gsl::not_null<vcpu_t *> vcpu,
@@ -336,12 +372,14 @@ xen_op_handler::io_cfc_in(
     expects(info.port_number == 0xCFC);
 
     printf("CFC in : %02x:%02x:%02x:%02x:%02x, size: %lu data %08lx\n",
-        cf8_bus(m_cf8), cf8_dev(m_cf8), cf8_fun(m_cf8),
-        cf8_reg(m_cf8), cf8_off(m_cf8), info.size_of_access + 1, info.val
+        cf8_to_bus(m_cf8), cf8_to_dev(m_cf8), cf8_to_fun(m_cf8),
+        cf8_to_reg(m_cf8), cf8_to_off(m_cf8), info.size_of_access + 1, info.val
     );
 
-    if (is_host_bridge(m_cf8)) {
-        return this->io_host_bridge_in(vcpu, info);
+    switch (pci_header_type(m_cf8)) {
+        case pci_hdr_normal: return this->pci_normal_in(info);
+        case pci_hdr_pci_bridge: return this->pci_bridge_in(info);
+        default: throw std::runtime_error("Unexpected PCI config header type");
     }
 
     return false;
@@ -354,54 +392,6 @@ xen_op_handler::io_cfc_out(
 {
     return false;
 }
-
-static uint32_t pci_read(uint32_t cf8, uint32_t dat, uint32_t size)
-{
-    using namespace ::x64::portio;
-    namespace io = vmcs_n::exit_qualification::io_instruction;
-
-    expects(dat >= 0xCFC && dat <= 0xCFF);
-    outd(0xCF8, cf8);
-
-    switch (size) {
-    case io::size_of_access::one_byte:
-        return inb(gsl::narrow_cast<uint16_t>(dat));
-    case io::size_of_access::two_byte:
-        return inw(gsl::narrow_cast<uint16_t>(dat));
-    case io::size_of_access::four_byte:
-        return ind(gsl::narrow_cast<uint16_t>(dat));
-    default:
-        throw std::runtime_error("Invalid PCI access size");
-    }
-
-}
-
-static void
-pci_info_in(uint32_t cf8,
-            eapis::intel_x64::io_instruction_handler::info_t &info)
-{
-    info.val = pci_read(cf8, info.port_number, info.size_of_access);
-}
-
-bool
-xen_op_handler::io_host_bridge_in(
-    gsl::not_null<vcpu_t *> vcpu,
-    eapis::intel_x64::io_instruction_handler::info_t &info)
-{
-    switch (cf8_reg(m_cf8)) {
-        case 0x00: // pass vendor/device
-        case 0x01: // pass cmd/status
-        case 0x02: // pass cc/sc/progif/revid
-            return pci_info_in(m_cf8, info);
-        case 0x03: {
-//            auto data = pci_read
-
-    }
-
-    return false;
-}
-
-
 
 static inline bool
 vmware_guest(void)
@@ -719,41 +709,6 @@ xen_op_handler::xapic_handle_write(
         default:
             bfalert_nhex(0, "unhandled xapic write indx:", idx);
             return false;
-    }
-
-    info.ignore_advance = false;
-    return true;
-}
-
-bool
-xen_op_handler::ioapic_handle_write(
-    gsl::not_null<vcpu_t *> vcpu,
-    eapis::intel_x64::ept_violation_handler::info_t &info)
-{
-    using namespace eapis::intel_x64::ioapic;
-
-    if (bfn::upper(info.gpa) != m_vcpu->ioapic_base()) {
-        return false;
-    }
-
-    const auto rip = ::intel_x64::vmcs::guest_rip::get();
-    const auto len = ::intel_x64::vmcs::vm_exit_instruction_length::get();
-    const auto buf = this->map_rip(m_rc_ioapic, rip, len);
-
-    hyperkernel::intel_x64::insn_decoder dec(buf, len);
-    const auto val = src_op_value(vcpu, dec.src_op());
-    switch (info.gpa & 0xFF) {
-        case sel_offset:
-            m_vcpu->ioapic_select(val);
-            m_vcpu->ioapic_set_window(m_vcpu->ioapic_read());
-            break;
-        case win_offset:
-            m_vcpu->ioapic_write(val);
-            m_vcpu->ioapic_set_window(val);
-
-        default:
-            throw std::invalid_argument("Invalid IOAPIC write: " +
-                                        std::to_string(info.gpa));
     }
 
     info.ignore_advance = false;
