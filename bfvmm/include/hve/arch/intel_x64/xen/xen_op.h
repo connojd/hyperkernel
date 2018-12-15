@@ -168,6 +168,21 @@ private:
     bool io_ignore_handler(
         gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::io_instruction_handler::info_t &info);
 
+    bool io_cf8_in(
+        gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::io_instruction_handler::info_t &info);
+    bool io_cf8_out(
+        gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::io_instruction_handler::info_t &info);
+
+    bool io_cfc_in(
+        gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::io_instruction_handler::info_t &info);
+    bool io_cfc_out(
+        gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::io_instruction_handler::info_t &info);
+
+    bool io_host_bridge_in(
+        gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::io_instruction_handler::info_t &info);
+
+
+
     // -------------------------------------------------------------------------
     // VMCalls
     // -------------------------------------------------------------------------
@@ -254,6 +269,7 @@ private:
 
     vcpu_info_t *m_vcpu_info;
     uint64_t m_hypercall_page_gpa{};
+    uint32_t m_cf8{};
 
     eapis::x64::unique_map<vcpu_runstate_info_t> m_runstate_info;
     eapis::x64::unique_map<vcpu_time_info_t> m_time_info;
