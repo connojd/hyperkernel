@@ -196,15 +196,16 @@ private:
     bool pci_in(eapis::intel_x64::io_instruction_handler::info_t &info);
     bool pci_hdr_pci_bridge_in(eapis::intel_x64::io_instruction_handler::info_t &info);
     bool pci_hdr_normal_in(eapis::intel_x64::io_instruction_handler::info_t &info);
-    bool pci_owned_in(eapis::intel_x64::io_instruction_handler::info_t &info);
     bool pci_host_bridge_in(eapis::intel_x64::io_instruction_handler::info_t &info);
+    bool pci_owned_in(eapis::intel_x64::io_instruction_handler::info_t &info);
     bool pci_msix_cap_prev_in(eapis::intel_x64::io_instruction_handler::info_t &info);
 
     bool pci_out(eapis::intel_x64::io_instruction_handler::info_t &info);
     bool pci_hdr_pci_bridge_out(eapis::intel_x64::io_instruction_handler::info_t &info);
     bool pci_hdr_normal_out(eapis::intel_x64::io_instruction_handler::info_t &info);
-    bool pci_owned_out(eapis::intel_x64::io_instruction_handler::info_t &info);
     bool pci_host_bridge_out(eapis::intel_x64::io_instruction_handler::info_t &info);
+    bool pci_owned_out(eapis::intel_x64::io_instruction_handler::info_t &info);
+    bool pci_owned_msi_out(eapis::intel_x64::io_instruction_handler::info_t &info);
 
     // -------------------------------------------------------------------------
     // VMCalls

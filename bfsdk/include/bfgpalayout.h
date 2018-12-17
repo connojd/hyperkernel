@@ -129,11 +129,19 @@ setup_e820_map(void *vm, uint64_t size)
         return FAILURE;
     }
 
+    /**
+     * TODO: Linux is assigning memory to PCI only if it isn't specified in the e820. This doesn't
+     * seem right but for now we leave a gap for PCI.
+     */
     ret |= add_e820_entry(vm, 0x0000000000000000, 0x00000000000E8000, XEN_HVM_MEMMAP_TYPE_RAM);
     ret |= add_e820_entry(vm, 0x00000000000E8000, 0x0000000000100000, XEN_HVM_MEMMAP_TYPE_RESERVED);
     ret |= add_e820_entry(vm, 0x0000000000100000, 0x0000000001000000, XEN_HVM_MEMMAP_TYPE_UNUSABLE);
     ret |= add_e820_entry(vm, 0x0000000001000000, 0x001000000 + size, XEN_HVM_MEMMAP_TYPE_RAM);
-    ret |= add_e820_entry(vm, 0x001000000 + size, 0x00000000FEC00000, XEN_HVM_MEMMAP_TYPE_UNUSABLE);
+    ret |= add_e820_entry(vm, 0x001000000 + size, 0x00000000F0000000, XEN_HVM_MEMMAP_TYPE_UNUSABLE);
+    //ret |= add_e820_entry(vm, 0x00000000F0000000, 0x00000000F0100000, XEN_HVM_MEMMAP_TYPE_RAM);
+    //ret |= add_e820_entry(vm, 0x00000000F0100000, 0x00000000F7000000, XEN_HVM_MEMMAP_TYPE_UNUSABLE);
+    //ret |= add_e820_entry(vm, 0x00000000F7000000, 0x00000000F7100000, XEN_HVM_MEMMAP_TYPE_RAM);
+    //ret |= add_e820_entry(vm, 0x00000000F7100000, 0x00000000FEC00000, XEN_HVM_MEMMAP_TYPE_UNUSABLE);
     ret |= add_e820_entry(vm, 0x00000000FEC00000, 0x00000000FFFFFFFF, XEN_HVM_MEMMAP_TYPE_RESERVED);
     ret |= add_e820_entry(vm, 0x00000000FFFFFFFF, 0xFFFFFFFFFFFFFFFF, XEN_HVM_MEMMAP_TYPE_UNUSABLE);
 

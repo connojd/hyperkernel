@@ -76,6 +76,16 @@ domain::setup_domU()
     m_ept_map.map_4k(m_gdt_virt, m_gdt_phys, ept::mmap::attr_type::read_only);
     m_ept_map.map_4k(m_idt_virt, m_idt_phys, ept::mmap::attr_type::read_only);
 
+    m_ept_map.map_4k(0xF7000000,
+                     0xF7000000,
+                     ept::mmap::attr_type::read_write,
+                     ept::mmap::memory_type::uncacheable);
+
+    m_ept_map.map_4k(0xF0000000, 0xF0000000, ept::mmap::attr_type::read_write);
+    m_ept_map.map_4k(0xF0001000, 0xF0001000, ept::mmap::attr_type::read_write);
+    m_ept_map.map_4k(0xF0002000, 0xF0002000, ept::mmap::attr_type::read_write);
+    m_ept_map.map_4k(0xF0003000, 0xF0003000, ept::mmap::attr_type::read_write);
+
     this->setup_acpi();
 }
 

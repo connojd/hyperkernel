@@ -22,6 +22,7 @@
 #include <iostream>
 #include <hve/arch/intel_x64/vcpu.h>
 #include <hve/arch/intel_x64/lapic.h>
+#include <hve/arch/intel_x64/vtd/vtd_sandbox.h>
 #include <eapis/hve/arch/intel_x64/time.h>
 
 #include <xen/public/xen.h>
@@ -240,11 +241,15 @@ xen_op_handler::xen_op_handler(
     );
 
     this->pci_init_caps();
+
+    for (auto i = 0xe000; i <= 0xefff; i++) {
+        vcpu->pass_through_io_accesses(i);
+    }
 }
 
-#define NIC_BUS 0x3a
-#define NIC_DEV 0
-#define NIC_FUN 0
+#define NIC_BUS 0x2
+#define NIC_DEV 0x0
+#define NIC_FUN 0x0
 
 using namespace ::x64::portio;
 using namespace eapis::intel_x64;
@@ -300,6 +305,8 @@ xen_op_handler::pci_init_caps()
     auto reg = ptr >> 2U;
     auto prev = 0xD;
 
+    printf("NIC: Capabilities pointer: %x\n", reg);
+
     while (reg != 0) {
         constexpr auto id_msi = 0x05;
         constexpr auto id_msix = 0x11;
@@ -330,12 +337,12 @@ xen_op_handler::pci_init_caps()
 
     ensures(m_msi_cap != 0);
 
-    printf("NIC: capability found: msi at byte 0x%x, reg 0x%x\n",
+    printf("NIC: Capability found: MSI at byte 0x%x, reg 0x%x\n",
            m_msi_cap << 2,
            m_msi_cap);
 
     if (m_msix_cap != 0) {
-        printf("NIC: capability found: msi-x at byte 0x%x, reg 0x%x\n",
+        printf("NIC: Capability found: MSI-x at byte 0x%x, reg 0x%x\n",
                m_msix_cap << 2,
                m_msix_cap);
     }
@@ -491,7 +498,26 @@ xen_op_handler::pci_owned_in(io_instruction_handler::info_t &info)
     }
 
     pci_info_in(m_cf8, info);
-    return false;
+
+    if (cf8_to_reg(m_cf8) == 0xF) {
+        if (info.port_number == 0xCFC) {
+            info.val |= 0xFF;
+
+            switch (info.size_of_access) {
+            case io::size_of_access::four_byte:
+                info.val &= 0xFFFF00FF;
+                break;
+
+            case io::size_of_access::two_byte:
+                info.val &= 0x00FF;
+                break;
+            }
+        } else if (info.port_number == 0xCFD) {
+            info.val = 0;
+        }
+    }
+
+    return true;
 }
 
 bool
@@ -545,13 +571,13 @@ xen_op_handler::pci_host_bridge_in(io_instruction_handler::info_t &info)
 bool
 xen_op_handler::pci_hdr_normal_in(io_instruction_handler::info_t &info)
 {
-    printf("(normal) ");
-
     if (domU_owned_cf8(m_cf8)) {
+//        printf("(owned)  ");
         return this->pci_owned_in(info);
     }
 
     if (is_host_bridge(m_cf8)) {
+//        printf("(hostbr) ");
         return this->pci_host_bridge_in(info);
     }
 
@@ -564,7 +590,12 @@ xen_op_handler::pci_hdr_normal_in(io_instruction_handler::info_t &info)
 bool
 xen_op_handler::pci_hdr_pci_bridge_in(io_instruction_handler::info_t &info)
 {
-    printf("(bridge) ");
+//    printf("(bridge) ");
+
+    if (cf8_to_dev(m_cf8) == 0x1c && cf8_to_fun(m_cf8) == 0) {
+            pci_info_in(m_cf8, info);
+            return true;
+    }
 
     switch (cf8_to_reg(m_cf8)) {
         case 0x00: // passthrough device/vendor register
@@ -645,13 +676,13 @@ xen_op_handler::pci_in(io_instruction_handler::info_t &info)
         case pci_hdr_normal:
         case pci_hdr_normal_multi:
             ret = this->pci_hdr_normal_in(info);
-            printf("data: %08lx\n", info.val);
+//            printf("data: %08lx\n", info.val);
             break;
 
         case pci_hdr_pci_bridge:
         case pci_hdr_pci_bridge_multi:
             ret = this->pci_hdr_pci_bridge_in(info);
-            printf("data: %08lx\n", info.val);
+//            printf("data: %08lx\n", info.val);
             break;
 
         case pci_hdr_nonexistant:
@@ -716,7 +747,7 @@ xen_op_handler::io_cfc_in(
 {
     expects(info.port_number == 0xCFC);
 
-    debug_pci_in(m_cf8, info);
+    //debug_pci_in(m_cf8, info);
     return this->pci_in(info);
 }
 
@@ -727,7 +758,7 @@ xen_op_handler::io_cfd_in(
 {
     expects(info.port_number == 0xCFD);
 
-    debug_pci_in(m_cf8, info);
+    //debug_pci_in(m_cf8, info);
     return this->pci_in(info);
 }
 
@@ -738,7 +769,7 @@ xen_op_handler::io_cfe_in(
 {
     expects(info.port_number == 0xCFE);
 
-    debug_pci_in(m_cf8, info);
+    //debug_pci_in(m_cf8, info);
     return this->pci_in(info);
 }
 
@@ -786,20 +817,62 @@ void debug_pci_out(uint32_t cf8, io_instruction_handler::info_t &info)
     }
 }
 
+void pci_phys_write(uint32_t addr,
+                    uint32_t port,
+                    uint32_t size,
+                    uint32_t data)
+{
+    expects(port >= 0xCFC && port <= 0xCFF);
+    outd(0xCF8, addr);
+
+    switch (size) {
+    case io::size_of_access::one_byte:
+        outb(port, gsl::narrow_cast<uint8_t>(data));
+        break;
+    case io::size_of_access::two_byte:
+        outw(port, gsl::narrow_cast<uint16_t>(data));
+        break;
+    case io::size_of_access::four_byte:
+        outd(port, gsl::narrow_cast<uint32_t>(data));
+        break;
+    default:
+        throw std::runtime_error("Invalid PCI access size");
+    }
+}
+
+inline void
+pci_info_out(uint32_t cf8, const io_instruction_handler::info_t &info)
+{
+    pci_phys_write(cf8,
+                   info.port_number,
+                   info.size_of_access,
+                   info.val);
+}
+
 bool
 xen_op_handler::pci_hdr_pci_bridge_out(io_instruction_handler::info_t &info)
 {
-    printf("(bridge) ");
+//    printf("(bridge) ");
 
-    return false;
+    if (cf8_to_dev(m_cf8) == 0x1c && cf8_to_fun(m_cf8) == 0) {
+            pci_info_out(m_cf8, info);
+            return true;
+    }
+
+    //bferror_dump_cf8(0, m_cf8);
+    return this->io_ignore_handler(m_vcpu, info);
 }
 
 bool
 xen_op_handler::pci_hdr_normal_out(io_instruction_handler::info_t &info)
 {
-    printf("(normal) ");
+    if (domU_owned_cf8(m_cf8)) {
+//        printf("(owned)  ");
+        return this->pci_owned_out(info);
+    }
 
     if (is_host_bridge(m_cf8)) {
+//        printf("(hostbr) ");
         return this->io_ignore_handler(m_vcpu, info);
     }
 
@@ -807,9 +880,47 @@ xen_op_handler::pci_hdr_normal_out(io_instruction_handler::info_t &info)
 }
 
 bool
+xen_op_handler::pci_owned_msi_out(io_instruction_handler::info_t &info)
+{
+    const auto reg = cf8_to_reg(m_cf8);
+
+    if (reg == m_msi_cap) {
+        bfdebug_nhex(0, "MSI+0", info.val);
+    }
+    if (reg == m_msi_cap + 1) {
+        bfdebug_nhex(0, "MSI+1", info.val);
+    }
+    if (reg == m_msi_cap + 2) {
+        bfdebug_nhex(0, "MSI+2", info.val);
+    }
+    if (reg == m_msi_cap + 3) {
+        bfdebug_nhex(0, "MSI+3", info.val);
+        bfdebug_nhex(0, "Received NIC vector:", info.val & 0xFF);
+        vtd_sandbox::g_ndvm_vector = info.val & 0xFF;
+    }
+    if (reg == m_msi_cap + 4) {
+        bfdebug_nhex(0, "MSI+4", info.val);
+    }
+    if (reg == m_msi_cap + 5) {
+        bfdebug_nhex(0, "MSI+5", info.val);
+    }
+
+    pci_info_out(m_cf8, info);
+    return true;
+}
+
+bool
 xen_op_handler::pci_owned_out(io_instruction_handler::info_t &info)
 {
-    return false;
+    const auto reg = cf8_to_reg(m_cf8);
+    expects(reg != m_msix_cap);
+
+    if (reg < m_msi_cap || reg > m_msi_cap + 5) {
+        pci_info_out(m_cf8, info);
+        return true;
+    }
+
+    return this->pci_owned_msi_out(info);
 }
 
 bool
@@ -827,13 +938,13 @@ xen_op_handler::pci_out(io_instruction_handler::info_t &info)
         case pci_hdr_normal:
         case pci_hdr_normal_multi:
             ret = this->pci_hdr_normal_out(info);
-            printf("data: %08lx\n", info.val);
+//           printf("data: %08lx\n", info.val);
             break;
 
         case pci_hdr_pci_bridge:
         case pci_hdr_pci_bridge_multi:
             ret = this->pci_hdr_pci_bridge_out(info);
-            printf("data: %08lx\n", info.val);
+//            printf("data: %08lx\n", info.val);
             break;
 
         case pci_hdr_nonexistant:
@@ -867,9 +978,8 @@ xen_op_handler::io_cfc_out(
 {
     expects(info.port_number == 0xCFC);
 
-    debug_pci_out(m_cf8, info);
-    this->pci_out(info);
-    return true;
+//    debug_pci_out(m_cf8, info);
+    return this->pci_out(info);
 }
 
 bool
@@ -877,7 +987,10 @@ xen_op_handler::io_cfd_out(
     gsl::not_null<vcpu_t *> vcpu,
     io_instruction_handler::info_t &info)
 {
-    return false;
+    expects(info.port_number == 0xCFD);
+
+ //   debug_pci_out(m_cf8, info);
+    return this->pci_out(info);
 }
 
 bool
@@ -887,9 +1000,8 @@ xen_op_handler::io_cfe_out(
 {
     expects(info.port_number == 0xCFE);
 
-    debug_pci_out(m_cf8, info);
-    this->pci_out(info);
-    return true;
+//    debug_pci_out(m_cf8, info);
+    return this->pci_out(info);
 }
 
 bool
