@@ -160,6 +160,19 @@ public:
     ///
     void map_4k_rw(uintptr_t gpa, uintptr_t hpa);
 
+    /// Map 4k GPA to HPA (Read/Write, Uncacheable)
+    ///
+    /// Maps a 4k guest physical address to a 4k host physical address
+    /// using EPT
+    ///
+    /// @expects
+    /// @ensures
+    ///
+    /// @param gpa the guest physical address
+    /// @param hpa the host physical address
+    ///
+    void map_4k_rw_uc(uintptr_t gpa, uintptr_t hpa);
+
     /// Map 1g GPA to HPA (Read/Write/Execute)
     ///
     /// Maps a 1g guest physical address to a 1g host physical address

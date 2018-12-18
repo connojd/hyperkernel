@@ -19,8 +19,8 @@
 #include <bfcallonce.h>
 #include <bfgpalayout.h>
 
+#include <list>
 #include <iostream>
-//#include <variant>
 
 #include <hve/arch/intel_x64/vcpu.h>
 #include <hve/arch/intel_x64/lapic.h>
@@ -243,10 +243,7 @@ xen_op_handler::xen_op_handler(
     );
 
     this->pci_init_caps();
-
-    for (auto i = 0xe000; i <= 0xefff; i++) {
-        vcpu->pass_through_io_accesses(i);
-    }
+    this->pci_init_bars();
 }
 
 #define NIC_BUS 0x2
@@ -283,6 +280,13 @@ inline uint32_t cf8_read_reg(uint32_t cf8, uint32_t reg)
     return ind(0xCFC);
 }
 
+inline void cf8_write_reg(uint32_t cf8, uint32_t reg, uint32_t val)
+{
+    const auto addr = (cf8 & 0xFFFFFF03UL) | (reg << 2);
+    outd(0xCF8, addr);
+    outd(0xCFC, val);
+}
+
 inline uint32_t bdf_to_cf8(uint32_t b, uint32_t d, uint32_t f)
 {
     return (1UL << 31) | (b << 16) | (d << 11) | (f << 8);
@@ -293,62 +297,6 @@ inline bool domU_owned_cf8(uint32_t cf8)
     return cf8_to_bus(cf8) == NIC_BUS &&
            cf8_to_dev(cf8) == NIC_DEV &&
            cf8_to_fun(cf8) == NIC_FUN;
-}
-
-void
-xen_op_handler::pci_init_caps()
-{
-    const auto cf8 = bdf_to_cf8(NIC_BUS, NIC_DEV, NIC_FUN);
-    if ((cf8_read_reg(cf8, 0x1) & 0x0010'0000) == 0) {
-        printf("NIC: capability list empty\n");
-        return;
-    }
-
-    const auto ptr = cf8_read_reg(cf8, 0xD) & 0xFF;
-    auto reg = ptr >> 2U;
-    auto prev = 0xD;
-
-    printf("NIC: Capabilities pointer: %x\n", reg);
-
-    while (reg != 0) {
-        constexpr auto id_msi = 0x05;
-        constexpr auto id_msix = 0x11;
-
-        const auto cap = cf8_read_reg(cf8, reg);
-        const auto id = cap & 0xFF;
-
-        if (id == id_msi) {
-            m_msi_cap = reg;
-            prev = reg;
-            reg = (cap & 0xFF00) >> (8 + 2);
-            continue;
-        }
-
-        if (id != id_msix) {
-            prev = reg;
-            reg = (cap & 0xFF00) >> (8 + 2);
-            continue;
-        }
-
-        // We don't update prev here like in the other cases because
-        // the only reason prev is around is to set m_msix_cap_prev
-        //
-        m_msix_cap = reg;
-        m_msix_cap_prev = prev;
-        m_msix_cap_next = reg = (cap & 0xFF00) >> (8 + 2);
-    }
-
-    ensures(m_msi_cap != 0);
-
-    printf("NIC: Capability found: MSI at byte 0x%x, reg 0x%x\n",
-           m_msi_cap << 2,
-           m_msi_cap);
-
-    if (m_msix_cap != 0) {
-        printf("NIC: Capability found: MSI-x at byte 0x%x, reg 0x%x\n",
-               m_msix_cap << 2,
-               m_msix_cap);
-    }
 }
 
 enum pci_header_t {
@@ -398,6 +346,221 @@ inline uint32_t pci_header_type(uint32_t cf8)
     return (val & 0x00FF0000UL) >> 16;
 }
 
+void
+xen_op_handler::pci_init_caps()
+{
+    const auto cf8 = bdf_to_cf8(NIC_BUS, NIC_DEV, NIC_FUN);
+    if ((cf8_read_reg(cf8, 0x1) & 0x0010'0000) == 0) {
+        printf("NIC: capability list empty\n");
+        return;
+    }
+
+    const auto ptr = cf8_read_reg(cf8, 0xD) & 0xFF;
+    auto reg = ptr >> 2U;
+    auto prev = 0xD;
+
+    printf("NIC: Capability pointer: %x\n", reg);
+
+    while (reg != 0) {
+        constexpr auto id_msi = 0x05;
+        constexpr auto id_msix = 0x11;
+
+        const auto cap = cf8_read_reg(cf8, reg);
+        const auto id = cap & 0xFF;
+
+        if (id == id_msi) {
+            m_msi_cap = reg;
+            prev = reg;
+            reg = (cap & 0xFF00) >> (8 + 2);
+            continue;
+        }
+
+        if (id != id_msix) {
+            prev = reg;
+            reg = (cap & 0xFF00) >> (8 + 2);
+            continue;
+        }
+
+        // We don't update prev here like in the other cases because
+        // the only reason prev is around is to set m_msix_cap_prev
+        //
+        m_msix_cap = reg;
+        m_msix_cap_prev = prev;
+        m_msix_cap_next = reg = (cap & 0xFF00) >> (8 + 2);
+    }
+
+    ensures(m_msi_cap != 0);
+
+    printf("NIC: Capability found: MSI at byte 0x%x, reg 0x%x\n",
+           m_msi_cap << 2,
+           m_msi_cap);
+
+    if (m_msix_cap != 0) {
+        printf("NIC: Capability found: MSI-x at byte 0x%x, reg 0x%x\n",
+               m_msix_cap << 2,
+               m_msix_cap);
+    }
+}
+
+enum pci_bar_t {
+    pci_bar_mm,
+    pci_bar_io
+};
+
+struct pci_bar {
+    uint8_t bar_type;
+    uint8_t mm_type;
+    uintptr_t addr;
+    uint32_t size;
+    bool prefetchable;
+};
+
+using pci_bars_t = std::list<struct pci_bar>;
+
+void parse_bar_size(
+    uint32_t cf8,
+    uint32_t reg,
+    uint32_t val,
+    uint32_t mask,
+    uint32_t *size)
+{
+    cf8_write_reg(cf8, reg, 0xFFFFFFFF);
+
+    auto len = cf8_read_reg(cf8, reg);
+    len = ~(len & mask) + 1U;
+    *size = len;
+
+    cf8_write_reg(cf8, reg, val);
+}
+
+void parse_bars_normal(uint32_t cf8, pci_bars_t &bars)
+{
+    const std::array<uint8_t, 6> bar_regs = {0x4, 0x5, 0x6, 0x7, 0x8, 0x9};
+
+    for (auto i = 0; i < bar_regs.size(); i++) {
+        const auto reg = bar_regs[i];
+        const auto val = cf8_read_reg(cf8, reg);
+
+        if (val == 0) {
+            continue;
+        }
+
+        struct pci_bar bar{};
+
+        if ((val & 0x1) != 0) { // IO bar
+            parse_bar_size(cf8, reg, val, 0xFFFFFFFC, &bar.size);
+            bar.addr = val & 0xFFFFFFFC;
+            bar.bar_type = pci_bar_io;
+        } else {                // MM bar
+            parse_bar_size(cf8, reg, val, 0xFFFFFFF0, &bar.size);
+            bar.addr = (val & 0xFFFFFFF0);
+            bar.prefetchable = (val & 0x8) != 0;
+            bar.mm_type = (val & 0x6) >> 1;
+
+            if (bar.mm_type == 2) {
+                bar.addr |= gsl::narrow_cast<uintptr_t>(cf8_read_reg(cf8, bar_regs.at(++i))) << 32;
+            }
+            bar.bar_type = pci_bar_mm;
+        }
+
+        bars.push_back(bar);
+    }
+}
+
+void parse_bars_pci_bridge(uint32_t cf8, pci_bars_t &bars)
+{
+    const std::array<uint8_t, 2> bar_regs = {0x4, 0x5};
+
+    for (auto i = 0; i < bar_regs.size(); i++) {
+        const auto reg = bar_regs[i];
+        const auto val = cf8_read_reg(cf8, reg);
+
+        if (val == 0) {
+            continue;
+        }
+
+        struct pci_bar bar{};
+
+        if ((val & 0x1) != 0) { // IO bar
+            parse_bar_size(cf8, reg, val, 0xFFFFFFFC, &bar.size);
+            bar.addr = val & 0xFFFFFFFC;
+            bar.bar_type = pci_bar_io;
+        } else {                // MM bar
+            parse_bar_size(cf8, reg, val, 0xFFFFFFF0, &bar.size);
+            bar.addr = (val & 0xFFFFFFF0);
+            bar.prefetchable = (val & 0x8) != 0;
+            bar.mm_type = (val & 0x6) >> 1;
+
+            if (bar.mm_type == 2) {
+                bar.addr |= gsl::narrow_cast<uintptr_t>(cf8_read_reg(cf8, bar_regs.at(++i))) << 32;
+            }
+            bar.bar_type = pci_bar_mm;
+        }
+
+        bars.push_back(bar);
+    }
+}
+
+void pci_parse_bars(uint32_t cf8, pci_bars_t &bars)
+{
+    const auto hdr = pci_header_type(cf8);
+
+    switch (hdr) {
+    case pci_hdr_normal:
+    case pci_hdr_normal_multi:
+        parse_bars_normal(cf8, bars);
+        return;
+
+    case pci_hdr_pci_bridge:
+    case pci_hdr_pci_bridge_multi:
+        parse_bars_pci_bridge(cf8, bars);
+        return;
+
+    default:
+        bfalert_nhex(0, "Unsupported header type for PCI bar parsing", hdr);
+        return;
+    }
+}
+
+void
+xen_op_handler::pci_init_bars()
+{
+    const auto cf8 = bdf_to_cf8(NIC_BUS, NIC_DEV, NIC_FUN);
+    pci_bars_t nic_bars;
+    parse_bars_normal(cf8, nic_bars);
+
+    for (const auto &bar : nic_bars) {
+        if (bar.bar_type == pci_bar_io) {
+            bfdebug_info(0, "IO BAR:");
+            bfdebug_subnhex(0, "addr", bar.addr);
+            bfdebug_subnhex(0, "size", bar.size);
+
+            for (auto p = 0; p < bar.size; p++) {
+                m_vcpu->pass_through_io_accesses(bar.addr + p);
+            }
+
+            continue;
+        }
+
+        bfdebug_info(0, "MM BAR:");
+        bfdebug_subnhex(0, "addr", bar.addr);
+        bfdebug_subnhex(0, "size", bar.size);
+        bfdebug_subbool(0, "64-bit", bar.mm_type == 2);
+        bfdebug_subbool(0, "prefetchable", bar.prefetchable);
+
+        if (bar.prefetchable) {
+            for (auto i = 0; i < bar.size; i += ::x64::pt::page_size) {
+                m_domain->map_4k_rw(bar.addr + i, bar.addr + i);
+            }
+        } else {
+            for (auto i = 0; i < bar.size; i += ::x64::pt::page_size) {
+                m_domain->map_4k_rw_uc(bar.addr + i, bar.addr + i);
+            }
+        }
+    }
+}
+
+
 uint32_t pci_phys_read(uint32_t addr, uint32_t port, uint32_t size)
 {
     expects(port >= 0xCFC && port <= 0xCFF);
@@ -413,53 +576,6 @@ uint32_t pci_phys_read(uint32_t addr, uint32_t port, uint32_t size)
 
 inline void pci_info_in(uint32_t cf8, io_instruction_handler::info_t &info)
 { info.val = pci_phys_read(cf8, info.port_number, info.size_of_access); }
-
-//struct pci_bar_mm {
-//    uintptr_t addr;
-//    size_t size;
-//    uint8_t type;
-//    bool prefetchable;
-//};
-//
-//struct pci_bar_io {
-//    uintptr_t addr;
-//    size_t size;
-//};
-//
-//using pci_bar_t = std::variant<struct pci_bar_mm, struct pci_bar_io>;
-//using pci_bars_t = std::list<pci_bar_t>;
-//
-//void parse_bars_normal(uint32_t cf8, pci_bars_t &bars)
-//{
-//    auto bar = cf8_read_reg(cf8, 0x4);
-//    if ((bar & 0x1) != 0) {
-//        struct pci_bar_io io = {
-//            .addr = bar & 0xFFFFFFFC;
-//            .size = 0;
-//        };
-//}
-//
-//void pci_parse_bars(uint32_t cf8, pci_bars_t &bars)
-//{
-//    const auto hdr = pci_header_type(cf8);
-//
-//    switch (hdr) {
-//    case pci_hdr_normal:
-//    case pci_hdr_normal_multi:
-//        parse_bars_normal(cf8, bars);
-//        return;
-//
-//    case pci_hdr_pci_bridge:
-//    case pci_hdr_pci_bridge_multi:
-//        parse_bars_pci_bridge(cf8, bars);
-//        return;
-//
-//    default:
-//        bfalert_nhex(0, "Unsupported header type for PCI bar parsing", hdr);
-//        return;
-//    }
-//}
-
 
 bool
 xen_op_handler::io_cf8_in(

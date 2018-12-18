@@ -76,15 +76,15 @@ domain::setup_domU()
     m_ept_map.map_4k(m_gdt_virt, m_gdt_phys, ept::mmap::attr_type::read_only);
     m_ept_map.map_4k(m_idt_virt, m_idt_phys, ept::mmap::attr_type::read_only);
 
-    m_ept_map.map_4k(0xF7100000,
-                     0xF7100000,
-                     ept::mmap::attr_type::read_write,
-                     ept::mmap::memory_type::uncacheable);
-
-    m_ept_map.map_4k(0xF0000000, 0xF0000000, ept::mmap::attr_type::read_write);
-    m_ept_map.map_4k(0xF0001000, 0xF0001000, ept::mmap::attr_type::read_write);
-    m_ept_map.map_4k(0xF0002000, 0xF0002000, ept::mmap::attr_type::read_write);
-    m_ept_map.map_4k(0xF0003000, 0xF0003000, ept::mmap::attr_type::read_write);
+//    m_ept_map.map_4k(0xF7000000,
+//                     0xF7000000,
+//                     ept::mmap::attr_type::read_write,
+//                     ept::mmap::memory_type::uncacheable);
+//
+//    m_ept_map.map_4k(0xF0000000, 0xF0000000, ept::mmap::attr_type::read_write);
+//    m_ept_map.map_4k(0xF0001000, 0xF0001000, ept::mmap::attr_type::read_write);
+//    m_ept_map.map_4k(0xF0002000, 0xF0002000, ept::mmap::attr_type::read_write);
+//    m_ept_map.map_4k(0xF0003000, 0xF0003000, ept::mmap::attr_type::read_write);
 
     this->setup_acpi();
 }
@@ -198,6 +198,15 @@ domain::map_2m_rw(uintptr_t gpa, uintptr_t hpa)
 void
 domain::map_4k_rw(uintptr_t gpa, uintptr_t hpa)
 { m_ept_map.map_4k(gpa, hpa, ept::mmap::attr_type::read_write); }
+
+void
+domain::map_4k_rw_uc(uintptr_t gpa, uintptr_t hpa)
+{
+    m_ept_map.map_4k(gpa,
+                     hpa,
+                     ept::mmap::attr_type::read_write,
+                     ept::mmap::memory_type::uncacheable);
+}
 
 void
 domain::map_1g_rwe(uintptr_t gpa, uintptr_t hpa)

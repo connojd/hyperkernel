@@ -264,6 +264,7 @@ private:
 
     bool local_xenstore() const;
     void pci_init_caps();
+    void pci_init_bars();
 
     // -------------------------------------------------------------------------
     // Quirks
@@ -294,6 +295,15 @@ private:
     uint32_t m_msix_cap{};
     uint32_t m_msix_cap_prev{};
     uint32_t m_msix_cap_next{};
+
+    uint32_t m_nic_io;
+    uint32_t m_nic_io_size;
+
+    uintptr_t m_nic_prefetch;
+    uintptr_t m_nic_prefetch_size;
+
+    uintptr_t m_nic_non_prefetch;
+    uintptr_t m_nic_non_prefetch_size;
 
     eapis::x64::unique_map<vcpu_runstate_info_t> m_runstate_info;
     eapis::x64::unique_map<vcpu_time_info_t> m_time_info;

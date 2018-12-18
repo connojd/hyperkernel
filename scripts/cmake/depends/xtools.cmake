@@ -24,12 +24,12 @@ endif()
 # Cross-compiler variables
 # ------------------------------------------------------------------------------
 
-set(ERB_TOOLS_URL "https://github.com/connojd/xtools/releases/download/v0.1.0/${ERB_TUPLE}_sdk-buildroot.tar.gz"
+set(ERB_TOOLS_URL "https://github.com/connojd/xtools/releases/download/v0.2.0/${ERB_TUPLE}_sdk-buildroot.tar.gz"
     CACHE INTERNAL FORCE
     "Cross-compiler URL"
 )
 
-set(ERB_TOOLS_URL_MD5 "45b9a2d96c5c41c599314f7fbfae2e94"
+set(ERB_TOOLS_URL_MD5 "0457a19cd9a4dece4615f8434b77a2df"
     CACHE INTERNAL FORCE
     "Cross-compiler URL MD5 hash"
 )

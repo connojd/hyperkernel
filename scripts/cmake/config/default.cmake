@@ -105,9 +105,9 @@ add_config(
 add_config(
     CONFIG_NAME ERB_TUPLE
     CONFIG_TYPE STRING
-    DEFAULT_VAL "x86_64-ais-linux-gnu"
+    DEFAULT_VAL "x86_64-buildroot-linux-gnu"
     DESCRIPTION "Tuple targeting the guest image"
-    OPTIONS "x86_64-ais-linux-gnu"
+    OPTIONS "x86_64-buildroot-linux-gnu"
 )
 
 add_config(
