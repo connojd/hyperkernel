@@ -76,8 +76,8 @@ domain::setup_domU()
     m_ept_map.map_4k(m_gdt_virt, m_gdt_phys, ept::mmap::attr_type::read_only);
     m_ept_map.map_4k(m_idt_virt, m_idt_phys, ept::mmap::attr_type::read_only);
 
-    m_ept_map.map_4k(0xF7000000,
-                     0xF7000000,
+    m_ept_map.map_4k(0xF7100000,
+                     0xF7100000,
                      ept::mmap::attr_type::read_write,
                      ept::mmap::memory_type::uncacheable);
 

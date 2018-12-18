@@ -944,8 +944,10 @@ xen_op_handler::pci_owned_msi_out(io_instruction_handler::info_t &info)
     }
     if (reg == m_msi_cap + 3) {
         bfdebug_nhex(0, "MSI+3", info.val);
-        bfdebug_nhex(0, "Received NIC vector:", info.val & 0xFF);
+        bfdebug_nhex(0, "Received ndvm vector:", info.val & 0xFF);
         vtd_sandbox::g_ndvm_vector = info.val & 0xFF;
+        bfdebug_nhex(0, "Setting visr vector:", vtd_sandbox::g_visr_vector);
+        info.val = vtd_sandbox::g_visr_vector & 0xFF;
     }
     if (reg == m_msi_cap + 4) {
         bfdebug_nhex(0, "MSI+4", info.val);
