@@ -243,7 +243,6 @@ xen_op_handler::xen_op_handler(
     );
 
     this->pci_init_caps();
-    this->pci_init_bars();
 }
 
 #define NIC_BUS 0x2
@@ -1064,6 +1063,8 @@ xen_op_handler::pci_owned_msi_out(io_instruction_handler::info_t &info)
         vtd_sandbox::g_ndvm_vector = info.val & 0xFF;
         bfdebug_nhex(0, "Setting visr vector:", vtd_sandbox::g_visr_vector);
         info.val = vtd_sandbox::g_visr_vector & 0xFF;
+
+        this->pci_init_bars();
     }
     if (reg == m_msi_cap + 4) {
         bfdebug_nhex(0, "MSI+4", info.val);
