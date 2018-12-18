@@ -1050,6 +1050,11 @@ xen_op_handler::pci_owned_msi_out(io_instruction_handler::info_t &info)
 
     if (reg == m_msi_cap) {
         bfdebug_nhex(0, "MSI+0", info.val);
+        static bool init_bars = true;
+        if (init_bars) {
+            this->pci_init_bars();
+            init_bars = false;
+        }
     }
     if (reg == m_msi_cap + 1) {
         bfdebug_nhex(0, "MSI+1", info.val);
@@ -1063,8 +1068,6 @@ xen_op_handler::pci_owned_msi_out(io_instruction_handler::info_t &info)
         vtd_sandbox::g_ndvm_vector = info.val & 0xFF;
         bfdebug_nhex(0, "Setting visr vector:", vtd_sandbox::g_visr_vector);
         info.val = vtd_sandbox::g_visr_vector & 0xFF;
-
-        this->pci_init_bars();
     }
     if (reg == m_msi_cap + 4) {
         bfdebug_nhex(0, "MSI+4", info.val);
