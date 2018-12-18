@@ -20,6 +20,8 @@
 #include <bfgpalayout.h>
 
 #include <iostream>
+//#include <variant>
+
 #include <hve/arch/intel_x64/vcpu.h>
 #include <hve/arch/intel_x64/lapic.h>
 #include <hve/arch/intel_x64/vtd/vtd_sandbox.h>
@@ -273,6 +275,7 @@ inline uint32_t cf8_to_reg(uint32_t cf8)
 inline uint32_t cf8_to_off(uint32_t cf8)
 { return (cf8 & 0x00000003UL); }
 
+//TODO: save the existing CF8 so we don't clobber the host
 inline uint32_t cf8_read_reg(uint32_t cf8, uint32_t reg)
 {
     const auto addr = (cf8 & 0xFFFFFF03UL) | (reg << 2);
@@ -388,29 +391,75 @@ enum pci_subclass_bridge_t {
     pci_sc_bridge_other = 0x80
 };
 
+
 inline uint32_t pci_header_type(uint32_t cf8)
 {
     const auto val = cf8_read_reg(cf8, 3);
     return (val & 0x00FF0000UL) >> 16;
 }
 
-uint32_t pci_phys_read(uint32_t addr, uint32_t dport, uint32_t size)
+uint32_t pci_phys_read(uint32_t addr, uint32_t port, uint32_t size)
 {
-    expects(dport >= 0xCFC && dport <= 0xCFF);
-    const auto p = gsl::narrow_cast<uint16_t>(dport);
+    expects(port >= 0xCFC && port <= 0xCFF);
     outd(0xCF8, addr);
 
     switch (size) {
-        case io::size_of_access::one_byte:  return inb(p);
-        case io::size_of_access::two_byte:  return inw(p);
-        case io::size_of_access::four_byte: return ind(p);
+        case io::size_of_access::one_byte:  return inb(port);
+        case io::size_of_access::two_byte:  return inw(port);
+        case io::size_of_access::four_byte: return ind(port);
         default: throw std::runtime_error("Invalid PCI access size");
     }
 }
 
-inline void
-pci_info_in(uint32_t cf8, io_instruction_handler::info_t &info)
+inline void pci_info_in(uint32_t cf8, io_instruction_handler::info_t &info)
 { info.val = pci_phys_read(cf8, info.port_number, info.size_of_access); }
+
+//struct pci_bar_mm {
+//    uintptr_t addr;
+//    size_t size;
+//    uint8_t type;
+//    bool prefetchable;
+//};
+//
+//struct pci_bar_io {
+//    uintptr_t addr;
+//    size_t size;
+//};
+//
+//using pci_bar_t = std::variant<struct pci_bar_mm, struct pci_bar_io>;
+//using pci_bars_t = std::list<pci_bar_t>;
+//
+//void parse_bars_normal(uint32_t cf8, pci_bars_t &bars)
+//{
+//    auto bar = cf8_read_reg(cf8, 0x4);
+//    if ((bar & 0x1) != 0) {
+//        struct pci_bar_io io = {
+//            .addr = bar & 0xFFFFFFFC;
+//            .size = 0;
+//        };
+//}
+//
+//void pci_parse_bars(uint32_t cf8, pci_bars_t &bars)
+//{
+//    const auto hdr = pci_header_type(cf8);
+//
+//    switch (hdr) {
+//    case pci_hdr_normal:
+//    case pci_hdr_normal_multi:
+//        parse_bars_normal(cf8, bars);
+//        return;
+//
+//    case pci_hdr_pci_bridge:
+//    case pci_hdr_pci_bridge_multi:
+//        parse_bars_pci_bridge(cf8, bars);
+//        return;
+//
+//    default:
+//        bfalert_nhex(0, "Unsupported header type for PCI bar parsing", hdr);
+//        return;
+//    }
+//}
+
 
 bool
 xen_op_handler::io_cf8_in(
