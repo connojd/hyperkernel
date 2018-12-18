@@ -854,10 +854,10 @@ xen_op_handler::pci_hdr_pci_bridge_out(io_instruction_handler::info_t &info)
 {
 //    printf("(bridge) ");
 
-    if (cf8_to_dev(m_cf8) == 0x1c && cf8_to_fun(m_cf8) == 0) {
-            pci_info_out(m_cf8, info);
-            return true;
-    }
+//    if (cf8_to_dev(m_cf8) == 0x1c && cf8_to_fun(m_cf8) == 0) {
+//            pci_info_out(m_cf8, info);
+//            return true;
+//    }
 
     //bferror_dump_cf8(0, m_cf8);
     return this->io_ignore_handler(m_vcpu, info);
