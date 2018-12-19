@@ -547,18 +547,11 @@ xen_op_handler::pci_init_bars()
 //        bfdebug_subbool(0, "64-bit", bar.mm_type == 2);
 //        bfdebug_subbool(0, "prefetchable", bar.prefetchable);
 
-        if (bar.prefetchable) {
-            for (auto i = 0; i < bar.size; i += ::x64::pt::page_size) {
-                m_domain->map_4k_rw(bar.addr + i, bar.addr + i);
-            }
-        } else {
-            for (auto i = 0; i < bar.size; i += ::x64::pt::page_size) {
-                m_domain->map_4k_rw_uc(bar.addr + i, bar.addr + i);
-            }
+        for (auto i = 0; i < bar.size; i += ::x64::pt::page_size) {
+            m_domain->map_4k_rw_uc(bar.addr + i, bar.addr + i);
         }
     }
 }
-
 
 uint32_t pci_phys_read(uint32_t addr, uint32_t port, uint32_t size)
 {

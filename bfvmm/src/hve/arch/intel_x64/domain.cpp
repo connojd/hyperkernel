@@ -84,7 +84,8 @@ domain::setup_domU()
 
         m_ept_map.map_4k(0xF0000000 + p,
                          0xF0000000 + p,
-                         ept::mmap::attr_type::read_write);
+                         ept::mmap::attr_type::read_write,
+                         ept::mmap::memory_type::uncacheable);
     }
 
     this->setup_acpi();
