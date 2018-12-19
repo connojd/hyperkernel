@@ -1058,6 +1058,22 @@ xen_op_handler::pci_owned_msi_out(io_instruction_handler::info_t &info)
     }
     if (reg == m_msi_cap + 1) {
         bfdebug_nhex(0, "MSI+1", info.val);
+
+        auto apic = ::intel_x64::msrs::ia32_apic_base::apic_base::get();
+        auto apic_map = m_vcpu->map_hpa_4k<uint8_t>(apic);
+        auto apic_ptr = apic_map.get();
+        auto phys = (*reinterpret_cast<uint32_t *>(apic_ptr + 0x20) & 0xFF000000) >> 24;
+        auto virt = (info.val & 0x000FF000) >> 12;
+
+        bfdebug_nhex(0, "MSI virt destination", virt);
+        bfdebug_nhex(0, "MSI phys destination", phys);
+
+        info.val &= 0xFFF00FFFUL;
+        info.val |= phys << 12;
+
+        if ((info.val & 0x8) != 0) {
+            bferror_info(0, "Redirection hint is set");
+        }
     }
     if (reg == m_msi_cap + 2) {
         bfdebug_nhex(0, "MSI+2", info.val);
@@ -1070,13 +1086,20 @@ xen_op_handler::pci_owned_msi_out(io_instruction_handler::info_t &info)
         info.val = vtd_sandbox::g_visr_vector & 0xFF;
     }
     if (reg == m_msi_cap + 4) {
-        bfdebug_nhex(0, "MSI+4", info.val);
+        bferror_nhex(0, "MSI+4", info.val);
     }
     if (reg == m_msi_cap + 5) {
-        bfdebug_nhex(0, "MSI+5", info.val);
+        bferror_nhex(0, "MSI+5", info.val);
     }
 
     pci_info_out(m_cf8, info);
+
+    if (reg == m_msi_cap + 3) {
+        bfdebug_info(0, "Final NIC setup:");
+        bfdebug_subnhex(0, "vector:", cf8_read_reg(m_cf8, reg));
+        bfdebug_subnhex(0, "destid:", (cf8_read_reg(m_cf8, m_msi_cap + 1) & 0xFF000) >> 12);
+    }
+
     return true;
 }
 
