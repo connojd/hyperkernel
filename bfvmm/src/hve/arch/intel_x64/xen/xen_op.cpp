@@ -358,7 +358,7 @@ xen_op_handler::pci_init_caps()
     auto reg = ptr >> 2U;
     auto prev = 0xD;
 
-    printf("NIC: Capability pointer: %x\n", reg);
+//    printf("NIC: Capability pointer: %x\n", reg);
 
     while (reg != 0) {
         constexpr auto id_msi = 0x05;
@@ -390,14 +390,14 @@ xen_op_handler::pci_init_caps()
 
     ensures(m_msi_cap != 0);
 
-    printf("NIC: Capability found: MSI at byte 0x%x, reg 0x%x\n",
-           m_msi_cap << 2,
-           m_msi_cap);
+ //   printf("NIC: Capability found: MSI at byte 0x%x, reg 0x%x\n",
+//           m_msi_cap << 2,
+//           m_msi_cap);
 
     if (m_msix_cap != 0) {
-        printf("NIC: Capability found: MSI-x at byte 0x%x, reg 0x%x\n",
-               m_msix_cap << 2,
-               m_msix_cap);
+//        printf("NIC: Capability found: MSI-x at byte 0x%x, reg 0x%x\n",
+//               m_msix_cap << 2,
+//               m_msix_cap);
     }
 }
 
@@ -530,9 +530,9 @@ xen_op_handler::pci_init_bars()
 
     for (const auto &bar : nic_bars) {
         if (bar.bar_type == pci_bar_io) {
-            bfdebug_info(0, "IO BAR:");
-            bfdebug_subnhex(0, "addr", bar.addr);
-            bfdebug_subnhex(0, "size", bar.size);
+//            bfdebug_info(0, "IO BAR:");
+//            bfdebug_subnhex(0, "addr", bar.addr);
+//            bfdebug_subnhex(0, "size", bar.size);
 
             for (auto p = 0; p < bar.size; p++) {
                 m_vcpu->pass_through_io_accesses(bar.addr + p);
@@ -541,11 +541,11 @@ xen_op_handler::pci_init_bars()
             continue;
         }
 
-        bfdebug_info(0, "MM BAR:");
-        bfdebug_subnhex(0, "addr", bar.addr);
-        bfdebug_subnhex(0, "size", bar.size);
-        bfdebug_subbool(0, "64-bit", bar.mm_type == 2);
-        bfdebug_subbool(0, "prefetchable", bar.prefetchable);
+//        bfdebug_info(0, "MM BAR:");
+//        bfdebug_subnhex(0, "addr", bar.addr);
+//        bfdebug_subnhex(0, "size", bar.size);
+//        bfdebug_subbool(0, "64-bit", bar.mm_type == 2);
+//        bfdebug_subbool(0, "prefetchable", bar.prefetchable);
 
         if (bar.prefetchable) {
             for (auto i = 0; i < bar.size; i += ::x64::pt::page_size) {
@@ -1049,7 +1049,7 @@ xen_op_handler::pci_owned_msi_out(io_instruction_handler::info_t &info)
     const auto reg = cf8_to_reg(m_cf8);
 
     if (reg == m_msi_cap) {
-        bfdebug_nhex(0, "MSI+0", info.val);
+//        bfdebug_nhex(0, "MSI+0", info.val);
         static bool init_bars = true;
         if (init_bars) {
             this->pci_init_bars();
@@ -1057,7 +1057,7 @@ xen_op_handler::pci_owned_msi_out(io_instruction_handler::info_t &info)
         }
     }
     if (reg == m_msi_cap + 1) {
-        bfdebug_nhex(0, "MSI+1", info.val);
+//        bfdebug_nhex(0, "MSI+1", info.val);
 
         auto apic = ::intel_x64::msrs::ia32_apic_base::apic_base::get();
         auto apic_map = m_vcpu->map_hpa_4k<uint8_t>(apic);
@@ -1065,8 +1065,8 @@ xen_op_handler::pci_owned_msi_out(io_instruction_handler::info_t &info)
         auto phys = (*reinterpret_cast<uint32_t *>(apic_ptr + 0x20) & 0xFF000000) >> 24;
         auto virt = (info.val & 0x000FF000) >> 12;
 
-        bfdebug_nhex(0, "MSI virt destination", virt);
-        bfdebug_nhex(0, "MSI phys destination", phys);
+//        bfdebug_nhex(0, "MSI virt destination", virt);
+//        bfdebug_nhex(0, "MSI phys destination", phys);
 
         info.val &= 0xFFF00FFFUL;
         info.val |= phys << 12;
@@ -1076,29 +1076,29 @@ xen_op_handler::pci_owned_msi_out(io_instruction_handler::info_t &info)
         }
     }
     if (reg == m_msi_cap + 2) {
-        bfdebug_nhex(0, "MSI+2", info.val);
+//        bfdebug_nhex(0, "MSI+2", info.val);
     }
     if (reg == m_msi_cap + 3) {
-        bfdebug_nhex(0, "MSI+3", info.val);
-        bfdebug_nhex(0, "Received ndvm vector:", info.val & 0xFF);
+ //       bfdebug_nhex(0, "MSI+3", info.val);
+ //       bfdebug_nhex(0, "Received ndvm vector:", info.val & 0xFF);
         vtd_sandbox::g_ndvm_vector = info.val & 0xFF;
-        bfdebug_nhex(0, "Setting visr vector:", vtd_sandbox::g_visr_vector);
+//        bfdebug_nhex(0, "Setting visr vector:", vtd_sandbox::g_visr_vector);
         info.val = vtd_sandbox::g_visr_vector & 0xFF;
     }
-    if (reg == m_msi_cap + 4) {
-        bferror_nhex(0, "MSI+4", info.val);
-    }
-    if (reg == m_msi_cap + 5) {
-        bferror_nhex(0, "MSI+5", info.val);
-    }
+ //   if (reg == m_msi_cap + 4) {
+ //       bferror_nhex(0, "MSI+4", info.val);
+ //   }
+ //   if (reg == m_msi_cap + 5) {
+ //       bferror_nhex(0, "MSI+5", info.val);
+ //   }
 
     pci_info_out(m_cf8, info);
 
-    if (reg == m_msi_cap + 3) {
-        bfdebug_info(0, "Final NIC setup:");
-        bfdebug_subnhex(0, "vector:", cf8_read_reg(m_cf8, reg));
-        bfdebug_subnhex(0, "destid:", (cf8_read_reg(m_cf8, m_msi_cap + 1) & 0xFF000) >> 12);
-    }
+//    if (reg == m_msi_cap + 3) {
+//        bfdebug_info(0, "Final NIC setup:");
+//        bfdebug_subnhex(0, "vector:", cf8_read_reg(m_cf8, reg));
+//        bfdebug_subnhex(0, "destid:", (cf8_read_reg(m_cf8, m_msi_cap + 1) & 0xFF000) >> 12);
+//    }
 
     return true;
 }
