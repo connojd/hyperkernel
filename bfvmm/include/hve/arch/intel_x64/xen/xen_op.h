@@ -64,6 +64,21 @@ namespace hyperkernel::intel_x64
 
 class vcpu;
 
+enum pci_bar_t {
+    pci_bar_mm,
+    pci_bar_io
+};
+
+struct pci_bar {
+    uint8_t bar_type;
+    uint8_t mm_type;
+    uintptr_t addr;
+    uint32_t size;
+    bool prefetchable;
+};
+
+using pci_bars_t = std::list<struct pci_bar>;
+
 class EXPORT_HYPERKERNEL_HVE xen_op_handler
 {
 public:
@@ -283,6 +298,10 @@ private:
 
     rip_cache_t m_rc_xapic;
 
+    std::array<uint32_t, 2> m_bridge_bar = {0};
+    std::array<uint32_t, 6> m_nic_bar = {0};
+    pci_bars_t m_nic_bar_list;
+
 private:
 
     vcpu *m_vcpu;
@@ -291,6 +310,7 @@ private:
     vcpu_info_t *m_vcpu_info;
     uint64_t m_hypercall_page_gpa{};
     uint32_t m_cf8{};
+    uint32_t m_msi_addr{};
     uint32_t m_msi_cap{};
     uint32_t m_msix_cap{};
     uint32_t m_msix_cap_prev{};

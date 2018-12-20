@@ -243,6 +243,7 @@ xen_op_handler::xen_op_handler(
     );
 
     this->pci_init_caps();
+    this->pci_init_bars();
 }
 
 #define NIC_BUS 0x2
@@ -401,21 +402,6 @@ xen_op_handler::pci_init_caps()
     }
 }
 
-enum pci_bar_t {
-    pci_bar_mm,
-    pci_bar_io
-};
-
-struct pci_bar {
-    uint8_t bar_type;
-    uint8_t mm_type;
-    uintptr_t addr;
-    uint32_t size;
-    bool prefetchable;
-};
-
-using pci_bars_t = std::list<struct pci_bar>;
-
 void parse_bar_size(
     uint32_t cf8,
     uint32_t reg,
@@ -524,13 +510,17 @@ void pci_parse_bars(uint32_t cf8, pci_bars_t &bars)
 void
 xen_op_handler::pci_init_bars()
 {
-    const auto cf8 = bdf_to_cf8(NIC_BUS, NIC_DEV, NIC_FUN);
-    pci_bars_t nic_bars;
-    parse_bars_normal(cf8, nic_bars);
+    auto cf8 = bdf_to_cf8(NIC_BUS, NIC_DEV, NIC_FUN);
 
-    for (const auto &bar : nic_bars) {
+    for (auto reg = 0x4; reg <= 0x9; reg++) {
+        m_nic_bar.at(reg - 0x4) = cf8_read_reg(cf8, reg);
+    }
+
+    parse_bars_normal(cf8, m_nic_bar_list);
+
+    for (const auto &bar : m_nic_bar_list) {
         if (bar.bar_type == pci_bar_io) {
-            bfdebug_info(0, "IO BAR:");
+            bfdebug_info(0, "NIC: io bar:");
             bfdebug_subnhex(0, "addr", bar.addr);
             bfdebug_subnhex(0, "size", bar.size);
 
@@ -541,7 +531,7 @@ xen_op_handler::pci_init_bars()
             continue;
         }
 
-        bfdebug_info(0, "MM BAR:");
+        bfdebug_info(0, "NIC: mm bar:");
         bfdebug_subnhex(0, "addr", bar.addr);
         bfdebug_subnhex(0, "size", bar.size);
         bfdebug_subbool(0, "64-bit", bar.mm_type == 2);
@@ -551,6 +541,10 @@ xen_op_handler::pci_init_bars()
             m_domain->map_4k_rw_uc(bar.addr + i, bar.addr + i);
         }
     }
+
+    cf8 = bdf_to_cf8(0, 0x1C, 0);
+    m_bridge_bar[0] = cf8_read_reg(cf8, 0x4);
+    m_bridge_bar[1] = cf8_read_reg(cf8, 0x5);
 }
 
 uint32_t pci_phys_read(uint32_t addr, uint32_t port, uint32_t size)
@@ -759,7 +753,7 @@ xen_op_handler::pci_hdr_pci_bridge_in(io_instruction_handler::info_t &info)
         case 0x02: // passthrough class register
         case 0x03: // passthrough header type register
         case 0x06: // passthrough secondary bus register
-        case 0x0F: // passthrough secondary cmd register
+        //case 0x0F: // passthrough secondary cmd register
             pci_info_in(m_cf8, info);
             break;
 
@@ -1011,10 +1005,22 @@ xen_op_handler::pci_hdr_pci_bridge_out(io_instruction_handler::info_t &info)
 {
 //    printf("(bridge) ");
 
-//    if (cf8_to_dev(m_cf8) == 0x1c && cf8_to_fun(m_cf8) == 0) {
-//            pci_info_out(m_cf8, info);
-//            return true;
-//    }
+    if (cf8_to_dev(m_cf8) == 0x1c && cf8_to_fun(m_cf8) == 0) {
+        if (cf8_to_reg(m_cf8) == 4 || cf8_to_reg(m_cf8) == 5) {
+            if (info.val == 0xFFFFFFFF) {
+                pci_info_out(m_cf8, info);
+                return true;
+            }
+
+            if (info.val != m_bridge_bar.at(cf8_to_reg(m_cf8) - 4)) {
+                bferror_info(0, "Attempt to remap PCI bridge bars");
+                return false;
+            }
+
+            pci_info_out(m_cf8, info);
+            return true;
+        }
+    }
 
     //bferror_dump_cf8(0, m_cf8);
     return this->io_ignore_handler(m_vcpu, info);
@@ -1040,36 +1046,57 @@ bool
 xen_op_handler::pci_owned_msi_out(io_instruction_handler::info_t &info)
 {
     const auto reg = cf8_to_reg(m_cf8);
+    pci_bars_t virt_bars;
 
+    // Pass this one through so it can be enabled/disabled
     if (reg == m_msi_cap) {
-        bfdebug_nhex(0, "MSI+0", info.val);
-        static bool init_bars = true;
-        if (init_bars) {
-            this->pci_init_bars();
-            init_bars = false;
+    //    bfdebug_nhex(0, "MSI+0", info.val);
+        pci_info_out(m_cf8, info);
+        return true;
+    }
+
+    if (reg == m_msi_cap + 1) {
+    //    bfdebug_nhex(0, "MSI+1", info.val);
+        expects((info.val & 0x8) == 0); // For now we don't support redirection hints
+
+        //auto apic_base = ::intel_x64::msrs::ia32_apic_base::apic_base::get();
+        //auto apic_map = m_vcpu->map_hpa_4k<uint8_t>(apic_base);
+        //auto curr_cpu = (*reinterpret_cast<uint32_t *>(apic_map.get() + 0x20) & 0xFF000000) >> 24;
+
+        //if (curr_cpu != vtd_sandbox::nic_msi_cpu) {
+        //    bferror_info(0, "NIC affinity mismatch:");
+        //    bferror_subnhex(0, "Physical cpu of guest:", curr_cpu);
+        //    bferror_subnhex(0, "Physical cpu of NIC's MSI:", vtd_sandbox::nic_msi_cpu);
+        //    throw std::runtime_error("NIC affinity mismatch");
+        //}
+
+        //info.val &= 0xFFF00FFF;
+        //info.val |= curr_cpu << 12;
+    }
+
+    if (reg == m_msi_cap + 2) {
+        if (info.val) {
+            throw std::runtime_error("Non-zero write to upper MSI address:");
         }
     }
-    if (reg == m_msi_cap + 1) {
-        bfdebug_nhex(0, "MSI+1", info.val);
-    }
-    if (reg == m_msi_cap + 2) {
-        bfdebug_nhex(0, "MSI+2", info.val);
-    }
+
     if (reg == m_msi_cap + 3) {
-        bfdebug_nhex(0, "MSI+3", info.val);
+    //    bfdebug_nhex(0, "MSI+3", info.val);
         bfdebug_nhex(0, "Received ndvm vector:", info.val & 0xFF);
         vtd_sandbox::g_ndvm_vector = info.val & 0xFF;
-        bfdebug_nhex(0, "Setting visr vector:", vtd_sandbox::g_visr_vector);
-        info.val = vtd_sandbox::g_visr_vector & 0xFF;
-    }
-    if (reg == m_msi_cap + 4) {
-        bfdebug_nhex(0, "MSI+4", info.val);
-    }
-    if (reg == m_msi_cap + 5) {
-        bfdebug_nhex(0, "MSI+5", info.val);
+    //    bfdebug_nhex(0, "Setting visr vector:", vtd_sandbox::g_visr_vector);
+
+    //    info.val &= 0xFFFFFF00;
+    //    info.val |= vtd_sandbox::g_visr_vector & 0xFF;
     }
 
-    pci_info_out(m_cf8, info);
+    if (reg == m_msi_cap + 4 && info.val) {
+        throw std::runtime_error("Non-zero write to MSI+4");
+    }
+    if (reg == m_msi_cap + 5 && info.val) {
+        throw std::runtime_error("Non-zero write to MSI+5");
+    }
+
     return true;
 }
 
@@ -1078,6 +1105,21 @@ xen_op_handler::pci_owned_out(io_instruction_handler::info_t &info)
 {
     const auto reg = cf8_to_reg(m_cf8);
     expects(reg != m_msix_cap);
+
+    if (reg >= 0x4 && reg <= 0x9) {
+        if (info.val == 0xFFFFFFFF) {
+            pci_info_out(m_cf8, info);
+            return true;
+        }
+
+        if (info.val != m_nic_bar.at(cf8_to_reg(m_cf8) - 4)) {
+            bferror_info(0, "Attempt to remap NIC bars");
+            return false;
+        }
+
+        pci_info_out(m_cf8, info);
+        return true;
+    }
 
     if (reg < m_msi_cap || reg > m_msi_cap + 5) {
         pci_info_out(m_cf8, info);
