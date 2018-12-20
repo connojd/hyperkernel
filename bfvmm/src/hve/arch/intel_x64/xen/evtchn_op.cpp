@@ -87,7 +87,7 @@ evtchn_op::alloc_unbound(gsl::not_null<evtchn_alloc_unbound_t *> arg)
     chan->set_state(evtchn::state_unbound);
 
     arg->port = port;
-    bfdebug_nhex(0, "alloc unbound", port);
+//    bfdebug_nhex(0, "alloc unbound", port);
 }
 
 void

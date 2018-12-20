@@ -749,59 +749,60 @@ xen_op_handler::pci_hdr_pci_bridge_in(io_instruction_handler::info_t &info)
     }
 
     switch (cf8_to_reg(m_cf8)) {
-        case 0x00: // passthrough device/vendor register
-        case 0x02: // passthrough class register
-        case 0x03: // passthrough header type register
-        case 0x06: // passthrough secondary bus register
-        //case 0x0F: // passthrough secondary cmd register
-            pci_info_in(m_cf8, info);
-            break;
+        //case 0x00: // passthrough device/vendor register
+        //case 0x02: // passthrough class register
+        //case 0x03: // passthrough header type register
+        //case 0x06: // passthrough secondary bus register
+        ////case 0x0F: // passthrough secondary cmd register
+        //    pci_info_in(m_cf8, info);
+        //    break;
 
-        case 0x01:
-            pci_info_in(m_cf8, info);
-            switch (info.size_of_access) {
-            case io::size_of_access::four_byte:
-                info.val |= 0x00000400; // Disable pin interrupt
-                info.val &= 0xFFEFFFFF; // Disable capability list
-                break;
-            case io::size_of_access::two_byte:
-                if (info.port_number == 0xCFC) {
-                    info.val |= 0x0400; // Disable pin interrupt
-                } else if (info.port_number == 0xCFE) {
-                    info.val &= 0xFFEF; // Disable capability list
-                }
-                break;
-            case io::size_of_access::one_byte:
-                if (info.port_number == 0xCFD) {
-                    info.val |= 0x04;   // Disable pin interrupt
-                } else if (info.port_number == 0xCFE) {
-                    info.val &= 0xEF;   // Disable capability list
-                }
-                break;
-            }
-            break;
+        //case 0x01:
+        //    pci_info_in(m_cf8, info);
+        //    switch (info.size_of_access) {
+        //    case io::size_of_access::four_byte:
+        //        info.val |= 0x00000400; // Disable pin interrupt
+        //        info.val &= 0xFFEFFFFF; // Disable capability list
+        //        break;
+        //    case io::size_of_access::two_byte:
+        //        if (info.port_number == 0xCFC) {
+        //            info.val |= 0x0400; // Disable pin interrupt
+        //        } else if (info.port_number == 0xCFE) {
+        //            info.val &= 0xFFEF; // Disable capability list
+        //        }
+        //        break;
+        //    case io::size_of_access::one_byte:
+        //        if (info.port_number == 0xCFD) {
+        //            info.val |= 0x04;   // Disable pin interrupt
+        //        } else if (info.port_number == 0xCFE) {
+        //            info.val &= 0xEF;   // Disable capability list
+        //        }
+        //        break;
+        //    }
+        //    break;
 
-        case 0x07:
-            pci_info_in(m_cf8, info);
-            switch (info.size_of_access) {
-            case io::size_of_access::four_byte:
-                info.val &= 0xFFFF0000; // Passthrough secondary status
-                break;
-            case io::size_of_access::two_byte:
-                if (info.port_number == 0xCFC) {
-                    info.val = 0;       // Mask IO limit and base
-                }
-                break;
-            case io::size_of_access::one_byte:
-                if (info.port_number == 0xCFC || info.port_number == 0xCFD) {
-                    info.val = 0;       // Mask IO limit and base
-                }
-                break;
-            }
-            break;
+        //case 0x07:
+        //    pci_info_in(m_cf8, info);
+        //    switch (info.size_of_access) {
+        //    case io::size_of_access::four_byte:
+        //        info.val &= 0xFFFF0000; // Passthrough secondary status
+        //        break;
+        //    case io::size_of_access::two_byte:
+        //        if (info.port_number == 0xCFC) {
+        //            info.val = 0;       // Mask IO limit and base
+        //        }
+        //        break;
+        //    case io::size_of_access::one_byte:
+        //        if (info.port_number == 0xCFC || info.port_number == 0xCFD) {
+        //            info.val = 0;       // Mask IO limit and base
+        //        }
+        //        break;
+        //    }
+        //    break;
 
         default:
-            info.val = 0;
+//            info.val = 0;
+            info.val = 0xFFFFFFFF;
             break;
     }
 
