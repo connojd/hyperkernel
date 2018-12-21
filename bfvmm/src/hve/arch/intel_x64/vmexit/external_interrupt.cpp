@@ -27,7 +27,8 @@ namespace hyperkernel::intel_x64
 external_interrupt_handler::external_interrupt_handler(
     gsl::not_null<vcpu *> vcpu
 ) :
-    m_vcpu{vcpu}
+    m_vcpu{vcpu},
+    m_xapic_map{nullptr}
 {
     using namespace vmcs_n;
 
@@ -37,6 +38,9 @@ external_interrupt_handler::external_interrupt_handler(
                 external_interrupt_handler, &external_interrupt_handler::handle>(this)
         );
     }
+
+    auto apic_base = ::intel_x64::msrs::ia32_apic_base::apic_base::get();
+    m_xapic_map = m_vcpu->map_hpa_4k<uint8_t>(apic_base);
 }
 
 // -----------------------------------------------------------------------------
@@ -54,6 +58,7 @@ external_interrupt_handler::handle(
         bfdebug_info(0, "Passing-through NIC interrupt -> NDVM");
         auto my_vcpu = vcpu_cast(vcpu);
         my_vcpu->queue_external_interrupt(vtd_sandbox::g_ndvm_vector);
+        this->send_eoi();
         return true;
     }
 
@@ -65,6 +70,16 @@ external_interrupt_handler::handle(
 
     // Unreachable
     return true;
+}
+
+void
+external_interrupt_handler::send_eoi()
+{
+    auto reg = reinterpret_cast<uint32_t *>(m_xapic_map.get() + 0xB0);
+    *reg = 0;
+
+    // TODO deal with compiler reordering
+    ::intel_x64::barrier::wmb();
 }
 
 }
