@@ -65,7 +65,9 @@ external_interrupt_handler::handle(
     auto parent_vcpu = m_vcpu->parent_vcpu();
 
     parent_vcpu->load();
-    parent_vcpu->queue_external_interrupt(info.vector);
+    if(info.vector != vtd_sandbox::g_visr_vector) {
+        parent_vcpu->queue_external_interrupt(info.vector);
+    }
     parent_vcpu->return_resume_after_interrupt();
 
     // Unreachable

@@ -126,24 +126,27 @@ vcpu::write_dom0_guest_state(domain *domain)
 
     // Use this function to "replace" a real PCI deivce with the visr device at
     // the given bus/device/function
-    // vtd_sandbox::visr_device::enable(this, 2, 0, 0);
+    vtd_sandbox::visr_device::enable(this, 2, 0, 0);
+
+    // Use this function to hide a PCI bridge (sort-of)
+    // vtd_sandbox::hidden_bridge::enable(this, 0, 0x1c, 0);
 
     // Use this function insert the visr device at a PCI bus/device/function
     // that is not currently occupied by a real device
     // vtd_sandbox::interrupt_remapping::enable(this, 2, 0, 0);
 
     // Use this function to hide the NIC, by hiding a hardcoded PCI
-    // device/function defined in vtd_sandbox.h
-    // vtd_sandbox::hidden_nic::enable(this);
+    // vendor/device id for a Relteck NIC on our Gigabyte motherboard
+    // vtd_sandbox::hidden_nic::enable(this, 2, 0, 0);
 
     // Use this function to map an entire PCI bus to a "view" of memory
     // in which DMA translation will be shared with the given EPT mmap
-    // vtd_sandbox::dma_remapping::map_bus(0, 0, domain->ept());
-    // vtd_sandbox::dma_remapping::map_bus(1, 0, domain->ept());
-    // vtd_sandbox::dma_remapping::map_bus(3, 0, domain->ept());
-    // vtd_sandbox::dma_remapping::map_bus(4, 0, domain->ept());
-    // vtd_sandbox::dma_remapping::map_bus(5, 0, domain->ept());
-    // vtd_sandbox::dma_remapping::enable(this);
+    vtd_sandbox::dma_remapping::map_bus(0, 0, domain->ept());
+    vtd_sandbox::dma_remapping::map_bus(1, 0, domain->ept());
+    vtd_sandbox::dma_remapping::map_bus(3, 0, domain->ept());
+    vtd_sandbox::dma_remapping::map_bus(4, 0, domain->ept());
+    vtd_sandbox::dma_remapping::map_bus(5, 0, domain->ept());
+    vtd_sandbox::dma_remapping::enable(this);
 }
 
 void
@@ -260,7 +263,7 @@ vcpu::write_domU_guest_state(domain *domain)
         ::handler_delegate_t::create<ept_violation_handler>()
     );
 
-    // vtd_sandbox::dma_remapping::map_bus(2, 1, domain->ept());
+    vtd_sandbox::dma_remapping::map_bus(2, 1, domain->ept());
 }
 
 //------------------------------------------------------------------------------

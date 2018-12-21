@@ -35,8 +35,7 @@ const uint32_t cap_ptr = 0x50;
 // const uint32_t lat_grant_pin_line = 0x100;   // Device one line based interrupt
 const uint32_t lat_grant_pin_line = 0x0;        // Device does not support line based interrupts
 
-const uint32_t cap_offset = cap_ptr / sizeof(uint32_t);
-
+const uint32_t g_msi_cap_reg = cap_ptr / sizeof(uint32_t);
 // The physical bus/device/function the emulated device will occupy
 uint64_t g_bus = 0;
 uint64_t g_device = 0;
@@ -59,6 +58,29 @@ handle_cfc_in(
     if ((emulate_addr <= cf8) && (cf8 < next_addr)) {
         // bfdebug_nhex(0, "Read from emulated device register:", reg_number);
         auto emulated_val = g_virtual_pci_config.at(reg_number);
+
+        // Pass through BARs
+        if(reg_number >=4 && reg_number <= 9) {
+            auto cfc = ::x64::portio::ind(0xCFC);
+            emulated_val = cfc;
+        }
+
+        // Mask-off "next capability" pointer
+        if(reg_number == g_msi_cap_reg) {
+            auto cfc = ::x64::portio::ind(0xCFC);
+            emulated_val = cfc & 0xffff00ff;
+        }
+
+        // Pass-through the rest of the MSI capability structure
+        if(reg_number == (g_msi_cap_reg + 1)
+            || reg_number == (g_msi_cap_reg + 2)
+            || reg_number == (g_msi_cap_reg + 3)
+            || reg_number == (g_msi_cap_reg + 4)
+        ) {
+            auto cfc = ::x64::portio::ind(0xCFC);
+            emulated_val = cfc;
+        }
+
         switch (info.size_of_access) {
             case io_instruction::size_of_access::one_byte:
                 emulated_val = emulated_val & 0xFF;
@@ -108,7 +130,15 @@ handle_cfc_out(
     auto reg_number = (cf8 & 0x000000FC) >> 2U;
     auto emulate_addr = 0x80000000U | (g_bus << 16U) | (g_device << 11U) | (g_function << 8U);
 
-    if (device_addr == emulate_addr) {
+    // Pass through BARs and MSI capability structure
+    if (device_addr == emulate_addr
+        && !(reg_number >=4 && reg_number <= 9)
+        && reg_number != g_msi_cap_reg
+        && reg_number != g_msi_cap_reg + 1
+        && reg_number != g_msi_cap_reg + 2
+        && reg_number != g_msi_cap_reg + 3
+        && reg_number != g_msi_cap_reg + 4
+    ) {
         // bfdebug_nhex(0, "Write to emulated device register:", reg_number);
         auto val_written = info.val;
         auto old_val = g_virtual_pci_config.at(reg_number);
@@ -169,6 +199,29 @@ handle_cfd_in(
     if ((emulate_addr <= cf8) && (cf8 < next_addr)) {
         // bfdebug_nhex(0, "Read from emulated device register:", reg_number);
         auto emulated_val = (g_virtual_pci_config.at(reg_number)) >> 8;
+
+        // Pass through BARs
+        if(reg_number >=4 && reg_number <= 9) {
+            auto cfc = ::x64::portio::ind(0xCFC);
+            emulated_val = cfc >> 8;
+        }
+
+        // Mask-off "next capability" pointer
+        if(reg_number == g_msi_cap_reg) {
+            auto cfc = ::x64::portio::ind(0xCFC);
+            emulated_val = (cfc & 0xffff00ff) >> 8;
+        }
+
+        // Pass-through the rest of the MSI capability structure
+        if(reg_number == (g_msi_cap_reg + 1)
+            || reg_number == (g_msi_cap_reg + 2)
+            || reg_number == (g_msi_cap_reg + 3)
+            || reg_number == (g_msi_cap_reg + 4)
+        ) {
+            auto cfc = ::x64::portio::ind(0xCFC);
+            emulated_val = cfc >> 8;
+        }
+
         switch (info.size_of_access) {
             case io_instruction::size_of_access::one_byte:
                 emulated_val = emulated_val & 0xFF;
@@ -242,6 +295,29 @@ handle_cfe_in(
     if ((emulate_addr <= cf8) && (cf8 < next_addr)) {
         // bfdebug_nhex(0, "Read from emulated device register:", reg_number);
         auto emulated_val = (g_virtual_pci_config.at(reg_number)) >> 16;
+
+        // Pass through BARs
+        if(reg_number >=4 && reg_number <= 9) {
+            auto cfc = ::x64::portio::ind(0xCFC);
+            emulated_val = cfc >> 16;
+        }
+
+        // Mask-off "next capability" pointer
+        if(reg_number == g_msi_cap_reg) {
+            auto cfc = ::x64::portio::ind(0xCFC);
+            emulated_val = (cfc & 0xffff00ff) >> 16;
+        }
+
+        // Pass-through the rest of the MSI capability structure
+        if(reg_number == (g_msi_cap_reg + 1)
+            || reg_number == (g_msi_cap_reg + 2)
+            || reg_number == (g_msi_cap_reg + 3)
+            || reg_number == (g_msi_cap_reg + 4)
+        ) {
+            auto cfc = ::x64::portio::ind(0xCFC);
+            emulated_val = cfc >> 16;
+        }
+
         switch (info.size_of_access) {
             case io_instruction::size_of_access::one_byte:
                 emulated_val = emulated_val & 0xFF;
@@ -315,6 +391,29 @@ handle_cff_in(
     if ((emulate_addr <= cf8) && (cf8 < next_addr)) {
         // bfdebug_nhex(0, "Read from emulated device register:", reg_number);
         auto emulated_val = (g_virtual_pci_config.at(reg_number)) >> 24;
+
+        // Pass through BARs
+        if(reg_number >=4 && reg_number <= 9) {
+            auto cfc = ::x64::portio::ind(0xCFC);
+            emulated_val = cfc >> 24;
+        }
+
+        // Mask-off "next capability" pointer
+        if(reg_number == g_msi_cap_reg) {
+            auto cfc = ::x64::portio::ind(0xCFC);
+            emulated_val = (cfc & 0xffff00ff) >> 24;
+        }
+
+        // Pass-through the rest of the MSI capability structure
+        if(reg_number == (g_msi_cap_reg + 1)
+            || reg_number == (g_msi_cap_reg + 2)
+            || reg_number == (g_msi_cap_reg + 3)
+            || reg_number == (g_msi_cap_reg + 4)
+        ) {
+            auto cfc = ::x64::portio::ind(0xCFC);
+            emulated_val = cfc >> 24;
+        }
+
         switch (info.size_of_access) {
             case io_instruction::size_of_access::one_byte:
                 emulated_val = emulated_val & 0xFF;
@@ -412,13 +511,13 @@ forward_interrupt_to_ndvm(
 
     bfdebug_info(0, "Forwarding interrupt: VISR -> NDVM");
 
-    auto ndvm_vcpu = reinterpret_cast<hyperkernel::intel_x64::vcpu *>(
-            get_vcpu(vtd_sandbox::ndvm_vcpu_id).get());
-
-    ndvm_vcpu->load();
-    ndvm_vcpu->queue_external_interrupt(g_ndvm_vector);
-
-    vcpu->load();
+    // auto ndvm_vcpu = reinterpret_cast<hyperkernel::intel_x64::vcpu *>(
+    //         get_vcpu(vtd_sandbox::ndvm_vcpu_id).get());
+    //
+    // ndvm_vcpu->load();
+    // ndvm_vcpu->queue_external_interrupt(g_ndvm_vector);
+    //
+    // vcpu->load();
 
     return true;
 }
@@ -432,14 +531,14 @@ enable(
 )
 {
     // Make sure there is a real PCI device at the address we want to emulate
-    uint32_t address = 0x80000000 | bus << 16 | device << 11 | function << 8;
-    ::x64::portio::outd(0xCF8, address);
-    auto data = ::x64::portio::ind(0xCFC);
-    if(data == 0xFFFFFFFF) {
-        bferror_info(0, "Failed to initalize Bareflank VISR device,");
-        bferror_nhex(0, "A real PCI device must exist at IO address:", address);
-        return;
-    }
+    // uint32_t address = 0x80000000 | bus << 16 | device << 11 | function << 8;
+    // ::x64::portio::outd(0xCF8, address);
+    // auto data = ::x64::portio::ind(0xCFC);
+    // if(data == 0xFFFFFFFF) {
+    //     bferror_info(0, "Failed to initalize Bareflank VISR device,");
+    //     bferror_nhex(0, "A real PCI device must exist at IO address:", address);
+    //     return;
+    // }
 
     g_bus = bus;
     g_device = device;
@@ -473,11 +572,11 @@ enable(
     g_virtual_pci_config.at(15) = lat_grant_pin_line;
 
     // PCI Capabilities (Report MSI Capable)
-    g_virtual_pci_config.at(cap_offset) = 0x10005;  // MSI Capability ID + MSI Enable, end of capabilties
-    g_virtual_pci_config.at(cap_offset + 1) = 0x0;  // MSI Address will be written here
-    g_virtual_pci_config.at(cap_offset + 2) = 0x0;  // MSI Data will be written here
-    g_virtual_pci_config.at(cap_offset + 3) = 0x0;  // Unmask all messages
-    g_virtual_pci_config.at(cap_offset + 4) = 0x0;  // Set no pending messages
+    g_virtual_pci_config.at(g_msi_cap_reg) = 0x10005;  // MSI Capability ID + MSI Enable, end of capabilties
+    g_virtual_pci_config.at(g_msi_cap_reg + 1) = 0x0;  // MSI Address will be written here
+    g_virtual_pci_config.at(g_msi_cap_reg + 2) = 0x0;  // MSI Data will be written here
+    g_virtual_pci_config.at(g_msi_cap_reg + 3) = 0x0;  // Unmask all messages
+    g_virtual_pci_config.at(g_msi_cap_reg + 4) = 0x0;  // Set no pending messages
 
     // -------------------------------------------------------------------------
     // PCI configuration space handlers

@@ -76,17 +76,17 @@ domain::setup_domU()
     m_ept_map.map_4k(m_gdt_virt, m_gdt_phys, ept::mmap::attr_type::read_only);
     m_ept_map.map_4k(m_idt_virt, m_idt_phys, ept::mmap::attr_type::read_only);
 
-//    for (auto p = 0; p < 256 * 4096; p += ::x64::pt::page_size) {
-//        m_ept_map.map_4k(0xF7100000 + p,
-//                         0xF7100000 + p,
-//                         ept::mmap::attr_type::read_write,
-//                         ept::mmap::memory_type::uncacheable);
-//
-//        m_ept_map.map_4k(0xF0000000 + p,
-//                         0xF0000000 + p,
-//                         ept::mmap::attr_type::read_write,
-//                         ept::mmap::memory_type::uncacheable);
-//    }
+    // for (auto p = 0; p < 256 * 4096; p += ::x64::pt::page_size) {
+    //     m_ept_map.map_4k(0xF7100000 + p,
+    //                      0xF7100000 + p,
+    //                      ept::mmap::attr_type::read_write,
+    //                      ept::mmap::memory_type::uncacheable);
+    //
+    //     m_ept_map.map_4k(0xF0000000 + p,
+    //                      0xF0000000 + p,
+    //                      ept::mmap::attr_type::read_write,
+    //                      ept::mmap::memory_type::uncacheable);
+    // }
 
     this->setup_acpi();
 }

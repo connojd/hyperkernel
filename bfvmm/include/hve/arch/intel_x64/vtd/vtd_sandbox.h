@@ -20,13 +20,17 @@ inline uintptr_t iommu_base_phys = 0xfed91000;     // Gigabyte and Surface Pro
 
 namespace hidden_nic
 {
-    // Realtek Semiconductor RTL8111/8168/8411 PCI Express Gigabit Ethernet Controller
-    inline uint32_t vendor_device = 0x816810EC;
-
-    void enable(gsl::not_null<eapis::intel_x64::vcpu *> vcpu);
+    void enable(gsl::not_null<eapis::intel_x64::vcpu *> vcpu, uint32_t bus,
+        uint32_t device, uint32_t function);
 }
 
 namespace visr_device
+{
+    void enable(gsl::not_null<eapis::intel_x64::vcpu *> vcpu, uint32_t bus,
+        uint32_t device, uint32_t function);
+}
+
+namespace hidden_bridge
 {
     void enable(gsl::not_null<eapis::intel_x64::vcpu *> vcpu, uint32_t bus,
         uint32_t device, uint32_t function);
