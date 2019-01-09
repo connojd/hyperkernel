@@ -55,11 +55,11 @@ external_interrupt_handler::handle(
     bfignored(vcpu);
 
     if(info.vector == vtd_sandbox::g_visr_vector) {
-        bfdebug_info(0, "Passing-through NIC interrupt -> NDVM");
+        // bfdebug_info(0, "Passing-through NIC interrupt -> NDVM");
         auto my_vcpu = vcpu_cast(vcpu);
         my_vcpu->queue_external_interrupt(vtd_sandbox::g_ndvm_vector);
         this->send_eoi();
-        return true;
+        // return true;
     }
 
     auto parent_vcpu = m_vcpu->parent_vcpu();

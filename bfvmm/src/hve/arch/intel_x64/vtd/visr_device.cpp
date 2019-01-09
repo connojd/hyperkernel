@@ -509,15 +509,15 @@ forward_interrupt_to_ndvm(
     bfignored(vcpu);
     bfignored(info);
 
-    bfdebug_info(0, "Forwarding interrupt: VISR -> NDVM");
+    // bfdebug_info(0, "Forwarding interrupt: VISR -> NDVM");
 
-    // auto ndvm_vcpu = reinterpret_cast<hyperkernel::intel_x64::vcpu *>(
-    //         get_vcpu(vtd_sandbox::ndvm_vcpu_id).get());
-    //
-    // ndvm_vcpu->load();
-    // ndvm_vcpu->queue_external_interrupt(g_ndvm_vector);
-    //
-    // vcpu->load();
+    auto ndvm_vcpu = reinterpret_cast<hyperkernel::intel_x64::vcpu *>(
+            get_vcpu(vtd_sandbox::ndvm_vcpu_id).get());
+
+    ndvm_vcpu->load();
+    ndvm_vcpu->queue_external_interrupt(g_ndvm_vector);
+
+    vcpu->load();
 
     return true;
 }
