@@ -24,12 +24,12 @@ endif()
 # Variables
 # ------------------------------------------------------------------------------
 
-set(BR_URL "https://buildroot.org/downloads/buildroot-2018.11.tar.gz"
+set(BR_URL "https://github.com/connojd/buildroot/archive/demo.zip"
     CACHE INTERNAL
     "Buildroot URL"
 )
 
-set(BR_URL_MD5 "1c140382fb8778b6c4458014e1fef4fb"
+set(BR_URL_MD5 "322dc2d50ada29c25b68f78310de6ddb"
     CACHE INTERNAL
     "Buildroot URL MD5 hash"
 )
