@@ -86,6 +86,11 @@ vmcall_handler::handle(gsl::not_null<vcpu_t *> vcpu)
 
     vcpu->advance();
 
+    if ((vcpu->rax() & 0xBFFF) == 0xBFFF) {
+        bfdebug_nhex(0, "ping id", vcpu->rcx());
+        return true;
+    }
+
     try {
         for (const auto &d : m_handlers) {
             if (d(m_vcpu)) {

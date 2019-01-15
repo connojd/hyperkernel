@@ -94,7 +94,7 @@ add_config(
 add_config(
     CONFIG_NAME ERB_IMAGE
     CONFIG_TYPE STRING
-    DEFAULT_VAL "tiny"
+    DEFAULT_VAL "ndvm-r8169"
     DESCRIPTION "The guest image to build"
     OPTIONS "tiny"
     OPTIONS "xenstore"
@@ -105,9 +105,10 @@ add_config(
 add_config(
     CONFIG_NAME ERB_TUPLE
     CONFIG_TYPE STRING
-    DEFAULT_VAL "x86_64-buildroot-linux-gnu"
+    DEFAULT_VAL "x86_64-buildroot-linux-uclibc"
     DESCRIPTION "Tuple targeting the guest image"
     OPTIONS "x86_64-buildroot-linux-gnu"
+    OPTIONS "x86_64-buildroot-linux-uclibc"
 )
 
 add_config(

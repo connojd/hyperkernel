@@ -27,8 +27,7 @@ namespace hyperkernel::intel_x64
 external_interrupt_handler::external_interrupt_handler(
     gsl::not_null<vcpu *> vcpu
 ) :
-    m_vcpu{vcpu},
-    m_xapic_map{nullptr}
+    m_vcpu{vcpu}
 {
     using namespace vmcs_n;
 
@@ -38,9 +37,6 @@ external_interrupt_handler::external_interrupt_handler(
                 external_interrupt_handler, &external_interrupt_handler::handle>(this)
         );
     }
-
-    auto apic_base = ::intel_x64::msrs::ia32_apic_base::apic_base::get();
-    m_xapic_map = m_vcpu->map_hpa_4k<uint8_t>(apic_base);
 }
 
 // -----------------------------------------------------------------------------
@@ -55,19 +51,17 @@ external_interrupt_handler::handle(
     bfignored(vcpu);
 
     if(info.vector == vtd_sandbox::g_visr_vector) {
-        // bfdebug_info(0, "Passing-through NIC interrupt -> NDVM");
-        auto my_vcpu = vcpu_cast(vcpu);
-        my_vcpu->queue_external_interrupt(vtd_sandbox::g_ndvm_vector);
+        expects(vcpuid::is_guest_vm_vcpu(m_vcpu->id()));
+        bfdebug_info(0, "Injecting NIC interrupt -> NDVM");
+        m_vcpu->queue_external_interrupt(vtd_sandbox::g_ndvm_vector);
         this->send_eoi();
-        // return true;
+        return true;
     }
 
     auto parent_vcpu = m_vcpu->parent_vcpu();
 
     parent_vcpu->load();
-    if(info.vector != vtd_sandbox::g_visr_vector) {
-        parent_vcpu->queue_external_interrupt(info.vector);
-    }
+    parent_vcpu->queue_external_interrupt(info.vector);
     parent_vcpu->return_resume_after_interrupt();
 
     // Unreachable
@@ -77,11 +71,7 @@ external_interrupt_handler::handle(
 void
 external_interrupt_handler::send_eoi()
 {
-    auto reg = reinterpret_cast<uint32_t *>(m_xapic_map.get() + 0xB0);
-    *reg = 0;
-
-    // TODO deal with compiler reordering
-    ::intel_x64::barrier::wmb();
+    ::intel_x64::msrs::ia32_x2apic_eoi::set(0);
 }
 
 }

@@ -24,6 +24,7 @@
 
 #include <hve/arch/intel_x64/vcpu.h>
 #include <hve/arch/intel_x64/lapic.h>
+#include <hve/arch/intel_x64/pci.h>
 #include <hve/arch/intel_x64/vtd/vtd_sandbox.h>
 #include <eapis/hve/arch/intel_x64/time.h>
 
@@ -246,105 +247,6 @@ xen_op_handler::xen_op_handler(
     this->pci_init_bars();
 }
 
-#define NIC_BUS 0x2
-#define NIC_DEV 0x0
-#define NIC_FUN 0x0
-
-using namespace ::x64::portio;
-using namespace eapis::intel_x64;
-namespace io = vmcs_n::exit_qualification::io_instruction;
-
-inline bool cf8_is_enabled(uint32_t cf8)
-{ return ((cf8 & 0x80000000UL) >> 31) != 0; }
-
-inline uint32_t cf8_to_bus(uint32_t cf8)
-{ return (cf8 & 0x00FF0000UL) >> 16; }
-
-inline uint32_t cf8_to_dev(uint32_t cf8)
-{ return (cf8 & 0x0000F800UL) >> 11; }
-
-inline uint32_t cf8_to_fun(uint32_t cf8)
-{ return (cf8 & 0x00000700UL) >> 8; }
-
-inline uint32_t cf8_to_reg(uint32_t cf8)
-{ return (cf8 & 0x000000FCUL) >> 2; }
-
-inline uint32_t cf8_to_off(uint32_t cf8)
-{ return (cf8 & 0x00000003UL); }
-
-//TODO: save the existing CF8 so we don't clobber the host
-inline uint32_t cf8_read_reg(uint32_t cf8, uint32_t reg)
-{
-    const auto addr = (cf8 & 0xFFFFFF03UL) | (reg << 2);
-    outd(0xCF8, addr);
-    return ind(0xCFC);
-}
-
-inline void cf8_write_reg(uint32_t cf8, uint32_t reg, uint32_t val)
-{
-    const auto addr = (cf8 & 0xFFFFFF03UL) | (reg << 2);
-    outd(0xCF8, addr);
-    outd(0xCFC, val);
-}
-
-inline uint32_t bdf_to_cf8(uint32_t b, uint32_t d, uint32_t f)
-{
-    return (1UL << 31) | (b << 16) | (d << 11) | (f << 8);
-}
-
-inline bool domU_owned_cf8(uint32_t cf8)
-{
-    return cf8_to_bus(cf8) == NIC_BUS &&
-           cf8_to_dev(cf8) == NIC_DEV &&
-           cf8_to_fun(cf8) == NIC_FUN;
-}
-
-enum pci_header_t {
-    pci_hdr_normal               = 0x00,
-    pci_hdr_pci_bridge           = 0x01,
-    pci_hdr_cardbus_bridge       = 0x02,
-    pci_hdr_normal_multi         = 0x80 | pci_hdr_normal,
-    pci_hdr_pci_bridge_multi     = 0x80 | pci_hdr_pci_bridge,
-    pci_hdr_cardbus_bridge_multi = 0x80 | pci_hdr_cardbus_bridge,
-    pci_hdr_nonexistant          = 0xFF
-};
-
-enum pci_class_code_t {
-    pci_cc_unclass = 0x00,
-    pci_cc_storage = 0x01,
-    pci_cc_network = 0x02,
-    pci_cc_display = 0x03,
-    pci_cc_multimedia = 0x04,
-    pci_cc_memory = 0x05,
-    pci_cc_bridge = 0x06,
-    pci_cc_simple_comms = 0x07,
-    pci_cc_input = 0x09,
-    pci_cc_processor = 0x0B,
-    pci_cc_serial_bus = 0x0C,
-    pci_cc_wireless = 0x0D
-};
-
-enum pci_subclass_bridge_t {
-    pci_sc_bridge_host = 0x00,
-    pci_sc_bridge_isa = 0x01,
-    pci_sc_bridge_eisa = 0x02,
-    pci_sc_bridge_mca = 0x03,
-    pci_sc_bridge_pci_decode = 0x04,
-    pci_sc_bridge_pcmcia = 0x05,
-    pci_sc_bridge_nubus = 0x06,
-    pci_sc_bridge_cardbus = 0x07,
-    pci_sc_bridge_raceway = 0x08,
-    pci_sc_bridge_pci_semi_trans = 0x09,
-    pci_sc_bridge_infiniband = 0x0A,
-    pci_sc_bridge_other = 0x80
-};
-
-
-inline uint32_t pci_header_type(uint32_t cf8)
-{
-    const auto val = cf8_read_reg(cf8, 3);
-    return (val & 0x00FF0000UL) >> 16;
-}
 
 void
 xen_op_handler::pci_init_caps()
@@ -402,111 +304,6 @@ xen_op_handler::pci_init_caps()
     }
 }
 
-void parse_bar_size(
-    uint32_t cf8,
-    uint32_t reg,
-    uint32_t val,
-    uint32_t mask,
-    uint32_t *size)
-{
-    cf8_write_reg(cf8, reg, 0xFFFFFFFF);
-
-    auto len = cf8_read_reg(cf8, reg);
-    len = ~(len & mask) + 1U;
-    *size = len;
-
-    cf8_write_reg(cf8, reg, val);
-}
-
-void parse_bars_normal(uint32_t cf8, pci_bars_t &bars)
-{
-    const std::array<uint8_t, 6> bar_regs = {0x4, 0x5, 0x6, 0x7, 0x8, 0x9};
-
-    for (auto i = 0; i < bar_regs.size(); i++) {
-        const auto reg = bar_regs[i];
-        const auto val = cf8_read_reg(cf8, reg);
-
-        if (val == 0) {
-            continue;
-        }
-
-        struct pci_bar bar{};
-
-        if ((val & 0x1) != 0) { // IO bar
-            parse_bar_size(cf8, reg, val, 0xFFFFFFFC, &bar.size);
-            bar.addr = val & 0xFFFFFFFC;
-            bar.bar_type = pci_bar_io;
-        } else {                // MM bar
-            parse_bar_size(cf8, reg, val, 0xFFFFFFF0, &bar.size);
-            bar.addr = (val & 0xFFFFFFF0);
-            bar.prefetchable = (val & 0x8) != 0;
-            bar.mm_type = (val & 0x6) >> 1;
-
-            if (bar.mm_type == 2) {
-                bar.addr |= gsl::narrow_cast<uintptr_t>(cf8_read_reg(cf8, bar_regs.at(++i))) << 32;
-            }
-            bar.bar_type = pci_bar_mm;
-        }
-
-        bars.push_back(bar);
-    }
-}
-
-void parse_bars_pci_bridge(uint32_t cf8, pci_bars_t &bars)
-{
-    const std::array<uint8_t, 2> bar_regs = {0x4, 0x5};
-
-    for (auto i = 0; i < bar_regs.size(); i++) {
-        const auto reg = bar_regs[i];
-        const auto val = cf8_read_reg(cf8, reg);
-
-        if (val == 0) {
-            continue;
-        }
-
-        struct pci_bar bar{};
-
-        if ((val & 0x1) != 0) { // IO bar
-            parse_bar_size(cf8, reg, val, 0xFFFFFFFC, &bar.size);
-            bar.addr = val & 0xFFFFFFFC;
-            bar.bar_type = pci_bar_io;
-        } else {                // MM bar
-            parse_bar_size(cf8, reg, val, 0xFFFFFFF0, &bar.size);
-            bar.addr = (val & 0xFFFFFFF0);
-            bar.prefetchable = (val & 0x8) != 0;
-            bar.mm_type = (val & 0x6) >> 1;
-
-            if (bar.mm_type == 2) {
-                bar.addr |= gsl::narrow_cast<uintptr_t>(cf8_read_reg(cf8, bar_regs.at(++i))) << 32;
-            }
-            bar.bar_type = pci_bar_mm;
-        }
-
-        bars.push_back(bar);
-    }
-}
-
-void pci_parse_bars(uint32_t cf8, pci_bars_t &bars)
-{
-    const auto hdr = pci_header_type(cf8);
-
-    switch (hdr) {
-    case pci_hdr_normal:
-    case pci_hdr_normal_multi:
-        parse_bars_normal(cf8, bars);
-        return;
-
-    case pci_hdr_pci_bridge:
-    case pci_hdr_pci_bridge_multi:
-        parse_bars_pci_bridge(cf8, bars);
-        return;
-
-    default:
-        bfalert_nhex(0, "Unsupported header type for PCI bar parsing", hdr);
-        return;
-    }
-}
-
 void
 xen_op_handler::pci_init_bars()
 {
@@ -547,22 +344,6 @@ xen_op_handler::pci_init_bars()
     m_bridge_bar[1] = cf8_read_reg(cf8, 0x5);
 }
 
-uint32_t pci_phys_read(uint32_t addr, uint32_t port, uint32_t size)
-{
-    expects(port >= 0xCFC && port <= 0xCFF);
-    outd(0xCF8, addr);
-
-    switch (size) {
-        case io::size_of_access::one_byte:  return inb(port);
-        case io::size_of_access::two_byte:  return inw(port);
-        case io::size_of_access::four_byte: return ind(port);
-        default: throw std::runtime_error("Invalid PCI access size");
-    }
-}
-
-inline void pci_info_in(uint32_t cf8, io_instruction_handler::info_t &info)
-{ info.val = pci_phys_read(cf8, info.port_number, info.size_of_access); }
-
 bool
 xen_op_handler::io_cf8_in(
     gsl::not_null<vcpu_t *> vcpu,
@@ -579,15 +360,6 @@ xen_op_handler::io_cf8_out(
 {
     m_cf8 = info.val;
     return true;
-}
-
-inline bool is_host_bridge(uint32_t cf8)
-{
-    const auto val = cf8_read_reg(cf8, 2);
-    const auto cc = (val & 0xFF000000UL) >> 24;
-    const auto sc = (val & 0x00FF0000UL) >> 16;
-
-    return cc == pci_cc_bridge && sc == pci_sc_bridge_host;
 }
 
 bool
@@ -743,10 +515,20 @@ xen_op_handler::pci_hdr_pci_bridge_in(io_instruction_handler::info_t &info)
 {
 //    printf("(bridge) ");
 
-    if (cf8_to_dev(m_cf8) == 0x1c && cf8_to_fun(m_cf8) == 0) {
-            pci_info_in(m_cf8, info);
-            return true;
-    }
+//    if (cf8_to_dev(m_cf8) == 0x1c && cf8_to_fun(m_cf8) == 0) {
+//            pci_info_in(m_cf8, info);
+//            auto reg = cf8_to_reg(m_cf8);
+//
+//            switch (reg) {
+//            case 0x01:
+//                info.val |= 0x400UL;       // disable INTx
+//                info.val &= ~0x00100000UL; // disable cap list
+//                break;
+//            default:
+//                break;
+//            }
+//            return true;
+//    }
 
     switch (cf8_to_reg(m_cf8)) {
         //case 0x00: // passthrough device/vendor register
@@ -809,16 +591,6 @@ xen_op_handler::pci_hdr_pci_bridge_in(io_instruction_handler::info_t &info)
     return true;
 }
 
-void bferror_dump_cf8(int level, uint32_t cf8)
-{
-    bferror_subbool(level, "enabled", cf8_is_enabled(cf8));
-    bferror_subnhex(level, "bus", cf8_to_bus(cf8));
-    bferror_subnhex(level, "dev", cf8_to_dev(cf8));
-    bferror_subnhex(level, "fun", cf8_to_fun(cf8));
-    bferror_subnhex(level, "reg", cf8_to_reg(cf8));
-    bferror_subnhex(level, "off", cf8_to_off(cf8));
-}
-
 bool
 xen_op_handler::pci_in(io_instruction_handler::info_t &info)
 {
@@ -861,37 +633,6 @@ xen_op_handler::pci_in(io_instruction_handler::info_t &info)
     return ret;
 }
 
-void debug_pci_in(uint32_t cf8, io_instruction_handler::info_t &info)
-{
-    const char *port = "";
-
-    switch (info.port_number) {
-        case 0xCFC: port = "CFC"; break;
-        case 0xCFD: port = "CFD"; break;
-        case 0xCFE: port = "CFE"; break;
-        case 0xCFF: port = "CFF"; break;
-        default:
-            bferror_nhex(0, "Invalid PCI in port:", info.port_number);
-            throw std::runtime_error("Invalid PCI in port");
-    }
-
-    switch (pci_header_type(cf8)) {
-        case pci_hdr_nonexistant:
-            break;
-
-        case pci_hdr_normal:
-        case pci_hdr_normal_multi:
-        case pci_hdr_pci_bridge:
-        case pci_hdr_pci_bridge_multi:
-            printf("%s in : %02x:%02x:%02x:%02x:%02x, size: %lu, ",
-                port, cf8_to_bus(cf8),
-                cf8_to_dev(cf8), cf8_to_fun(cf8),
-                cf8_to_reg(cf8), cf8_to_off(cf8),
-                info.size_of_access + 1);
-            break;
-    }
-}
-
 bool
 xen_op_handler::io_cfc_in(
     gsl::not_null<vcpu_t *> vcpu,
@@ -923,82 +664,6 @@ xen_op_handler::io_cfe_in(
 
     //debug_pci_in(m_cf8, info);
     return this->pci_in(info);
-}
-
-void debug_pci_out(uint32_t cf8, io_instruction_handler::info_t &info)
-{
-    const char *port = "";
-
-    switch (info.port_number) {
-        case 0xCFC: port = "CFC"; break;
-        case 0xCFD: port = "CFD"; break;
-        case 0xCFE: port = "CFE"; break;
-        case 0xCFF: port = "CFF"; break;
-        default:
-            bferror_nhex(0, "Invalid PCI out port:", info.port_number);
-            throw std::runtime_error("Invalid PCI out port");
-    }
-
-    switch (pci_header_type(cf8)) {
-        case pci_hdr_nonexistant:
-            break;
-
-        case pci_hdr_normal:
-        case pci_hdr_normal_multi:
-        case pci_hdr_pci_bridge:
-        case pci_hdr_pci_bridge_multi:
-            printf("%s out: %02x:%02x:%02x:%02x:%02x, size: %lu, ",
-                port, cf8_to_bus(cf8),
-                cf8_to_dev(cf8), cf8_to_fun(cf8),
-                cf8_to_reg(cf8), cf8_to_off(cf8),
-                info.size_of_access + 1);
-            break;
-
-        default:
-            bferror_nhex(0, "Unhandled PCI header:", pci_header_type(cf8));
-            bferror_nhex(0, "m_cf8:", cf8);
-            bferror_dump_cf8(0, cf8);
-            bferror_lnbr(0); {
-                const auto cur = ind(0xCF8);
-                bferror_nhex(0, "0xCF8:", cur);
-                bferror_dump_cf8(0, cur);
-                bferror_lnbr(0);
-            }
-            bferror_nhex(0, "0xCFC:", ind(0xCFC));
-            throw std::runtime_error("Unhandled PCI header");
-    }
-}
-
-void pci_phys_write(uint32_t addr,
-                    uint32_t port,
-                    uint32_t size,
-                    uint32_t data)
-{
-    expects(port >= 0xCFC && port <= 0xCFF);
-    outd(0xCF8, addr);
-
-    switch (size) {
-    case io::size_of_access::one_byte:
-        outb(port, gsl::narrow_cast<uint8_t>(data));
-        break;
-    case io::size_of_access::two_byte:
-        outw(port, gsl::narrow_cast<uint16_t>(data));
-        break;
-    case io::size_of_access::four_byte:
-        outd(port, gsl::narrow_cast<uint32_t>(data));
-        break;
-    default:
-        throw std::runtime_error("Invalid PCI access size");
-    }
-}
-
-inline void
-pci_info_out(uint32_t cf8, const io_instruction_handler::info_t &info)
-{
-    pci_phys_write(cf8,
-                   info.port_number,
-                   info.size_of_access,
-                   info.val);
 }
 
 bool
@@ -1051,28 +716,27 @@ xen_op_handler::pci_owned_msi_out(io_instruction_handler::info_t &info)
 
     // Pass this one through so it can be enabled/disabled
     if (reg == m_msi_cap) {
-    //    bfdebug_nhex(0, "MSI+0", info.val);
+        bfdebug_nhex(0, "MSI+0", info.val);
         pci_info_out(m_cf8, info);
         return true;
     }
 
     if (reg == m_msi_cap + 1) {
-    //    bfdebug_nhex(0, "MSI+1", info.val);
+        using namespace ::intel_x64::msrs;
+
+        auto msr = ia32_apic_base::get();
+        expects(ia32_apic_base::state::get(msr) == ia32_apic_base::state::x2apic);
         expects((info.val & 0x8) == 0); // For now we don't support redirection hints
 
-        //auto apic_base = ::intel_x64::msrs::ia32_apic_base::apic_base::get();
-        //auto apic_map = m_vcpu->map_hpa_4k<uint8_t>(apic_base);
-        //auto curr_cpu = (*reinterpret_cast<uint32_t *>(apic_map.get() + 0x20) & 0xFF000000) >> 24;
+        bfdebug_nhex(0, "xen: apic_id:", ia32_x2apic_apicid::get());
+        bfdebug_nhex(0, "xen: ndvm_id:", (cf8_read_reg(m_cf8, reg) & 0x000FF000) >> 12);
 
-        //if (curr_cpu != vtd_sandbox::nic_msi_cpu) {
-        //    bferror_info(0, "NIC affinity mismatch:");
-        //    bferror_subnhex(0, "Physical cpu of guest:", curr_cpu);
-        //    bferror_subnhex(0, "Physical cpu of NIC's MSI:", vtd_sandbox::nic_msi_cpu);
-        //    throw std::runtime_error("NIC affinity mismatch");
-        //}
-
-        //info.val &= 0xFFF00FFF;
-        //info.val |= curr_cpu << 12;
+        // We dont copy the value that windows program because the write 1 to
+        // reserved bits. tsktsk
+        //
+        info.val = 0xFEE00000UL | (vtd_sandbox::ndvm_apic_id << 12);
+        pci_info_out(m_cf8, info);
+        return true;
     }
 
     if (reg == m_msi_cap + 2) {
@@ -1082,13 +746,22 @@ xen_op_handler::pci_owned_msi_out(io_instruction_handler::info_t &info)
     }
 
     if (reg == m_msi_cap + 3) {
-    //    bfdebug_nhex(0, "MSI+3", info.val);
         bfdebug_nhex(0, "Received ndvm vector:", info.val & 0xFF);
         vtd_sandbox::g_ndvm_vector = info.val & 0xFF;
-    //    bfdebug_nhex(0, "Setting visr vector:", vtd_sandbox::g_visr_vector);
+        bfdebug_nhex(0, "Setting visr vector:", vtd_sandbox::g_visr_vector);
 
-    //    info.val &= 0xFFFFFF00;
-    //    info.val |= vtd_sandbox::g_visr_vector & 0xFF;
+        // Reset the vector to visr
+        //
+        info.val &= 0xFFFFFF00;
+        info.val |= vtd_sandbox::g_visr_vector & 0xFF;
+        pci_info_out(m_cf8, info);
+
+        bfdebug_nhex(0, "NIC MSI+0 hw:", cf8_read_reg(m_cf8, reg - 3));
+        bfdebug_nhex(0, "NIC MSI+1 hw:", cf8_read_reg(m_cf8, reg - 2));
+        bfdebug_nhex(0, "NIC MSI+2 hw:", cf8_read_reg(m_cf8, reg - 1));
+        bfdebug_nhex(0, "NIC MSI+3 hw:", cf8_read_reg(m_cf8, reg - 0));
+
+        return true;
     }
 
     if (reg == m_msi_cap + 4 && info.val) {
@@ -1828,6 +1501,9 @@ xen_op_handler::cpuid_leaf1_handler(
     info.rdx &= ~::intel_x64::cpuid::feature_information::edx::mca::mask;
     info.rdx &= ~::intel_x64::cpuid::feature_information::edx::ds::mask;
     info.rdx &= ~::intel_x64::cpuid::feature_information::edx::acpi::mask;
+    info.rdx &= ~::intel_x64::cpuid::feature_information::edx::mmx::mask;
+    info.rdx &= ~::intel_x64::cpuid::feature_information::edx::sse::mask;
+    info.rdx &= ~::intel_x64::cpuid::feature_information::edx::sse2::mask;
     info.rdx &= ~::intel_x64::cpuid::feature_information::edx::tm::mask;
     info.rdx &= ~::intel_x64::cpuid::feature_information::edx::pbe::mask;
 

@@ -29,7 +29,7 @@
 //------------------------------------------------------------------------------
 
 static bool
-cpuid_handler(
+hk_cpuid_handler(
     gsl::not_null<vcpu_t *> vcpu)
 {
     vcpu->halt("cpuid_handler executed. unsupported!!!");
@@ -39,7 +39,7 @@ cpuid_handler(
 }
 
 static bool
-rdmsr_handler(
+hk_rdmsr_handler(
     gsl::not_null<vcpu_t *> vcpu)
 {
     vcpu->halt("rdmsr_handler executed. unsupported!!!");
@@ -49,7 +49,7 @@ rdmsr_handler(
 }
 
 static bool
-wrmsr_handler(
+hk_wrmsr_handler(
     gsl::not_null<vcpu_t *> vcpu)
 {
     vcpu->halt("wrmsr_handler executed. unsupported!!!");
@@ -59,7 +59,7 @@ wrmsr_handler(
 }
 
 static bool
-io_instruction_handler(
+hk_io_instruction_handler(
     gsl::not_null<vcpu_t *> vcpu)
 {
     vcpu->halt("io_instruction_handler executed. unsupported!!!");
@@ -69,7 +69,7 @@ io_instruction_handler(
 }
 
 static bool
-ept_violation_handler(
+hk_ept_violation_handler(
     gsl::not_null<vcpu_t *> vcpu)
 {
     vcpu->halt("ept_violation_handler executed. unsupported!!!");
@@ -236,31 +236,31 @@ vcpu::write_domU_guest_state(domain *domain)
     this->set_rbx(XEN_START_INFO_PAGE_GPA);
 
     this->add_default_cpuid_handler(
-        ::handler_delegate_t::create<cpuid_handler>()
+        ::handler_delegate_t::create<hk_cpuid_handler>()
     );
 
     this->add_default_wrmsr_handler(
-        ::handler_delegate_t::create<wrmsr_handler>()
+        ::handler_delegate_t::create<hk_wrmsr_handler>()
     );
 
     this->add_default_rdmsr_handler(
-        ::handler_delegate_t::create<rdmsr_handler>()
+        ::handler_delegate_t::create<hk_rdmsr_handler>()
     );
 
     this->add_default_io_instruction_handler(
-        ::handler_delegate_t::create<io_instruction_handler>()
+        ::handler_delegate_t::create<hk_io_instruction_handler>()
     );
 
     this->add_default_ept_read_violation_handler(
-        ::handler_delegate_t::create<ept_violation_handler>()
+        ::handler_delegate_t::create<hk_ept_violation_handler>()
     );
 
     this->add_default_ept_write_violation_handler(
-        ::handler_delegate_t::create<ept_violation_handler>()
+        ::handler_delegate_t::create<hk_ept_violation_handler>()
     );
 
     this->add_default_ept_execute_violation_handler(
-        ::handler_delegate_t::create<ept_violation_handler>()
+        ::handler_delegate_t::create<hk_ept_violation_handler>()
     );
 
     vtd_sandbox::dma_remapping::map_bus(2, 1, domain->ept());

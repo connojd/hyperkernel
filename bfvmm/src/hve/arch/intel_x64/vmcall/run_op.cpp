@@ -25,7 +25,8 @@ namespace hyperkernel::intel_x64
 vmcall_run_op_handler::vmcall_run_op_handler(
     gsl::not_null<vcpu *> vcpu
 ) :
-    m_vcpu{vcpu}
+    m_vcpu{vcpu},
+    m_child_vcpu{nullptr}
 {
     using namespace vmcs_n;
 

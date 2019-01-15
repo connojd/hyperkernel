@@ -19,7 +19,7 @@ gsl::span<uint32_t> g_virtual_pci_config {};
 
 // Initial PCI Configuration space for the emulated device
 const uint32_t vendor_device = 0xBEEFF00D;      // Non-existent PCI Vendor/Device
-const uint32_t status_command = 0x00100001;     // IO-space capable + capabilities list present
+const uint32_t status_command = 0x00100402;     // MMIO-space capable, no INTx, capabilities list present
 const uint32_t class_sub_prog_rev = 0xFF000000; // Vendor-specific class
 const uint32_t bist_htype_ltimer_clsize = 0;
 const uint32_t bar0 = 0;
@@ -494,8 +494,15 @@ receive_vector_from_windows(
     bfignored(vcpu);
     bfignored(info);
 
+    using namespace ::intel_x64::msrs;
+
+    auto msr = ia32_apic_base::get();
+    expects(ia32_apic_base::state::get(msr) == ia32_apic_base::state::x2apic);
+
     vtd_sandbox::g_visr_vector = vcpu->rcx();
     bfdebug_nhex(0, "Recieved vector from VISR driver:", vtd_sandbox::g_visr_vector);
+    bfdebug_subnhex(0, "visr apic_id:", ia32_x2apic_apicid::get());
+    ndvm_apic_id = ia32_x2apic_apicid::get();
 
     return true;
 }
@@ -509,7 +516,7 @@ forward_interrupt_to_ndvm(
     bfignored(vcpu);
     bfignored(info);
 
-    // bfdebug_info(0, "Forwarding interrupt: VISR -> NDVM");
+    bfdebug_info(0, "Forwarding interrupt: VISR -> NDVM");
 
     auto ndvm_vcpu = reinterpret_cast<hyperkernel::intel_x64::vcpu *>(
             get_vcpu(vtd_sandbox::ndvm_vcpu_id).get());
@@ -572,7 +579,7 @@ enable(
     g_virtual_pci_config.at(15) = lat_grant_pin_line;
 
     // PCI Capabilities (Report MSI Capable)
-    g_virtual_pci_config.at(g_msi_cap_reg) = 0x10005;  // MSI Capability ID + MSI Enable, end of capabilties
+    g_virtual_pci_config.at(g_msi_cap_reg) = 0x00005;  // MSI Capability ID + MSI Enable, end of capabilties
     g_virtual_pci_config.at(g_msi_cap_reg + 1) = 0x0;  // MSI Address will be written here
     g_virtual_pci_config.at(g_msi_cap_reg + 2) = 0x0;  // MSI Data will be written here
     g_virtual_pci_config.at(g_msi_cap_reg + 3) = 0x0;  // Unmask all messages

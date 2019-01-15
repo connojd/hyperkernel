@@ -83,7 +83,6 @@ private:
     void send_eoi();
 
     vcpu *m_vcpu;
-    eapis::x64::unique_map<uint8_t> m_xapic_map;
 
 public:
 

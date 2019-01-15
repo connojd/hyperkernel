@@ -13,6 +13,7 @@ inline uint64_t g_ndvm_vector = 0;
 
 // The id of the NDVM's vCPU (needed as a destination for interrupt injection)
 inline uint64_t ndvm_vcpu_id = 0;
+inline uint64_t ndvm_apic_id = 0;
 
 
 inline uintptr_t iommu_base_phys = 0xfed91000;     // Gigabyte and Surface Pro

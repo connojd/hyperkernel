@@ -39,6 +39,8 @@
 #include <eapis/hve/arch/intel_x64/vmexit/io_instruction.h>
 #include <eapis/hve/arch/intel_x64/vmexit/ept_violation.h>
 
+#include <hve/arch/intel_x64/pci.h>
+
 // -----------------------------------------------------------------------------
 // Exports
 // -----------------------------------------------------------------------------
@@ -63,21 +65,6 @@ namespace hyperkernel::intel_x64
 {
 
 class vcpu;
-
-enum pci_bar_t {
-    pci_bar_mm,
-    pci_bar_io
-};
-
-struct pci_bar {
-    uint8_t bar_type;
-    uint8_t mm_type;
-    uintptr_t addr;
-    uint32_t size;
-    bool prefetchable;
-};
-
-using pci_bars_t = std::list<struct pci_bar>;
 
 class EXPORT_HYPERKERNEL_HVE xen_op_handler
 {

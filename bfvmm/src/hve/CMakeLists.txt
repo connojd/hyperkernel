@@ -24,9 +24,9 @@ if(${BUILD_TARGET_ARCH} STREQUAL "x86_64")
         arch/intel_x64/vmcall/run_op.cpp
         arch/intel_x64/vmcall/vcpu_op.cpp
         arch/intel_x64/vtd/dma_remapping.cpp
-        arch/intel_x64/vtd/hidden_nic.cpp
-        arch/intel_x64/vtd/hidden_bridge.cpp
-        arch/intel_x64/vtd/interrupt_remapping.cpp
+        #        arch/intel_x64/vtd/hidden_nic.cpp
+        #        arch/intel_x64/vtd/hidden_bridge.cpp
+        #        arch/intel_x64/vtd/interrupt_remapping.cpp
         arch/intel_x64/vtd/visr_device.cpp
         arch/intel_x64/xen/xen_op.cpp
         arch/intel_x64/xen/evtchn_op.cpp
