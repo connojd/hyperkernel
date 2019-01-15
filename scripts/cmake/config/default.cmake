@@ -121,7 +121,7 @@ add_config(
 add_config(
     CONFIG_NAME ERB_LINUX_OVERRIDE
     CONFIG_TYPE STRING
-    DEFAULT_VAL ""
+    DEFAULT_VAL "/home/dev/linux"
     DESCRIPTION "Path of linux source to override buildroot's default"
 )
 
