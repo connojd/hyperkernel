@@ -149,6 +149,7 @@ xen_op_handler::xen_op_handler(
     this->isolate_msr(::x64::msrs::ia32_kernel_gs_base::addr);
 
     if (vcpu->is_dom0()) {
+        ADD_WRMSR_HANDLER(::intel_x64::msrs::ia32_apic_base::addr, dom0_apic_base);
         return;
     }
 
@@ -711,63 +712,82 @@ xen_op_handler::pci_hdr_normal_out(io_instruction_handler::info_t &info)
 bool
 xen_op_handler::pci_owned_msi_out(io_instruction_handler::info_t &info)
 {
-    const auto reg = cf8_to_reg(m_cf8);
+    const auto pci_reg = cf8_to_reg(m_cf8);
     pci_bars_t virt_bars;
 
     // Pass this one through so it can be enabled/disabled
-    if (reg == m_msi_cap) {
+    if (pci_reg == m_msi_cap) {
         bfdebug_nhex(0, "MSI+0", info.val);
         pci_info_out(m_cf8, info);
         return true;
     }
 
-    if (reg == m_msi_cap + 1) {
+    if (pci_reg == m_msi_cap + 1) {
         using namespace ::intel_x64::msrs;
 
+        // Parse the APIC ID from VCPU's PoV
         auto msr = ia32_apic_base::get();
-        expects(ia32_apic_base::state::get(msr) == ia32_apic_base::state::x2apic);
+        auto hpa = ia32_apic_base::apic_base::get(msr);
+        auto ptr = m_vcpu->map_hpa_4k<uint8_t>(hpa);
+        auto apic_reg = *reinterpret_cast<uint32_t *>(ptr.get() + 0x20);
+        auto phys_id = apic_reg >> 24;
+
+        // Parse the APIC ID from NIC's PoV
+        auto msi_addr = cf8_read_reg(m_cf8, pci_reg);
+        auto nic_id = (msi_addr & 0xFF000) >> 12;
+
+        bfdebug_nhex(0, "visr_id", vtd_sandbox::ndvm_apic_id);
+        bfdebug_nhex(0, "phys_id", phys_id);
+        bfdebug_nhex(0, "nic_id", nic_id);
+
         expects((info.val & 0x8) == 0); // For now we don't support redirection hints
+        expects(ia32_apic_base::state::get(msr) == ia32_apic_base::state::xapic);
+        expects(phys_id == vtd_sandbox::ndvm_apic_id);
 
-        bfdebug_nhex(0, "xen: apic_id:", ia32_x2apic_apicid::get());
-        bfdebug_nhex(0, "xen: ndvm_id:", (cf8_read_reg(m_cf8, reg) & 0x000FF000) >> 12);
+        // Trust no one, clear reserved bits
+        info.val &= ~0x00000FF0UL;
 
-        // We dont copy the value that windows program because the write 1 to
-        // reserved bits. tsktsk
-        //
-        info.val = 0xFEE00000UL | (vtd_sandbox::ndvm_apic_id << 12);
+        // Program the proper physical apic id
+        info.val &= ~0x000FF000UL;
+        info.val |= (phys_id << 12);
+
         pci_info_out(m_cf8, info);
         return true;
     }
 
-    if (reg == m_msi_cap + 2) {
+    if (pci_reg == m_msi_cap + 2) {
         if (info.val) {
             throw std::runtime_error("Non-zero write to upper MSI address:");
         }
     }
 
-    if (reg == m_msi_cap + 3) {
+    if (pci_reg == m_msi_cap + 3) {
+        // Save the vector linux expects
+        //
         bfdebug_nhex(0, "Received ndvm vector:", info.val & 0xFF);
         vtd_sandbox::g_ndvm_vector = info.val & 0xFF;
-        bfdebug_nhex(0, "Setting visr vector:", vtd_sandbox::g_visr_vector);
 
-        // Reset the vector to visr
+        // We set the vector to the one visr expects and clear all
+        // other bits. This implies the interrupt will be delivered
+        // with fixed delivery mode, edge triggered. We can't trust
+        // the host or guest to program this properly (Windows programmed
+        // lowest-priority!).
         //
-        info.val &= 0xFFFFFF00;
-        info.val |= vtd_sandbox::g_visr_vector & 0xFF;
+        info.val = vtd_sandbox::g_visr_vector;
         pci_info_out(m_cf8, info);
 
-        bfdebug_nhex(0, "NIC MSI+0 hw:", cf8_read_reg(m_cf8, reg - 3));
-        bfdebug_nhex(0, "NIC MSI+1 hw:", cf8_read_reg(m_cf8, reg - 2));
-        bfdebug_nhex(0, "NIC MSI+2 hw:", cf8_read_reg(m_cf8, reg - 1));
-        bfdebug_nhex(0, "NIC MSI+3 hw:", cf8_read_reg(m_cf8, reg - 0));
+        bfdebug_nhex(0, "NIC MSI+0 hw:", cf8_read_reg(m_cf8, pci_reg - 3));
+        bfdebug_nhex(0, "NIC MSI+1 hw:", cf8_read_reg(m_cf8, pci_reg - 2));
+        bfdebug_nhex(0, "NIC MSI+2 hw:", cf8_read_reg(m_cf8, pci_reg - 1));
+        bfdebug_nhex(0, "NIC MSI+3 hw:", cf8_read_reg(m_cf8, pci_reg - 0));
 
         return true;
     }
 
-    if (reg == m_msi_cap + 4 && info.val) {
+    if (pci_reg == m_msi_cap + 4 && info.val) {
         throw std::runtime_error("Non-zero write to MSI+4");
     }
-    if (reg == m_msi_cap + 5 && info.val) {
+    if (pci_reg == m_msi_cap + 5 && info.val) {
         throw std::runtime_error("Non-zero write to MSI+5");
     }
 
@@ -1382,6 +1402,15 @@ vmx_init_hypercall_page(uint8_t *hypercall_page)
         entry[7] = 0xC1U;
         entry[8] = 0xC3U;
     }
+}
+
+bool
+xen_op_handler::dom0_apic_base(
+    gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::wrmsr_handler::info_t &info)
+{
+    ::intel_x64::msrs::ia32_apic_base::dump(0, info.val);
+    info.ignore_write = false;
+    return true;
 }
 
 bool

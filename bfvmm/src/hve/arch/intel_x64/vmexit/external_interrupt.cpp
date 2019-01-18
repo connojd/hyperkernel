@@ -27,7 +27,8 @@ namespace hyperkernel::intel_x64
 external_interrupt_handler::external_interrupt_handler(
     gsl::not_null<vcpu *> vcpu
 ) :
-    m_vcpu{vcpu}
+    m_vcpu{vcpu},
+    m_xapic{nullptr}
 {
     using namespace vmcs_n;
 
@@ -36,6 +37,9 @@ external_interrupt_handler::external_interrupt_handler(
             eapis::intel_x64::external_interrupt_handler::handler_delegate_t::create<
                 external_interrupt_handler, &external_interrupt_handler::handle>(this)
         );
+        auto msr = ::intel_x64::msrs::ia32_apic_base::get();
+        auto hpa = ::intel_x64::msrs::ia32_apic_base::apic_base::get(msr);
+        m_xapic = m_vcpu->map_hpa_4k<uint8_t>(hpa);
     }
 }
 
@@ -51,10 +55,10 @@ external_interrupt_handler::handle(
     bfignored(vcpu);
 
     if(info.vector == vtd_sandbox::g_visr_vector) {
-        expects(vcpuid::is_guest_vm_vcpu(m_vcpu->id()));
         bfdebug_info(0, "Injecting NIC interrupt -> NDVM");
         m_vcpu->queue_external_interrupt(vtd_sandbox::g_ndvm_vector);
         this->send_eoi();
+
         return true;
     }
 
@@ -71,7 +75,9 @@ external_interrupt_handler::handle(
 void
 external_interrupt_handler::send_eoi()
 {
-    ::intel_x64::msrs::ia32_x2apic_eoi::set(0);
+    uint32_t *eoi_reg = reinterpret_cast<uint32_t *>(m_xapic.get() + 0xB0);
+    *eoi_reg = 0U;
+    ::intel_x64::barrier::wmb();
 }
 
 }

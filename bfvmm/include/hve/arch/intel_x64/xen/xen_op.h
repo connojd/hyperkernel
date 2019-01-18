@@ -108,6 +108,9 @@ private:
     bool wrmsr_store_handler(
         gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::wrmsr_handler::info_t &info);
 
+    bool dom0_apic_base(
+        gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::wrmsr_handler::info_t &info);
+
     bool ia32_misc_enable_rdmsr_handler(
         gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::rdmsr_handler::info_t &info);
     bool ia32_misc_enable_wrmsr_handler(
