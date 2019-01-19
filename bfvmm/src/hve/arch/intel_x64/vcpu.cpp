@@ -113,6 +113,17 @@ vcpu::vcpu(
         vtd_sandbox::ndvm_vcpu_id = id;
         this->write_domU_guest_state(domain);
     }
+
+    using namespace ::intel_x64::msrs;
+
+//    auto msr = ia32_apic_base::get();
+//    expects(ia32_apic_base::state::get(msr) == ia32_apic_base::state::xapic);
+//
+//    auto hpa = ia32_apic_base::apic_base::get(msr);
+//    auto ptr = this->map_hpa_4k<uint8_t>(hpa);
+//    auto reg = *reinterpret_cast<uint32_t *>(ptr.get() + 0x20);
+//    m_apic_id = reg >> 24;
+//    bfdebug_subnhex(0, "physical apic id", m_apic_id);
 }
 
 //------------------------------------------------------------------------------

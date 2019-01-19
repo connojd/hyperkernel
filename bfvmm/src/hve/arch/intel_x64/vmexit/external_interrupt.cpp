@@ -76,7 +76,7 @@ void
 external_interrupt_handler::send_eoi()
 {
     uint32_t *eoi_reg = reinterpret_cast<uint32_t *>(m_xapic.get() + 0xB0);
-    *eoi_reg = 0U;
+    *eoi_reg = 0UL;
     ::intel_x64::barrier::wmb();
 }
 

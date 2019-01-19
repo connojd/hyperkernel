@@ -379,6 +379,7 @@ private:
 
     vcpu *m_parent_vcpu{};
     uint64_t m_timer_vector{};
+    uint64_t m_apic_id{};
 };
 
 }

@@ -470,21 +470,6 @@ handle_cff_out(
     return true;
 }
 
-bool
-receive_vector_from_ndvm(
-    gsl::not_null<vcpu_t *> vcpu,
-    cpuid_handler::info_t &info
-)
-{
-    bfignored(vcpu);
-    bfignored(info);
-
-    g_ndvm_vector = vcpu->rcx();
-    bfdebug_nhex(0, "Recieved vector from NDVM:", g_ndvm_vector);
-
-    return true;
-}
-
 static bool need_injection = false;
 
 bool
@@ -509,11 +494,7 @@ receive_vector_from_windows(
     auto reg = *reinterpret_cast<uint32_t *>(ptr.get() + 0x20);
     auto id = reg >> 24;
 
-    bfalert_subnhex(0, "active apic_id:", id);
-
-    // At this point, we've received the vector from windows.
-    // Check to see which cores the handler is installed one
-    ndvm_apic_id = id;
+    vtd_sandbox::ndvm_apic_id = id;
 
     return true;
 }
@@ -527,7 +508,7 @@ forward_interrupt_to_ndvm(
     bfignored(vcpu);
     bfignored(info);
 
-    //bfdebug_info(0, "Forwarding interrupt: VISR -> NDVM");
+    bfdebug_info(0, "Forwarding interrupt: VISR -> NDVM");
 
     //auto nic = 0x80000000U | (g_bus << 16U) | (g_device << 11U) | (g_function << 8U);
     //auto reg0 = g_msi_cap_reg;
@@ -651,10 +632,10 @@ enable(
     // -------------------------------------------------------------------------
     // Handlers to coordinate interupt injection
     // -------------------------------------------------------------------------
-    vcpu->emulate_cpuid(
-        0xd00dfeed,
-        cpuid_handler::handler_delegate_t::create<receive_vector_from_ndvm>()
-    );
+//    vcpu->emulate_cpuid(
+//        0xd00dfeed,
+//        cpuid_handler::handler_delegate_t::create<receive_vector_from_ndvm>()
+//    );
 
     vcpu->emulate_cpuid(
         0xf00dbeef,
@@ -665,8 +646,6 @@ enable(
         0xcafebabe,
         cpuid_handler::handler_delegate_t::create<forward_interrupt_to_ndvm>()
     );
-
-    // bfdebug_info(0, "Virtual interrupt service route device initialized");
 }
 
 }
