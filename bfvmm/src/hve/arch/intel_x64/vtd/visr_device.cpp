@@ -18,10 +18,10 @@ using namespace eapis::intel_x64;
 gsl::span<uint32_t> g_virtual_pci_config {};
 
 // Initial PCI Configuration space for the emulated device
-const uint32_t vendor_device = 0xBEEFF00D;      // Non-existent PCI Vendor/Device
+const uint32_t device_vendor = 0xBEEFF00D;      // Non-existent PCI Vendor/Device
 const uint32_t status_command = 0x0010'0402;     // MMIO-space capable, no INTx, capabilities list present
 const uint32_t class_sub_prog_rev = 0xFF000000; // Vendor-specific class
-const uint32_t bist_htype_ltimer_clsize = 0;
+const uint32_t bist_htype_ltimer_clsize = 0x10;
 const uint32_t bar0 = 0;
 const uint32_t bar1 = 0;
 const uint32_t bar2 = 0;
@@ -578,7 +578,7 @@ enable(
     }
 
     // Standard configuration space
-    g_virtual_pci_config.at(0) = vendor_device;
+    g_virtual_pci_config.at(0) = device_vendor;
     g_virtual_pci_config.at(1) = status_command;
     g_virtual_pci_config.at(2) = class_sub_prog_rev;
     g_virtual_pci_config.at(3) = bist_htype_ltimer_clsize;

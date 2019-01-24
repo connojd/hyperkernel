@@ -270,6 +270,7 @@ private:
     bool local_xenstore() const;
     void pci_init_caps();
     void pci_init_bars();
+    void pci_init_nic();
 
     // -------------------------------------------------------------------------
     // Quirks

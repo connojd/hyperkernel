@@ -246,6 +246,29 @@ xen_op_handler::xen_op_handler(
 
     this->pci_init_caps();
     this->pci_init_bars();
+    this->pci_init_nic();
+}
+
+// Do fixups after Windows to ensure we start from a known initial state
+//
+void
+xen_op_handler::pci_init_nic()
+{
+    auto nic = bdf_to_cf8(NIC_BUS, NIC_DEV, NIC_FUN);
+
+    // status_command - disable INTx
+    cf8_write_reg(nic, 0x1, 0x00100407);
+
+    // Disable MSI
+    cf8_write_reg(nic, 0x14, 0x00807005);
+
+    // Bus-level reset of the NIC's bus
+    auto bridge = bdf_to_cf8(0, 0x1C, 0);
+    auto ctl = cf8_read_reg(bridge, 0xF);
+    auto tmp = ctl | (0x40UL << 16);
+
+    cf8_write_reg(bridge, 0xF, tmp);
+    cf8_write_reg(bridge, 0xF, ctl);
 }
 
 
@@ -343,6 +366,10 @@ xen_op_handler::pci_init_bars()
     cf8 = bdf_to_cf8(0, 0x1C, 0);
     m_bridge_bar[0] = cf8_read_reg(cf8, 0x4);
     m_bridge_bar[1] = cf8_read_reg(cf8, 0x5);
+
+    // Map in NIC's PCIe mmconfig page
+    uintptr_t page = 0xf8000000 | (2 << 20);
+    m_domain->map_4k_rw_uc(page, page);
 }
 
 bool
@@ -391,12 +418,10 @@ xen_op_handler::pci_msix_cap_prev_in(io_instruction_handler::info_t &info)
         info.val &= 0xFFFF00FF;
         info.val |= next << (8 + 2);
         break;
-
     case 0xCFD:
         info.val &= 0xFFFFFF00;
         info.val |= next << 2;
         break;
-
     default:
         break;
     }
@@ -407,11 +432,6 @@ xen_op_handler::pci_msix_cap_prev_in(io_instruction_handler::info_t &info)
 bool
 xen_op_handler::pci_owned_in(io_instruction_handler::info_t &info)
 {
-    if (m_msix_cap == 0) {
-        pci_info_in(m_cf8, info);
-        return true;
-    }
-
     expects(m_msix_cap_prev != 0);
     if (cf8_to_reg(m_cf8) == m_msix_cap_prev) {
         return this->pci_msix_cap_prev_in(info);
@@ -423,22 +443,37 @@ xen_op_handler::pci_owned_in(io_instruction_handler::info_t &info)
 
     pci_info_in(m_cf8, info);
 
-    if (cf8_to_reg(m_cf8) == 0xF) {
+    switch (cf8_to_reg(m_cf8)) {
+    case 0x1:
         if (info.port_number == 0xCFC) {
-            info.val |= 0xFF;
-
-            switch (info.size_of_access) {
-            case io::size_of_access::four_byte:
-                info.val &= 0xFFFF00FF;
-                break;
-
-            case io::size_of_access::two_byte:
-                info.val &= 0x00FF;
-                break;
-            }
-        } else if (info.port_number == 0xCFD) {
-            info.val = 0;
+            info.val |= 0x400UL;
+            pci_info_out(m_cf8, info);
+            info.val |= 0x10UL;
         }
+        break;
+    case 0x3:
+        if (info.port_number == 0xCFC) {
+            info.val &= 0xFFFFFF00UL;
+            info.val |= 0x10UL;
+        }
+        break;
+//    case 0xD:
+//        if (info.port_number == 0xCFC) {
+//            info.val = 0x50;
+//        }
+//        break;
+//    case 0x14: // MSI cap reg
+//        if (info.port_number == 0xCFC) {
+//            if (info.size_of_access > io::size_of_access::one_byte) {
+//                info.val &= 0xFFFF00FFUL;
+//            }
+//        } else if (info.port_number == 0xCFD) {
+//            expects(info.size_of_access == io::size_of_access::one_byte);
+//            info.val = 0;
+//        }
+//        break;
+    default:
+        break;
     }
 
     return true;
@@ -1068,6 +1103,17 @@ xen_op_handler::run_delegate(bfobject *obj)
         for (const auto &msr : m_msrs) {
             ::x64::msrs::set(msr.first, msr.second);
         }
+    }
+
+    if (!vtd_sandbox::frr_ready) {
+        return;
+    }
+
+    if (::intel_x64::vtd::iommu::fsts_reg::ppf::is_enabled()) {
+        printf("\n");
+        bferror_info(0, "IOMMU fault occurred:");
+        ::intel_x64::vtd::iommu::frr::dump(0);
+        printf("\n");
     }
 }
 

@@ -358,6 +358,7 @@ private:
     page_ptr<madt_t> m_madt;
     page_ptr<fadt_t> m_fadt;
     page_ptr<dsdt_t> m_dsdt;
+    page_ptr<mcfg_t> m_mcfg;
 
     uart::port_type m_uart_port{};
     uart::port_type m_pt_uart_port{};

@@ -7,6 +7,8 @@
 namespace vtd_sandbox
 {
 
+inline bool frr_ready = false;
+
 // The two NIC interrupt vectors to be remapped to/from each other
 inline uint64_t g_visr_vector = 0;
 inline uint64_t g_ndvm_vector = 0;

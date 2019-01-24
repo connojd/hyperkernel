@@ -89,7 +89,7 @@ typedef struct {
 
 typedef struct {
     acpi_header_t           header;                     ///< Common ACPI table header
-    uint64_t                entries[2];                 ///< Array of pointers to ACPI tables
+    uint64_t                entries[3];                 ///< Array of pointers to ACPI tables
 } __attribute__((packed)) xsdt_t;
 
 // -----------------------------------------------------------------------------
@@ -196,6 +196,28 @@ typedef struct {
 typedef struct {
     acpi_header_t header;
 } __attribute__((packed)) dsdt_t;
+
+typedef struct {
+    uint64_t base;
+    uint16_t segment;
+    uint8_t start_bus;
+    uint8_t end_bus;
+    uint32_t rsvd;
+} __attribute__((packed)) mcfg_entry_t;
+
+typedef struct {
+    char signature[4];
+    uint32_t length;
+    uint8_t revision;
+    uint8_t csum;
+    char oemid[6];
+    char oemtableid[8];
+    uint32_t oemrevision;
+    char creatorid[4];
+    uint32_t creatorrevision;
+    char rsvd[8];
+    mcfg_entry_t entry[1];
+} __attribute__((packed)) mcfg_t;
 
 // -----------------------------------------------------------------------------
 // ACPI Checksum

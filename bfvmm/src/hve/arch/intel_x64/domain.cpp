@@ -37,7 +37,8 @@ domain::domain(domainid_type domainid) :
     m_xsdt{make_page<xsdt_t>()},
     m_madt{make_page<madt_t>()},
     m_fadt{make_page<fadt_t>()},
-    m_dsdt{make_page<dsdt_t>()}
+    m_dsdt{make_page<dsdt_t>()},
+    m_mcfg{make_page<mcfg_t>()}
 {
     if (domainid == 0) {
         this->setup_dom0();
@@ -76,18 +77,6 @@ domain::setup_domU()
     m_ept_map.map_4k(m_gdt_virt, m_gdt_phys, ept::mmap::attr_type::read_only);
     m_ept_map.map_4k(m_idt_virt, m_idt_phys, ept::mmap::attr_type::read_only);
 
-    // for (auto p = 0; p < 256 * 4096; p += ::x64::pt::page_size) {
-    //     m_ept_map.map_4k(0xF7100000 + p,
-    //                      0xF7100000 + p,
-    //                      ept::mmap::attr_type::read_write,
-    //                      ept::mmap::memory_type::uncacheable);
-    //
-    //     m_ept_map.map_4k(0xF0000000 + p,
-    //                      0xF0000000 + p,
-    //                      ept::mmap::attr_type::read_write,
-    //                      ept::mmap::memory_type::uncacheable);
-    // }
-
     this->setup_acpi();
 }
 
@@ -117,6 +106,7 @@ domain::setup_acpi()
     m_xsdt->header.aslcompilerrevision = ASLCOMPILERREVISION;
     m_xsdt->entries[0] = ACPI_MADT_GPA;
     m_xsdt->entries[1] = ACPI_FADT_GPA;
+    m_xsdt->entries[2] = ACPI_MCFG_GPA;
     m_xsdt->header.checksum = acpi_checksum(m_xsdt.get(), m_xsdt->header.length);
 
     std::strncpy(m_madt->header.signature, "APIC", sizeof(m_madt->header.signature));
@@ -164,17 +154,37 @@ domain::setup_acpi()
     m_dsdt->header.aslcompilerrevision = ASLCOMPILERREVISION;
     m_dsdt->header.checksum = acpi_checksum(m_dsdt.get(), m_dsdt->header.length);
 
+    std::strncpy(m_mcfg->signature, "MCFG", sizeof(m_mcfg->signature));
+    m_mcfg->length = sizeof(mcfg_t);
+    m_mcfg->revision = 1;
+    m_mcfg->csum = 0;
+    std::strncpy(m_mcfg->oemid, OEMID, sizeof(m_mcfg->oemid));
+    std::strncpy(m_mcfg->oemtableid, OEMTABLEID, sizeof(m_mcfg->oemtableid));
+    m_mcfg->oemrevision = OEMREVISION;
+    std::strncpy(m_mcfg->creatorid, "AIS", sizeof(4));
+    m_mcfg->creatorrevision = 0;
+
+    m_mcfg->entry[0].base = 0xF8000000;
+    m_mcfg->entry[0].segment = 0;
+    m_mcfg->entry[0].start_bus = 2;
+    m_mcfg->entry[0].end_bus = 2;
+    m_mcfg->entry[0].rsvd = 0;
+
+    m_mcfg->csum = acpi_checksum(m_mcfg.get(), m_mcfg->length);
+
     auto rsdp_hpa = g_mm->virtptr_to_physint(m_rsdp.get());
     auto xsdt_hpa = g_mm->virtptr_to_physint(m_xsdt.get());
     auto madt_hpa = g_mm->virtptr_to_physint(m_madt.get());
     auto fadt_hpa = g_mm->virtptr_to_physint(m_fadt.get());
     auto dsdt_hpa = g_mm->virtptr_to_physint(m_dsdt.get());
+    auto mcfg_hpa = g_mm->virtptr_to_physint(m_mcfg.get());
 
     m_ept_map.map_4k(ACPI_RSDP_GPA, rsdp_hpa, ept::mmap::attr_type::read_only);
     m_ept_map.map_4k(ACPI_XSDT_GPA, xsdt_hpa, ept::mmap::attr_type::read_only);
     m_ept_map.map_4k(ACPI_MADT_GPA, madt_hpa, ept::mmap::attr_type::read_only);
     m_ept_map.map_4k(ACPI_FADT_GPA, fadt_hpa, ept::mmap::attr_type::read_only);
     m_ept_map.map_4k(ACPI_DSDT_GPA, dsdt_hpa, ept::mmap::attr_type::read_only);
+    m_ept_map.map_4k(ACPI_MCFG_GPA, mcfg_hpa, ept::mmap::attr_type::read_only);
 }
 
 void
