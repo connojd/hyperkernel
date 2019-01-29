@@ -154,8 +154,8 @@ setup_e820_map(void *vm, uint64_t size)
 #define RESERVED1_ADRR      0xEE000
 #define RESERVED1_SIZE      0x02000
 
-#define RESERVED2_ADRR      0xF5000
-#define RESERVED2_SIZE      0x0B000
+#define RESERVED2_ADRR      0xF6000
+#define RESERVED2_SIZE      0x0A000
 
 #define INITIAL_GDT_GPA     0xE8000
 #define INITIAL_IDT_GPA     0xE9000
@@ -170,6 +170,7 @@ setup_e820_map(void *vm, uint64_t size)
 #define ACPI_MADT_GPA       0xF2000
 #define ACPI_FADT_GPA       0xF3000
 #define ACPI_DSDT_GPA       0xF4000
+#define ACPI_MCFG_GPA       0xF5000
 
 #define LAPIC_GPA           0xFEE00000
 #define IOAPIC_GPA          0xFEC00000
