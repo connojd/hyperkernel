@@ -221,7 +221,7 @@ public:
     ///
     /// @param gpa the guest physical address to unmap
     ///
-    void unmap(uintptr_t gpa);
+    uintptr_t unmap(uintptr_t gpa);
 
     /// Release Virtual Address
     ///

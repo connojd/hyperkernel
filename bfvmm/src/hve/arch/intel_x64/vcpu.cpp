@@ -152,12 +152,28 @@ vcpu::write_dom0_guest_state(domain *domain)
 
     // Use this function to map an entire PCI bus to a "view" of memory
     // in which DMA translation will be shared with the given EPT mmap
-    vtd_sandbox::dma_remapping::map_bus(0, 0, domain->ept());
-    vtd_sandbox::dma_remapping::map_bus(1, 0, domain->ept());
-    vtd_sandbox::dma_remapping::map_bus(3, 0, domain->ept());
-    vtd_sandbox::dma_remapping::map_bus(4, 0, domain->ept());
-    vtd_sandbox::dma_remapping::map_bus(5, 0, domain->ept());
-    vtd_sandbox::dma_remapping::enable(this);
+//    vtd_sandbox::dma_remapping::map_bus(0, 1, domain->ept());
+//    vtd_sandbox::dma_remapping::map_bus(1, 1, domain->ept());
+//    vtd_sandbox::dma_remapping::map_bus(3, 1, domain->ept());
+//    vtd_sandbox::dma_remapping::map_bus(4, 1, domain->ept());
+//    vtd_sandbox::dma_remapping::map_bus(5, 1, domain->ept());
+//    vtd_sandbox::dma_remapping::enable(this);
+
+//    static bool need_unmap = true;
+//    if (need_unmap) {
+//        expects(domain->unmap(vtd_sandbox::iommu_base_phys) == 21);
+//        domain->release(vtd_sandbox::iommu_base_phys);
+//
+//        auto base_2m = vtd_sandbox::iommu_base_phys & ~((1ULL << 21) - 1);
+//        for (auto i = base_2m; i < vtd_sandbox::iommu_base_phys; i += 4096) {
+//            domain->map_4k_rw(i, i);
+//        }
+//
+//        for (auto i = vtd_sandbox::iommu_base_phys + 4096; i < base_2m + (1ULL << 21); i += 4096) {
+//            domain->map_4k_rw(i, i);
+//        }
+//        need_unmap = false;
+//    }
 }
 
 void
@@ -274,7 +290,7 @@ vcpu::write_domU_guest_state(domain *domain)
         ::handler_delegate_t::create<hk_ept_violation_handler>()
     );
 
-    vtd_sandbox::dma_remapping::map_bus(2, 1, domain->ept());
+//    vtd_sandbox::dma_remapping::map_bus(2, 2, domain->ept());
 }
 
 //------------------------------------------------------------------------------

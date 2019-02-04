@@ -51,9 +51,7 @@ domain::domain(domainid_type domainid) :
 void
 domain::setup_dom0()
 {
-    ept::identity_map(
-        m_ept_map, MAX_PHYS_ADDR
-    );
+    ept::identity_map(m_ept_map, MAX_PHYS_ADDR);
 }
 
 void
@@ -232,9 +230,9 @@ void
 domain::map_4k_rwe(uintptr_t gpa, uintptr_t hpa)
 { m_ept_map.map_4k(gpa, hpa, ept::mmap::attr_type::read_write_execute); }
 
-void
+uintptr_t
 domain::unmap(uintptr_t gpa)
-{ m_ept_map.unmap(gpa); }
+{ return m_ept_map.unmap(gpa); }
 
 void
 domain::release(uintptr_t gpa)
