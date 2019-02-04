@@ -1,0 +1,129 @@
+//
+// Bareflank Hyperkernel
+// Copyright (C) 2019 Assured Information Security, Inc.
+//
+// This library is free software; you can redistribute it and/or
+// modify it under the terms of the GNU Lesser General Public
+// License as published by the Free Software Foundation; either
+// version 2.1 of the License, or (at your option) any later version.
+//
+// This library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+// Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public
+// License along with this library; if not, write to the Free Software
+// Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+
+#ifndef IOMMU_INTEL_X64_HYPERKERNEL_H
+#define IOMMU_INTEL_X64_HYPERKERNEL_H
+
+#include <cstdint>
+#include <eapis/hve/arch/x64/unmapper.h>
+
+// -----------------------------------------------------------------------------
+// Exports
+// -----------------------------------------------------------------------------
+
+#include <bfexports.h>
+
+#ifndef STATIC_HYPERKERNEL_HVE
+#ifdef SHARED_HYPERKERNEL_HVE
+#define EXPORT_HYPERKERNEL_HVE EXPORT_SYM
+#else
+#define EXPORT_HYPERKERNEL_HVE IMPORT_SYM
+#endif
+#else
+#define EXPORT_HYPERKERNEL_HVE
+#endif
+
+//------------------------------------------------------------------------------
+// Definition
+//------------------------------------------------------------------------------
+
+namespace vtd {
+
+extern uint64_t visr_vector;
+extern uint64_t ndvm_vector;
+extern uint64_t ndvm_apic_id;
+extern uint64_t ndvm_vcpu_id;
+
+}
+
+namespace hyperkernel::intel_x64
+{
+
+class EXPORT_HYPERKERNEL_HVE iommu
+{
+public:
+
+    /// This is found in the register base address field
+    /// of DRHD[1] on the gigabyte board. DRHD[0] is at
+    /// the previous page, but only scopes the graphics
+    /// card.
+    ///
+    /// Obviously this will potentially change from system to
+    /// system, so it should be read generically out of the DMAR
+    ///
+    static constexpr uintptr_t hpa = 0xFED91000UL;
+
+    /// Only 4K pages allowed
+    ///
+    static constexpr uintptr_t page_size = 4096UL;
+
+    /// Get the instance of the iommu
+    ///
+    static iommu *instance() noexcept;
+
+    /// Destructor
+    ///
+    /// @expects
+    /// @ensures
+    ///
+    ~iommu() = default;
+
+    /// Initialize
+    ///
+    /// @expects
+    /// @ensures
+    ///
+    void init();
+
+    /// Register access
+    ///
+    uint64_t read64(uintptr_t off);
+    uint32_t read32(uintptr_t off);
+    void write64(uintptr_t off, uint64_t val);
+    void write32(uintptr_t off, uint64_t val);
+
+private:
+
+    iommu() noexcept;
+    eapis::x64::unique_map<uint8_t> m_reg_map;
+    uint8_t *m_reg_hva;
+
+public:
+
+    /// @cond
+
+    iommu(iommu &&) noexcept = delete;
+    iommu &operator=(iommu &&) noexcept = delete;
+
+    iommu(const iommu &) = delete;
+    iommu &operator=(const iommu &) = delete;
+
+    /// @endcond
+};
+}
+
+/// iommu macro
+///
+/// The following macro can be used to quickly call for iommu services
+///
+/// @expects
+/// @ensures g_iommu != nullptr
+///
+#define g_iommu hyperkernel::intel_x64::iommu::instance()
+
+#endif

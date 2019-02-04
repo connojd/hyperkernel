@@ -17,15 +17,19 @@
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 #include <bfdebug.h>
+#include <bfcallonce.h>
 #include <bfgpalayout.h>
 
 #include <hve/arch/intel_x64/domain.h>
+#include <hve/arch/intel_x64/iommu.h>
 
 using namespace eapis::intel_x64;
 
 // -----------------------------------------------------------------------------
 // Implementation
 // -----------------------------------------------------------------------------
+
+bfn::once_flag init_iommu;
 
 namespace hyperkernel::intel_x64
 {
@@ -42,6 +46,10 @@ domain::domain(domainid_type domainid) :
 {
     if (domainid == 0) {
         this->setup_dom0();
+
+        bfn::call_once(init_iommu, [&]() {
+            g_iommu->init();
+        });
     }
     else {
         this->setup_domU();

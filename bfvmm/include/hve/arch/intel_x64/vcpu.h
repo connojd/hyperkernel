@@ -32,7 +32,6 @@
 
 #include "domain.h"
 #include "lapic.h"
-#include "ioapic.h"
 
 #include <bfvmm/vcpu/vcpu_manager.h>
 #include <eapis/hve/arch/intel_x64/vcpu.h>
@@ -287,36 +286,6 @@ public:
     ///
     VIRTUAL void lapic_write(uint32_t indx, uint32_t val);
 
-    /// IOAPIC Base
-    ///
-    /// @return IOAPIC base GPA
-    ///
-    VIRTUAL uint64_t ioapic_base() const;
-
-    /// IOAPIC Select
-    ///
-    /// @param offset the offset of the IOAPIC register to access
-    ///
-    VIRTUAL void ioapic_select(uint32_t offset);
-
-    /// IOAPIC Read
-    ///
-    /// @return the 32-bit value of the selected register
-    ///
-    VIRTUAL uint32_t ioapic_read() const;
-
-    /// IOAPIC Write
-    ///
-    /// @param val the 32-bit value to write to the selected register
-    ///
-    VIRTUAL void ioapic_write(uint32_t val);
-
-    /// IOAPIC set window
-    ///
-    /// @param val the 32-bit value to write to IOWIN
-    ///
-    VIRTUAL void ioapic_set_window(uint32_t val);
-
     /// Set timer vector
     ///
     /// @param vector the vector of the timer interrupt
@@ -364,7 +333,6 @@ private:
 
     domain *m_domain{};
     lapic m_lapic;
-    ioapic m_ioapic;
 
     external_interrupt_handler m_external_interrupt_handler;
     vmcall_handler m_vmcall_handler;

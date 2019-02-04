@@ -19,7 +19,7 @@
 #include <hve/arch/intel_x64/vcpu.h>
 #include <eapis/hve/arch/intel_x64/vcpu.h>
 #include <hve/arch/intel_x64/vmexit/external_interrupt.h>
-#include "../../../../../include/hve/arch/intel_x64/vtd/vtd_sandbox.h"
+#include "../../../../../include/hve/arch/intel_x64/iommu.h"
 
 namespace hyperkernel::intel_x64
 {
@@ -54,9 +54,9 @@ external_interrupt_handler::handle(
 {
     bfignored(vcpu);
 
-    if(info.vector == vtd_sandbox::g_visr_vector) {
+    if(info.vector == vtd::visr_vector) {
         bfdebug_info(0, "Injecting NIC interrupt -> NDVM");
-        m_vcpu->queue_external_interrupt(vtd_sandbox::g_ndvm_vector);
+        m_vcpu->queue_external_interrupt(vtd::ndvm_vector);
         this->send_eoi();
 
         return true;

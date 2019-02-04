@@ -1,15 +1,19 @@
 #include <bfvmm/hve/arch/intel_x64/exit_handler.h>
-#include <eapis/hve/arch/intel_x64/vcpu.h>
 #include <bfvmm/memory_manager/memory_manager.h>
-
-#include "hve/arch/intel_x64/vtd/vtd_sandbox.h"
-
-#include "hve/arch/intel_x64/vtd/ioapic.h"
-#include "hve/arch/intel_x64/vcpu.h"
 #include <bfvmm/vcpu/vcpu_manager.h>
+#include <eapis/hve/arch/intel_x64/vcpu.h>
 
-namespace vtd_sandbox
+#include "hve/arch/intel_x64/iommu.h"
+#include "hve/arch/intel_x64/vcpu.h"
+
+namespace vtd
 {
+
+uint64_t visr_vector = 0;
+uint64_t ndvm_vector = 0;
+uint64_t ndvm_apic_id = 0;
+uint64_t ndvm_vcpu_id = 0;
+
 namespace visr_device
 {
 
@@ -486,15 +490,15 @@ receive_vector_from_windows(
     auto msr = ia32_apic_base::get();
     expects(ia32_apic_base::state::get(msr) == ia32_apic_base::state::xapic);
 
-    vtd_sandbox::g_visr_vector = vcpu->rcx();
-    bfdebug_nhex(0, "Recieved vector from VISR driver:", vtd_sandbox::g_visr_vector);
+    vtd::visr_vector = vcpu->rcx();
+    bfdebug_nhex(0, "Recieved vector from VISR driver:", vtd::visr_vector);
 
     auto hpa = ::intel_x64::msrs::ia32_apic_base::apic_base::get(msr);
     auto ptr = vcpu_cast(vcpu)->map_hpa_4k<uint8_t>(hpa);
     auto reg = *reinterpret_cast<uint32_t *>(ptr.get() + 0x20);
     auto id = reg >> 24;
 
-    vtd_sandbox::ndvm_apic_id = id;
+    vtd::ndvm_apic_id = id;
 
     return true;
 }
@@ -535,13 +539,13 @@ forward_interrupt_to_ndvm(
     //auto id = reg >> 24;
 
     //bfdebug_subnhex(0, "active apic_id:", id);
-    //bfdebug_subnhex(0, "ndvm_vcpu_id:", vtd_sandbox::ndvm_vcpu_id);
+    //bfdebug_subnhex(0, "ndvm_vcpu_id:", vtd::ndvm_vcpu_id);
     //bfdebug_subnhex(0, "vcpu_id:", vcpu->id());
 
     auto ndvm_vcpu = reinterpret_cast<hyperkernel::intel_x64::vcpu *>(
-            get_vcpu(vtd_sandbox::ndvm_vcpu_id).get());
+            get_vcpu(vtd::ndvm_vcpu_id).get());
 
-    ndvm_vcpu->queue_external_interrupt(g_ndvm_vector, false);
+    ndvm_vcpu->queue_external_interrupt(ndvm_vector, false);
 
     return true;
 }

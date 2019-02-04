@@ -25,8 +25,9 @@
 #include <hve/arch/intel_x64/vcpu.h>
 #include <hve/arch/intel_x64/lapic.h>
 #include <hve/arch/intel_x64/pci.h>
-#include <hve/arch/intel_x64/vtd/vtd_sandbox.h>
+#include <hve/arch/intel_x64/iommu.h>
 #include <eapis/hve/arch/intel_x64/time.h>
+#include <eapis/hve/arch/intel_x64/vtd/iommu.h>
 
 #include <xen/public/xen.h>
 #include <xen/public/event_channel.h>
@@ -771,13 +772,13 @@ xen_op_handler::pci_owned_msi_out(io_instruction_handler::info_t &info)
         auto msi_addr = cf8_read_reg(m_cf8, pci_reg);
         auto nic_id = (msi_addr & 0xFF000) >> 12;
 
-        bfdebug_nhex(0, "visr_id", vtd_sandbox::ndvm_apic_id);
+        bfdebug_nhex(0, "visr_id", vtd::ndvm_apic_id);
         bfdebug_nhex(0, "phys_id", phys_id);
         bfdebug_nhex(0, "nic_id", nic_id);
 
         expects((info.val & 0x8) == 0); // For now we don't support redirection hints
         expects(ia32_apic_base::state::get(msr) == ia32_apic_base::state::xapic);
-        expects(phys_id == vtd_sandbox::ndvm_apic_id);
+        expects(phys_id == vtd::ndvm_apic_id);
 
         // Trust no one, clear reserved bits
         info.val &= ~0x00000FF0UL;
@@ -800,7 +801,7 @@ xen_op_handler::pci_owned_msi_out(io_instruction_handler::info_t &info)
         // Save the vector linux expects
         //
         bfdebug_nhex(0, "Received ndvm vector:", info.val & 0xFF);
-        vtd_sandbox::g_ndvm_vector = info.val & 0xFF;
+        vtd::ndvm_vector = info.val & 0xFF;
 
         // We set the vector to the one visr expects and clear all
         // other bits. This implies the interrupt will be delivered
@@ -808,7 +809,7 @@ xen_op_handler::pci_owned_msi_out(io_instruction_handler::info_t &info)
         // the host or guest to program this properly (Windows programmed
         // lowest-priority!).
         //
-        info.val = vtd_sandbox::g_visr_vector;
+        info.val = vtd::visr_vector;
         pci_info_out(m_cf8, info);
 
         bfdebug_nhex(0, "NIC MSI+0 hw:", cf8_read_reg(m_cf8, pci_reg - 3));
@@ -1105,16 +1106,16 @@ xen_op_handler::run_delegate(bfobject *obj)
         }
     }
 
-    if (!vtd_sandbox::frr_ready) {
-        return;
-    }
+    //if (!vtd::frr_ready) {
+    //    return;
+    //}
 
-    if (::intel_x64::vtd::iommu::fsts_reg::ppf::is_enabled()) {
-        printf("\n");
-        bferror_info(0, "IOMMU fault occurred:");
-        ::intel_x64::vtd::iommu::frr::dump(0);
-        printf("\n");
-    }
+    //if (::intel_x64::vtd::iommu::fsts_reg::ppf::is_enabled()) {
+    //    printf("\n");
+    //    bferror_info(0, "IOMMU fault occurred:");
+    //    ::intel_x64::vtd::iommu::frr::dump(0);
+    //    printf("\n");
+    //}
 }
 
 bool
