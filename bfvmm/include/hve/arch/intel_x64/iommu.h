@@ -21,6 +21,7 @@
 
 #include <cstdint>
 #include <eapis/hve/arch/x64/unmapper.h>
+#include <hve/arch/intel_x64/vcpu.h>
 
 // -----------------------------------------------------------------------------
 // Exports
@@ -55,6 +56,8 @@ class EXPORT_HYPERKERNEL_HVE iommu
 {
 public:
 
+    using entry_t = struct { uint64_t data[2]; } __attribute__((packed));
+
     /// This is found in the register base address field
     /// of DRHD[1] on the gigabyte board. DRHD[0] is at
     /// the previous page, but only scopes the graphics
@@ -85,7 +88,16 @@ public:
     /// @expects
     /// @ensures
     ///
-    void map_dom0(uintptr_t eptp);
+    void init_dom0_mappings();
+    void init_domU_mappings();
+
+    void set_dom0_eptp(uintptr_t eptp);
+    void set_domU_eptp(uintptr_t eptp);
+
+    void set_dom0_cte(entry_t *cte);
+    void set_domU_cte(entry_t *cte);
+
+    void enable();
 
     /// Register access
     ///
@@ -94,13 +106,12 @@ public:
     void write64(uintptr_t off, uint64_t val);
     void write32(uintptr_t off, uint64_t val);
 
-    using entry_t = struct { uint64_t data[2]; } __attribute__((packed));
-
 private:
 
     iommu() noexcept;
-    eapis::x64::unique_map<uint8_t> m_reg_map;
-    uint8_t *m_reg_hva;
+    uint8_t *m_hva;
+    uintptr_t m_dom0_eptp{0};
+    uintptr_t m_domU_eptp{0};
 
     page_ptr<entry_t> m_root;
     std::vector<page_ptr<entry_t>> m_ctxt;

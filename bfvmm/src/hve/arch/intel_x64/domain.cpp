@@ -48,11 +48,16 @@ domain::domain(domainid_type domainid) :
     if (domainid == 0) {
         this->setup_dom0();
         bfn::call_once(init_iommu, [&]() {
-            g_iommu->map_dom0(m_ept_map.eptp());
+            g_iommu->set_dom0_eptp(m_ept_map.eptp());
+            g_iommu->init_dom0_mappings();
+            g_iommu->enable();
+            bfdebug_info(0, "IOMMU init'd");
         });
     }
     else {
         this->setup_domU();
+        g_iommu->set_domU_eptp(m_ept_map.eptp());
+        g_iommu->init_domU_mappings();
     }
 }
 

@@ -21,10 +21,12 @@
 #include <bfvmm/memory_manager/memory_manager.h>
 #include <bfvmm/memory_manager/arch/x64/cr3.h>
 #include <eapis/hve/arch/x64/unmapper.h>
+#include <eapis/hve/arch/intel_x64/vtd/iommu.h>
 #include <hve/arch/intel_x64/iommu.h>
 #include <hve/arch/intel_x64/pci.h>
 
 using namespace eapis::intel_x64;
+using namespace bfvmm::x64;
 
 namespace hyperkernel::intel_x64
 {
@@ -33,14 +35,11 @@ iommu::iommu() noexcept : m_root{make_page<entry_t>()}
 {
     /// Map in registers
     ///
-    auto hva = g_mm->alloc_map(iommu::page_size);
-    g_cr3->map_4k(hva, iommu::hpa);
-
-    m_reg_map = eapis::x64::unique_map<uint8_t>(
-        static_cast<uint8_t *>(hva),
-        eapis::x64::unmapper(hva, iommu::page_size)
-    );
-    m_reg_hva = m_reg_map.get();
+    g_cr3->map_4k(iommu::hpa,
+                  iommu::hpa,
+                  cr3::mmap::attr_type::read_write,
+                  cr3::mmap::memory_type::uncacheable);
+    m_hva = reinterpret_cast<uint8_t *>(iommu::hpa);
 }
 
 iommu *iommu::instance() noexcept
@@ -49,16 +48,34 @@ iommu *iommu::instance() noexcept
     return &self;
 }
 
-static void set_dom0_cte(iommu::entry_t *cte, uintptr_t eptp)
+void iommu::set_dom0_eptp(uintptr_t eptp)
+{ m_dom0_eptp = eptp; }
+
+void iommu::set_domU_eptp(uintptr_t eptp)
+{ m_domU_eptp = eptp; }
+
+void iommu::set_dom0_cte(iommu::entry_t *cte)
 {
 //    // TODO check TT against dev tlb support
-//    cte->data[0] = mmap->eptp() | 1U; // present, points to dom0 ept
-//    cte->data[1] = (1ULL << 8U) | 2U; // DID 1, 4-level EPT
+
+    cte->data[0] = m_dom0_eptp | 1U;  // present, points to dom0 ept
+    cte->data[1] = (1ULL << 8U) | 2U; // DID 1, 4-level EPT
 }
+
+void iommu::set_domU_cte(iommu::entry_t *cte)
+{
+//    // TODO check TT against dev tlb support
+
+    cte->data[0] = m_domU_eptp | 1U;  // present, points to domU ept
+    cte->data[1] = (2ULL << 8U) | 2U; // DID 2, 4-level EPT
+}
+
+static constexpr uint32_t devfn(uint32_t dev, uint32_t fn)
+{ return (dev << 3) | fn; }
 
 // Called once from {dom0, vcpu0}
 //
-void iommu::map_dom0(uintptr_t eptp)
+void iommu::init_dom0_mappings()
 {
     //TODO turn this into a probe fn
     m_ctxt.push_back(make_page<entry_t>());
@@ -69,37 +86,84 @@ void iommu::map_dom0(uintptr_t eptp)
     entry_t *rte = m_root.get();
     rte[0].data[0] = g_mm->virtptr_to_physint(m_ctxt[0].get()) | 1U;
     rte[1].data[0] = g_mm->virtptr_to_physint(m_ctxt[1].get()) | 1U;
+
+    // Bus 0 for gigabyte board
+    entry_t *cte = m_ctxt[0].get();
+    this->set_dom0_cte(&cte[devfn(0x00, 0)]); // Host bridge
+    this->set_dom0_cte(&cte[devfn(0x02, 0)]); // VGA
+    this->set_dom0_cte(&cte[devfn(0x08, 0)]); // Gaussian model
+    this->set_dom0_cte(&cte[devfn(0x14, 0)]); // USB
+    this->set_dom0_cte(&cte[devfn(0x16, 0)]); // Comms
+    this->set_dom0_cte(&cte[devfn(0x17, 0)]); // SATA
+    this->set_dom0_cte(&cte[devfn(0x1B, 0)]); // PCI Bridge to bus 1
+    this->set_dom0_cte(&cte[devfn(0x1C, 0)]); // PCI Bridge to bus 2
+    this->set_dom0_cte(&cte[devfn(0x1C, 5)]); // PCI Bridge to bus 3
+    this->set_dom0_cte(&cte[devfn(0x1C, 6)]); // PCI Bridge to bus 4
+    this->set_dom0_cte(&cte[devfn(0x1C, 7)]); // PCI Bridge to bus 5
+    this->set_dom0_cte(&cte[devfn(0x1D, 0)]); // PCI Bridge to bus 6
+    this->set_dom0_cte(&cte[devfn(0x1D, 1)]); // PCI Bridge to bus 7
+    this->set_dom0_cte(&cte[devfn(0x1D, 2)]); // PCI Bridge to bus 8
+    this->set_dom0_cte(&cte[devfn(0x1D, 3)]); // PCI Bridge to bus 9
+    this->set_dom0_cte(&cte[devfn(0x1F, 0)]); // ISA bridge
+    this->set_dom0_cte(&cte[devfn(0x1F, 2)]); // Memory controller
+    this->set_dom0_cte(&cte[devfn(0x1F, 3)]); // Audio controller
+    this->set_dom0_cte(&cte[devfn(0x1F, 4)]); // SMBus controller
+
+    // Bus 1 for GB board
+    cte = m_ctxt[1].get();
+    this->set_dom0_cte(&cte[devfn(0x00, 0)]); // NVMe controller
+
+    ::x64::cache::wbinvd();
+}
+
+void iommu::init_domU_mappings()
+{
+    entry_t *rte = m_root.get();
     rte[2].data[0] = g_mm->virtptr_to_physint(m_ctxt[2].get()) | 1U;
 
+    // Bus 2 for GB board
+    entry_t *cte = m_ctxt[2].get();
+    this->set_domU_cte(&cte[devfn(0x00, 0)]); // Ethernet controller
 
+    ::x64::cache::wbinvd();
+}
 
+void iommu::enable()
+{
+    expects(m_dom0_eptp != 0);
 
+    auto cap = this->read64(0x8);
+    auto ecap = this->read64(0x10);
+    auto gsts = this->read32(0x1C);
 
+    ::intel_x64::vtd::iommu::cap_reg::dump(0, cap);
+    ::intel_x64::vtd::iommu::ecap_reg::dump(0, ecap);
+    ::intel_x64::vtd::iommu::gsts_reg::dump(0, gsts);
 }
 
 /// Register access
 ///
 uint64_t iommu::read64(uintptr_t off)
 {
-    auto addr = reinterpret_cast<uint64_t *>(m_reg_hva + off);
+    uint64_t *addr = reinterpret_cast<uint64_t *>(m_hva + off);
     return *addr;
 }
 
 uint32_t iommu::read32(uintptr_t off)
 {
-    auto addr = reinterpret_cast<uint32_t *>(m_reg_hva + off);
+    uint32_t *addr = reinterpret_cast<uint32_t *>(m_hva + off);
     return *addr;
 }
 
 void iommu::write64(uintptr_t off, uint64_t val)
 {
-    auto addr = reinterpret_cast<uint64_t *>(m_reg_hva + off);
+    uint64_t *addr = reinterpret_cast<uint64_t *>(m_hva + off);
     *addr = val;
 }
 
 void iommu::write32(uintptr_t off, uint64_t val)
 {
-    auto addr = reinterpret_cast<uint32_t *>(m_reg_hva + off);
+    uint32_t *addr = reinterpret_cast<uint32_t *>(m_hva + off);
     *addr = gsl::narrow_cast<uint32_t>(val);
 }
 

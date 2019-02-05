@@ -81,6 +81,9 @@ inline bool domU_owned_cf8(uint32_t cf8)
            cf8_to_fun(cf8) == NIC_FUN;
 }
 
+inline bool cf8_exists(uint32_t cf8)
+{ return cf8_read_reg(cf8, 0) != 0xFFFFFFFF; }
+
 enum pci_header_t {
     pci_hdr_normal               = 0x00,
     pci_hdr_pci_bridge           = 0x01,
@@ -173,6 +176,7 @@ inline void probe_bus(uint32_t b, probe_t probe)
                 continue;
             }
 
+            // Call the probe callback for each valid device/vendor
             probe(cf8);
 
             switch (pci_header_type(cf8)) {
