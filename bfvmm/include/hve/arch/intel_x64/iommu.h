@@ -43,16 +43,13 @@
 //------------------------------------------------------------------------------
 
 namespace vtd {
-
-extern uint64_t visr_vector;
-extern uint64_t ndvm_vector;
-extern uint64_t ndvm_apic_id;
-extern uint64_t ndvm_vcpu_id;
-
+    extern uint64_t visr_vector;
+    extern uint64_t ndvm_vector;
+    extern uint64_t ndvm_apic_id;
+    extern uint64_t ndvm_vcpu_id;
 }
 
-namespace hyperkernel::intel_x64
-{
+namespace hyperkernel::intel_x64 {
 
 class EXPORT_HYPERKERNEL_HVE iommu
 {
@@ -88,7 +85,7 @@ public:
     /// @expects
     /// @ensures
     ///
-    void init();
+    void map_dom0(uintptr_t eptp);
 
     /// Register access
     ///
@@ -105,9 +102,8 @@ private:
     eapis::x64::unique_map<uint8_t> m_reg_map;
     uint8_t *m_reg_hva;
 
-
     page_ptr<entry_t> m_root;
-    std::array<page_ptr<entry_t>, 3> m_ctxt;
+    std::vector<page_ptr<entry_t>> m_ctxt;
 
 public:
 

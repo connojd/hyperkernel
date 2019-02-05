@@ -47,9 +47,8 @@ domain::domain(domainid_type domainid) :
 {
     if (domainid == 0) {
         this->setup_dom0();
-
         bfn::call_once(init_iommu, [&]() {
-            g_iommu->init();
+            g_iommu->map_dom0(m_ept_map.eptp());
         });
     }
     else {

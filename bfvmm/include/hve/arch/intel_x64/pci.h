@@ -23,6 +23,7 @@
 #include <array>
 #include <list>
 #include <intrinsics.h>
+#include <eapis/hve/arch/intel_x64/vcpu.h>
 
 namespace hyperkernel::intel_x64
 {
@@ -120,7 +121,6 @@ enum pci_subclass_bridge_t {
     pci_sc_bridge_other = 0x80
 };
 
-
 inline uint32_t pci_header_type(uint32_t cf8)
 {
     const auto val = cf8_read_reg(cf8, 3);
@@ -160,6 +160,33 @@ inline void bferror_dump_cf8(int level, uint32_t cf8)
     bferror_subnhex(level, "fun", cf8_to_fun(cf8));
     bferror_subnhex(level, "reg", cf8_to_reg(cf8));
     bferror_subnhex(level, "off", cf8_to_off(cf8));
+}
+
+using probe_t = delegate<void(uint32_t)>;
+
+inline void probe_bus(uint32_t b, probe_t probe)
+{
+    for (auto d = 0; d < 32; d++) {
+        for (auto f = 0; f < 8; f++) {
+            auto cf8 = bdf_to_cf8(b, d, f);
+            if (cf8_read_reg(cf8, 0) == 0xFFFFFFFF) {
+                continue;
+            }
+
+            probe(cf8);
+
+            switch (pci_header_type(cf8)) {
+            case pci_hdr_pci_bridge:
+            case pci_hdr_pci_bridge_multi: {
+                auto child = (cf8_read_reg(cf8, 0x6) & 0xFF00) >> 8;
+                probe_bus(child, probe);
+                }
+                break;
+            default:
+                break;
+            }
+        }
+    }
 }
 
 inline void debug_pci_in(uint32_t cf8, io_instruction_handler::info_t &info)
