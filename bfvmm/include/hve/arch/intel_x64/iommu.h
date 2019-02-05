@@ -97,11 +97,17 @@ public:
     void write64(uintptr_t off, uint64_t val);
     void write32(uintptr_t off, uint64_t val);
 
+    using entry_t = struct { uint64_t data[2]; } __attribute__((packed));
+
 private:
 
     iommu() noexcept;
     eapis::x64::unique_map<uint8_t> m_reg_map;
     uint8_t *m_reg_hva;
+
+
+    page_ptr<entry_t> m_root;
+    std::array<page_ptr<entry_t>, 3> m_ctxt;
 
 public:
 
