@@ -36,6 +36,7 @@ parse_args(int argc, char *argv[])
         ("attach", "Attach to a VM that was already created", value<uint64_t>(), "[domid]")
         ("elf", "Create a VM from an ELF file and attach to it")
         ("path", "The VM's path", value<std::string>(), "[path]")
+        ("initrd", "The initrd path", value<std::string>(), "[path]")
         ("size", "The VM's total RAM", value<uint64_t>(), "[bytes]")
         ("init", "The VM's init process", value<std::string>(), "[path]")
         ("cmdline", "Additional Linux command line arguments", value<std::string>(), "[text]")
@@ -70,7 +71,9 @@ parse_args(int argc, char *argv[])
         throw std::runtime_error("must specify 'uart' or 'pt_uart'");
     }
 
+    if (!args.count("initrd")) {
+        throw std::runtime_error("must specify 'initrd'");
+    }
+
     return args;
 }
-
-

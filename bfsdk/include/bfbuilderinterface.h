@@ -81,6 +81,9 @@ struct create_from_elf_args {
 
     uint64_t size;
     uint64_t domainid;
+
+    const char *initrd_addr;
+    uint64_t initrd_size;
 };
 
 /* -------------------------------------------------------------------------- */

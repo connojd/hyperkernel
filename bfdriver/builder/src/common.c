@@ -143,7 +143,7 @@ setup_pt_uart(
 static status_t
 setup_xen_start_info(struct vm_t *vm)
 {
-    status_t ret;
+    //status_t ret;
 
     vm->xen_start_info = bfalloc_page(struct hvm_start_info);
     if (vm->xen_start_info == 0) {
@@ -156,13 +156,69 @@ setup_xen_start_info(struct vm_t *vm)
     vm->xen_start_info->cmdline_paddr = XEN_COMMAND_LINE_PAGE_GPA;
     vm->xen_start_info->rsdp_paddr = ACPI_RSDP_GPA;
 
-    ret = donate_page(vm, vm->xen_start_info, XEN_START_INFO_PAGE_GPA, MAP_RO);
-    if (ret != BF_SUCCESS) {
-        BFDEBUG("setup_xen_start_info: donate failed\n");
-        return ret;
-    }
+    // See modlist below
+    vm->xen_start_info->nr_modules = 1;
+    vm->xen_start_info->modlist_paddr = XEN_MODLIST_GPA;
 
-    return ret;
+//    ret = donate_page(vm, vm->xen_start_info, XEN_START_INFO_PAGE_GPA, MAP_RO);
+//    if (ret != BF_SUCCESS) {
+//        BFDEBUG("setup_xen_start_info: donate failed\n");
+//        return ret;
+//    }
+
+    //return ret;
+    return SUCCESS; 
+}
+
+static status_t
+setup_xen_initrd(struct vm_t *vm, struct create_from_elf_args *args)
+{
+	status_t ret;
+	(void)vm;
+	BFDEBUG("initrd:");
+	vm->initrd_addr = bfalloc_buffer(char, vm->initrd_size);
+//    	if (vm->initrd_addr == 0) {
+//    	    BFDEBUG("setup_xen_initrd: failed to alloc initrd\n");
+//    	    return FAILURE;
+//    	}
+
+	(void)args;
+	(void)ret;
+//	platform_memcpy(vm->initrd_addr, args->initrd_addr, args->initrd_size);
+//
+//        ret = donate_buffer(vm, vm->initrd_addr, START_ADDR + args->size, args->initrd_size, MAP_RWE);
+//	if (ret != BF_SUCCESS) {
+//		BFDEBUG("setup_xen_initrd: donate initrd buffer failed\n");
+//		return FAILURE;
+//	}
+
+	return SUCCESS;
+}
+
+static status_t
+setup_xen_modlist(struct vm_t *vm, struct create_from_elf_args *args)
+{
+	status_t ret;
+	vm->xen_modlist = bfalloc_page(char);
+	if (vm->xen_modlist == 0) {
+        	BFDEBUG("setup_xen_modlist: modlist alloc failed\n");
+        	return FAILURE;
+    	}
+
+	struct hvm_modlist_entry ramdisk;
+	ramdisk.paddr = START_ADDR + args->size;
+	ramdisk.size = args->initrd_size;
+	ramdisk.cmdline_paddr = XEN_COMMAND_LINE_PAGE_GPA;
+	ramdisk.reserved = 0;
+
+	platform_memcpy(vm->xen_modlist, &ramdisk, sizeof(struct hvm_modlist_entry));
+	ret = donate_page(vm, vm->xen_modlist, XEN_MODLIST_GPA, MAP_RO);
+	if (ret != BF_SUCCESS) {
+		BFDEBUG("setup_xen_modlist: donate page failed\n");
+		return FAILURE;
+	}
+
+	return SUCCESS;
 }
 
 static status_t
@@ -362,63 +418,73 @@ common_create_from_elf(
         return HYPERVISOR_NOT_LOADED;
     }
 
-    vm->domainid = __domain_op__create_domain();
-    if (vm->domainid == INVALID_DOMAINID) {
-        BFDEBUG("__domain_op__create_domain failed\n");
-        return CREATE_FROM_ELF_FAILED;
-    }
-
-    ret = setup_e820_map(vm, args->size);
-    if (ret != SUCCESS) {
-        return ret;
-    }
+//    vm->domainid = __domain_op__create_domain();
+//    if (vm->domainid == INVALID_DOMAINID) {
+//        BFDEBUG("__domain_op__create_domain failed\n");
+//        return CREATE_FROM_ELF_FAILED;
+//    }
+//
+//    ret = setup_e820_map(vm, args->size, args->initrd_size);
+//    if (ret != SUCCESS) {
+//        return ret;
+//    }
 
     ret = setup_xen_start_info(vm);
     if (ret != SUCCESS) {
         return ret;
     }
 
-    ret = setup_xen_cmdline(vm, args);
+    ret = setup_xen_initrd(vm, args);
     if (ret != SUCCESS) {
         return ret;
     }
 
-    ret = setup_xen_console(vm);
-    if (ret != SUCCESS) {
-        return ret;
-    }
+//    ret = setup_xen_modlist(vm, args);
+//    if (ret != SUCCESS) {
+//        return ret;
+//    }
 
-    ret = setup_bios_ram(vm);
-    if (ret != SUCCESS) {
-        return ret;
-    }
-
-    ret = setup_reserved_free(vm);
-    if (ret != SUCCESS) {
-        return ret;
-    }
-
-    ret = setup_kernel(vm, args);
-    if (ret != SUCCESS) {
-        return ret;
-    }
-
-    ret = setup_entry(vm);
-    if (ret != SUCCESS) {
-        return ret;
-    }
-
-    ret = setup_uart(vm, args->uart);
-    if (ret != SUCCESS) {
-        return ret;
-    }
-
-    ret = setup_pt_uart(vm, args->pt_uart);
-    if (ret != SUCCESS) {
-        return ret;
-    }
-
-    args->domainid = vm->domainid;
+//    ret = setup_xen_cmdline(vm, args);
+//    if (ret != SUCCESS) {
+//        return ret;
+//    }
+//
+//    ret = setup_xen_console(vm);
+//    if (ret != SUCCESS) {
+//        return ret;
+//    }
+//
+//    ret = setup_bios_ram(vm);
+//    if (ret != SUCCESS) {
+//        return ret;
+//    }
+//
+//    ret = setup_reserved_free(vm);
+//    if (ret != SUCCESS) {
+//        return ret;
+//    }
+//
+//    ret = setup_kernel(vm, args);
+//    if (ret != SUCCESS) {
+//        return ret;
+//    }
+//
+//    ret = setup_entry(vm);
+//    if (ret != SUCCESS) {
+//        return ret;
+//    }
+//
+//    ret = setup_uart(vm, args->uart);
+//    if (ret != SUCCESS) {
+//        return ret;
+//    }
+//
+//    ret = setup_pt_uart(vm, args->pt_uart);
+//    if (ret != SUCCESS) {
+//        return ret;
+//    }
+//
+//    args->domainid = vm->domainid;
     return BF_SUCCESS;
 }
 
@@ -426,23 +492,24 @@ int64_t
 common_destroy(struct vm_t *vm)
 {
     status_t ret;
+    (void)ret;
 
     if (_cpuid_eax(0xBF00) != 0xBF01) {
         return HYPERVISOR_NOT_LOADED;
     }
 
-    ret = __domain_op__destroy_domain(vm->domainid);
-    if (ret != SUCCESS) {
-        BFDEBUG("__domain_op__destroy_domain failed\n");
-        return FAILURE;
-    }
+//    ret = __domain_op__destroy_domain(vm->domainid);
+//    if (ret != SUCCESS) {
+//        BFDEBUG("__domain_op__destroy_domain failed\n");
+//        return FAILURE;
+//    }
 
-    platform_free_rw(vm->bfelf_binary.exec, vm->bfelf_binary.exec_size);
+//    platform_free_rw(vm->bfelf_binary.exec, vm->bfelf_binary.exec_size);
     platform_free_rw(vm->xen_start_info, BAREFLANK_PAGE_SIZE);
-    platform_free_rw(vm->xen_cmdl, BAREFLANK_PAGE_SIZE);
-    platform_free_rw(vm->xen_console, BAREFLANK_PAGE_SIZE);
-    platform_free_rw(vm->bios_ram, 0xE8000);
-    platform_free_rw(vm->zero_page, BAREFLANK_PAGE_SIZE);
+//    platform_free_rw(vm->xen_cmdl, BAREFLANK_PAGE_SIZE);
+//    platform_free_rw(vm->xen_console, BAREFLANK_PAGE_SIZE);
+//    platform_free_rw(vm->bios_ram, 0xE8000);
+//    platform_free_rw(vm->zero_page, BAREFLANK_PAGE_SIZE);
 
     platform_memset(vm, 0, sizeof(struct vm_t));
     return BF_SUCCESS;

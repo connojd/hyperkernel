@@ -46,6 +46,11 @@ struct vm_t {
     char *xen_cmdl;
     void *xen_console;
 
+    char *initrd_addr;
+    uint64_t initrd_size;
+
+    char *xen_modlist;
+
     int used;
 };
 

@@ -120,11 +120,11 @@ add_e820_entry(void *vm, uint64_t saddr, uint64_t eaddr, uint32_t type);
  * @return SUCCESS on success, FAILURE otherwise
  */
 static inline int64_t
-setup_e820_map(void *vm, uint64_t size)
+setup_e820_map(void *vm, uint64_t vmlinux_size, uint64_t initrd_size)
 {
     status_t ret = 0;
 
-    if (size >= 0xFDC00000) {
+    if (vmlinux_size >= 0xFDC00000) {
         BFALERT("setup_e820_map: unsupported amount of RAM\n");
         return FAILURE;
     }
@@ -135,10 +135,13 @@ setup_e820_map(void *vm, uint64_t size)
      */
     ret |= add_e820_entry(vm, 0x0000000000000000, 0x00000000000E8000, XEN_HVM_MEMMAP_TYPE_RAM);
     ret |= add_e820_entry(vm, 0x00000000000E8000, 0x0000000000100000, XEN_HVM_MEMMAP_TYPE_RESERVED);
-    //ret |= add_e820_entry(vm, 0x0000000000100000, 0x0000000001000000, XEN_HVM_MEMMAP_TYPE_UNUSABLE);
-    ret |= add_e820_entry(vm, 0x0000000001000000, 0x001000000 + size, XEN_HVM_MEMMAP_TYPE_RAM);
-    ret |= add_e820_entry(vm, 0x00000000FEC00000, 0x00000000FEC01000, XEN_HVM_MEMMAP_TYPE_UNUSABLE);
- //   ret |= add_e820_entry(vm, 0x00000000FFFFFFFF, 0xFFFFFFFFFFFFFFFF, XEN_HVM_MEMMAP_TYPE_UNUSABLE);
+    ret |= add_e820_entry(vm, 0x0000000000100000, 0x0000000001000000, XEN_HVM_MEMMAP_TYPE_UNUSABLE);
+    ret |= add_e820_entry(vm, 0x0000000001000000, 0x001000000 + vmlinux_size + initrd_size, XEN_HVM_MEMMAP_TYPE_RAM);
+//    ret |= add_e820_entry(vm, 0x001000000 + size, 0x00F0000000, XEN_HVM_MEMMAP_TYPE_UNUSABLE);
+//    ret |= add_e820_entry(vm, 0x00F7100000, 0x00F8000000, XEN_HVM_MEMMAP_TYPE_UNUSABLE);
+    ret |= add_e820_entry(vm, 0x00000000F8000000, 0x00000000F8001000, XEN_HVM_MEMMAP_TYPE_RESERVED); // mmcfg
+    ret |= add_e820_entry(vm, 0x00000000FEC00000, 0xFEC01000, XEN_HVM_MEMMAP_TYPE_UNUSABLE);
+//    ret |= add_e820_entry(vm, 0x00000000FFFFFFFF, 0xFFFFFFFFFFFFFFFF, XEN_HVM_MEMMAP_TYPE_UNUSABLE);
 
     if (ret != SUCCESS) {
         BFALERT("setup_e820_map: add_e820_entry failed to add E820 entries\n");
@@ -154,8 +157,8 @@ setup_e820_map(void *vm, uint64_t size)
 #define RESERVED1_ADRR      0xEE000
 #define RESERVED1_SIZE      0x02000
 
-#define RESERVED2_ADRR      0xF6000
-#define RESERVED2_SIZE      0x0A000
+#define RESERVED2_ADRR      0xF7000
+#define RESERVED2_SIZE      0x09000
 
 #define INITIAL_GDT_GPA     0xE8000
 #define INITIAL_IDT_GPA     0xE9000
@@ -164,6 +167,7 @@ setup_e820_map(void *vm, uint64_t size)
 #define XEN_START_INFO_PAGE_GPA     0xEB000
 #define XEN_COMMAND_LINE_PAGE_GPA   0xEC000
 #define XEN_CONSOLE_PAGE_GPA        0xED000
+#define XEN_MODLIST_GPA             0xF6000
 
 #define ACPI_RSDP_GPA       0xF0000
 #define ACPI_XSDT_GPA       0xF1000

@@ -192,11 +192,13 @@ create_elf_vm(const args_type &args)
         size = args["size"].as<uint64_t>();
     }
 
+    bfn::file initrd(args["initrd"].as<std::string>());
+
     uint64_t uart = 0;
     if (args.count("uart")) {
         uart = args["uart"].as<uint64_t>();
         cmdl.add(
-            "console=uart,io," + bfn::to_string(uart, 16) + ",115200n8"
+            "console=uart,io," + bfn::to_string(uart, 16) + ",115200n8 root=/dev/ram0"
         );
     }
 
@@ -223,6 +225,11 @@ create_elf_vm(const args_type &args)
     ioctl_args.uart = uart;
     ioctl_args.pt_uart = pt_uart;
     ioctl_args.size = size;
+    ioctl_args.initrd_addr = initrd.data();
+    ioctl_args.initrd_size = initrd.size();
+
+	std::cout << "initrd addr: " << initrd.data() << '\n';
+	std::cout << "initrd size: " << initrd.size() << '\n';
 
     ctl->call_ioctl_create_from_elf(ioctl_args);
     create_elf_vm_verbose();
