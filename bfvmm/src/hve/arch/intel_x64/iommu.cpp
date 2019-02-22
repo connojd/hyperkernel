@@ -35,11 +35,18 @@ iommu::iommu() noexcept : m_root{make_page<entry_t>()}
 {
     /// Map in registers
     ///
-    g_cr3->map_4k(iommu::hpa,
-                  iommu::hpa,
-                  cr3::mmap::attr_type::read_write,
-                  cr3::mmap::memory_type::uncacheable);
-    m_hva = reinterpret_cast<uint8_t *>(iommu::hpa);
+    auto hva = g_mm->alloc_map(iommu::page_size);
+
+    g_cr3->map_4k(
+            hva,
+            iommu::hpa,
+            cr3::mmap::attr_type::read_write,
+            cr3::mmap::memory_type::uncacheable);
+
+    m_reg_map = eapis::x64::unique_map<uint8_t>(
+            static_cast<uint8_t *>(hva),
+            eapis::x64::unmapper(hva, iommu::page_size)
+    );
 }
 
 iommu *iommu::instance() noexcept
@@ -131,14 +138,100 @@ void iommu::init_domU_mappings()
 void iommu::enable()
 {
     expects(m_dom0_eptp != 0);
+    expects(m_domU_eptp != 0);
 
-    auto cap = this->read64(0x8);
+    // Update the hva from the VMM's cr3.
+    // Any access to this member between now and
+    // VMX-root will fault.
+    //
+    m_hva = m_reg_map.get();
+
+//    auto cap = this->read64(0x8);
     auto ecap = this->read64(0x10);
     auto gsts = this->read32(0x1C);
+    auto rtar = this->read64(0x20);
 
-    ::intel_x64::vtd::iommu::cap_reg::dump(0, cap);
-    ::intel_x64::vtd::iommu::ecap_reg::dump(0, ecap);
-    ::intel_x64::vtd::iommu::gsts_reg::dump(0, gsts);
+//    ::intel_x64::vtd::iommu::cap_reg::dump(0, cap);
+//    ::intel_x64::vtd::iommu::ecap_reg::dump(0, ecap);
+//    ::intel_x64::vtd::iommu::rtaddr_reg::dump(0, rtar);
+//    ::intel_x64::vtd::iommu::gsts_reg::dump(0, gsts);
+
+    expects(::intel_x64::vtd::iommu::gsts_reg::tes::is_disabled(gsts));
+    expects(::intel_x64::vtd::iommu::gsts_reg::qies::is_disabled(gsts));
+    expects(::intel_x64::vtd::iommu::gsts_reg::ires::is_disabled(gsts));
+    expects(::intel_x64::vtd::iommu::rtaddr_reg::ttm::get(rtar) == 0);
+
+    //
+    // Set the root address with legacy translation mode
+    //
+
+    this->write64(0x20, g_mm->virtptr_to_physint(m_root.get()));
+    ::intel_x64::barrier::mb();
+    gsts = this->read32(0x1C);
+    uint32_t gcmd = (gsts & 0x96FFFFFFU) | (1UL << 30);
+    this->write32(0x18, gcmd);
+
+    ::intel_x64::barrier::mb();
+    while ((this->read32(0x1C) | (1UL << 30)) == 0) {
+        ::intel_x64::pause();
+    }
+
+    //
+    // Once the RTAR is set, the context-cache and IOTLB must be invalidated
+    //
+
+    uint64_t ctxcmd = this->read64(0x28);
+    expects((ctxcmd & 0x8000000000000000U) == 0);
+    ctxcmd &= ~0x6000000000000000U;
+    ctxcmd |= (1ULL << 61); // global invalidation
+    ctxcmd |= (1ULL << 63); // do it
+    this->write64(0x28, ctxcmd);
+
+    ::intel_x64::barrier::mb();
+    while ((this->read64(0x28) & (1ULL << 63)) != 0) {
+        ::intel_x64::pause();
+    }
+
+    uint64_t iva = ::intel_x64::vtd::iommu::ecap_reg::iro::get(ecap);
+    expects(iva == 0x50);
+    uint64_t iotlb = this->read64(iva + 0x8);
+    iotlb &= ~0x3000000000000000U;
+    iotlb |= (1ULL << 60); // global invalidation
+    iotlb |= (1ULL << 63); // do it
+    this->write64(iva + 0x8, iotlb);
+
+    ::intel_x64::barrier::mb();
+    while ((this->read64(iva + 0x8) & (1ULL << 63)) != 0) {
+        ::intel_x64::pause();
+    }
+
+    //
+    // Enable DMA remapping
+    //
+
+    gsts = this->read32(0x1C);
+    gcmd = (gsts & 0x96FFFFFFU) | (1UL << 31);
+    this->write32(0x18, gcmd);
+
+    ::intel_x64::barrier::mb();
+    while ((this->read32(0x1C) | (1UL << 31)) == 0) {
+        ::intel_x64::pause();
+    }
+
+    bfdebug_info(0, "DMA remapping enabled");
+   ::intel_x64::vtd::iommu::gsts_reg::dump(0, gsts);
+}
+
+void iommu::disable()
+{
+    uint32_t gsts = this->read32(0x1C);
+    uint32_t gcmd = (gsts & 0x96FFFFFFU) | (0UL << 31);
+    this->write32(0x18, gcmd);
+
+    ::intel_x64::barrier::mb();
+    while ((this->read32(0x1C) | (1UL << 31)) != 0) {
+        ::intel_x64::pause();
+    }
 }
 
 /// Register access

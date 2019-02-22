@@ -93,6 +93,13 @@ hk_ept_violation_handler(
 namespace hyperkernel::intel_x64
 {
 
+vcpu::~vcpu()
+{
+    if (this->is_domU()) {
+        g_iommu->disable();
+    }
+}
+
 vcpu::vcpu(
     vcpuid::type id,
     gsl::not_null<domain *> domain
@@ -165,22 +172,6 @@ vcpu::write_dom0_guest_state(domain *domain)
 //    vtd::dma_remapping::map_bus(4, 1, domain->ept());
 //    vtd::dma_remapping::map_bus(5, 1, domain->ept());
 //    vtd::dma_remapping::enable(this);
-
-//    static bool need_unmap = true;
-//    if (need_unmap) {
-//        expects(domain->unmap(vtd::iommu_base_phys) == 21);
-//        domain->release(vtd::iommu_base_phys);
-//
-//        auto base_2m = vtd::iommu_base_phys & ~((1ULL << 21) - 1);
-//        for (auto i = base_2m; i < vtd::iommu_base_phys; i += 4096) {
-//            domain->map_4k_rw(i, i);
-//        }
-//
-//        for (auto i = vtd::iommu_base_phys + 4096; i < base_2m + (1ULL << 21); i += 4096) {
-//            domain->map_4k_rw(i, i);
-//        }
-//        need_unmap = false;
-//    }
 }
 
 void

@@ -53,13 +53,13 @@ domain::domain(domainid_type domainid) :
         bfn::call_once(init_iommu, [&]() {
             g_iommu->set_dom0_eptp(m_ept_map.eptp());
             g_iommu->init_dom0_mappings();
-            g_iommu->enable();
         });
     }
     else {
         this->setup_domU();
         g_iommu->set_domU_eptp(m_ept_map.eptp());
         g_iommu->init_domU_mappings();
+        g_iommu->enable();
     }
 }
 
@@ -88,7 +88,8 @@ domain::setup_dom0()
     for (auto p = dmar_page_4k + 4096; p < dmar_page_2m + (1UL << 21); p += 4096) {
         this->map_4k_rw(p, p);
     }
-    //   ::intel_x64::vmx::invept_global();// This causes a lockup on win10 -- why?
+
+    ::intel_x64::vmx::invept_global();// This causes a lockup on win10 -- why?
 }
 
 void

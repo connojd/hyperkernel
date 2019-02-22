@@ -67,7 +67,7 @@ public:
     /// @expects
     /// @ensures
     ///
-    ~vcpu() = default;
+    ~vcpu();
 
     /// Write Dom0 Guest State
     ///

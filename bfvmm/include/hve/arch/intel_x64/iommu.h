@@ -98,6 +98,7 @@ public:
     void set_domU_cte(entry_t *cte);
 
     void enable();
+    void disable();
 
     /// Register access
     ///
@@ -110,6 +111,7 @@ private:
 
     iommu() noexcept;
     uint8_t *m_hva;
+    eapis::x64::unique_map<uint8_t> m_reg_map;
     uintptr_t m_dom0_eptp{0};
     uintptr_t m_domU_eptp{0};
 
