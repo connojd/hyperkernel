@@ -23,6 +23,15 @@
 #include <hve/arch/intel_x64/iommu.h>
 #include <hve/arch/intel_x64/vcpu.h>
 
+namespace vtd::visr_device {
+    void enable(
+        gsl::not_null<eapis::intel_x64::vcpu *> vcpu,
+        uint32_t bus,
+        uint32_t device,
+        uint32_t function
+    );
+}
+
 //------------------------------------------------------------------------------
 // Fault Handlers
 //------------------------------------------------------------------------------
@@ -135,7 +144,7 @@ vcpu::write_dom0_guest_state(domain *domain)
 
     // Use this function to "replace" a real PCI deivce with the visr device at
     // the given bus/device/function
-    //vtd::visr_device::enable(this, 2, 0, 0);
+    vtd::visr_device::enable(this, 2, 0, 0);
 
     // Use this function to hide a PCI bridge (sort-of)
     // vtd::hidden_bridge::enable(this, 0, 0x1c, 0);

@@ -31,6 +31,9 @@ using namespace eapis::intel_x64;
 
 bfn::once_flag init_iommu;
 
+uintptr_t dmar_page_4k = 0xCA6C6000;
+uintptr_t dmar_page_2m = 0xCA600000;
+
 namespace hyperkernel::intel_x64
 {
 
@@ -51,7 +54,6 @@ domain::domain(domainid_type domainid) :
             g_iommu->set_dom0_eptp(m_ept_map.eptp());
             g_iommu->init_dom0_mappings();
             g_iommu->enable();
-            bfdebug_info(0, "IOMMU init'd");
         });
     }
     else {
@@ -65,6 +67,28 @@ void
 domain::setup_dom0()
 {
     ept::identity_map(m_ept_map, MAX_PHYS_ADDR);
+
+    uint32_t *gsts = reinterpret_cast<uint32_t *>(0xFED91000 | 0x1C);
+    uint32_t *rtar = reinterpret_cast<uint32_t *>(0xFED91000 | 0x20);
+
+    static page_ptr<uint8_t> dmar_copy = make_page<uint8_t>();
+
+    // dbgp, dbg2, dmar, and bgrt are on this page
+    strncpy((char *)(dmar_copy.get()), (const char *)dmar_page_4k, 4096);
+    uint32_t *dmar = reinterpret_cast<uint32_t *>(dmar_copy.get() + 0x6C8U);
+    *dmar = 0;
+
+    // Remap DMAR page to the redacted version
+    //
+    this->unmap(dmar_page_2m);
+    for (auto p = dmar_page_2m; p < dmar_page_4k; p += 4096) {
+        this->map_4k_rw(p, p);
+    }
+    this->map_4k_rw(dmar_page_4k, (uintptr_t)(dmar_copy.get()));
+    for (auto p = dmar_page_4k + 4096; p < dmar_page_2m + (1UL << 21); p += 4096) {
+        this->map_4k_rw(p, p);
+    }
+    //   ::intel_x64::vmx::invept_global();// This causes a lockup on win10 -- why?
 }
 
 void

@@ -512,8 +512,6 @@ forward_interrupt_to_ndvm(
     bfignored(vcpu);
     bfignored(info);
 
-    bfdebug_info(0, "Forwarding interrupt: VISR -> NDVM");
-
     //auto nic = 0x80000000U | (g_bus << 16U) | (g_device << 11U) | (g_function << 8U);
     //auto reg0 = g_msi_cap_reg;
     //auto reg1 = reg0 + 1;
