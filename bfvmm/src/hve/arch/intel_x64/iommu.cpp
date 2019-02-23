@@ -219,7 +219,7 @@ void iommu::enable()
     }
 
     bfdebug_info(0, "DMA remapping enabled");
-   ::intel_x64::vtd::iommu::gsts_reg::dump(0, gsts);
+//   ::intel_x64::vtd::iommu::gsts_reg::dump(0, gsts);
 }
 
 void iommu::disable()
