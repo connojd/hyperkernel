@@ -97,7 +97,6 @@ visr_wdf_isr(
 	UNREFERENCED_PARAMETER(MessageID);
 
 	int cpui[4] = { 0 };
-	DEBUG("$$$$$$$$ visr_wdf_isr called $$$$$$$$");
 	CpuIdEx(cpui, 0xcafebabe, 0xbadc0fee);
 	return TRUE;
 }
@@ -110,8 +109,6 @@ visr_wdf_interrupt_dpc(
 {
 	UNREFERENCED_PARAMETER(Interrupt);
 	UNREFERENCED_PARAMETER(AssociatedObject);
-
-	DEBUG("$$$$$$$$ visr_wdf_interrupt_dpc called $$$$$$$$");
 }
 
 NTSTATUS
