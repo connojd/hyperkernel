@@ -64,6 +64,47 @@
 namespace hyperkernel::intel_x64
 {
 
+/**
+ * MTRR range
+ *
+ * @base the base gpa of the range
+ * @size the size of the range in bytes
+ * @type the type of the range
+ */
+struct mtrr_range {
+    uint64_t base{};
+    uint64_t size{};
+    uint32_t type{};
+
+    mtrr_range(const struct e820_entry_t &entry)
+    {
+        base = entry.addr;
+        size = entry.size;
+
+        switch (entry.type) {
+        case 1: // RAM
+        case 2: // Reserved
+        case 5: // Unusable
+            type = 6; // write-back
+            break;
+        }
+    }
+};
+
+ /**
+ * size_to_physmask
+ *
+ * Convert the @size of a range to its corresponding value in a *valid* range.
+ * This is the inverse function of physmask_to_size found in the base
+ * hypervisor at bfvmm/src/hve/arch/intel_x64/mtrrs.cpp
+ *
+ */
+static uint64_t size_to_physmask(uint64_t size)
+{
+    static auto addr_size = ::x64::cpuid::addr_size::phys::get();
+    return (~(size - 1U) & ((1ULL << addr_size) - 1U)) | (1UL << 11);
+}
+
 class vcpu;
 
 class EXPORT_HYPERKERNEL_HVE xen_op_handler
@@ -92,6 +133,17 @@ private:
     // -------------------------------------------------------------------------
     // MSRS
     // -------------------------------------------------------------------------
+
+    bool rdmsr_mtrr_cap(
+        gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::rdmsr_handler::info_t &info);
+    bool rdmsr_mtrr_def(
+        gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::rdmsr_handler::info_t &info);
+    bool wrmsr_mtrr_def(
+        gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::wrmsr_handler::info_t &info);
+    bool rdmsr_mtrr_physbase(
+        gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::rdmsr_handler::info_t &info);
+    bool rdmsr_mtrr_physmask(
+        gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::rdmsr_handler::info_t &info);
 
     void isolate_msr(uint32_t msr);
 
@@ -307,15 +359,6 @@ private:
     uint32_t m_msix_cap_prev{};
     uint32_t m_msix_cap_next{};
 
-    uint32_t m_nic_io;
-    uint32_t m_nic_io_size;
-
-    uintptr_t m_nic_prefetch;
-    uintptr_t m_nic_prefetch_size;
-
-    uintptr_t m_nic_non_prefetch;
-    uintptr_t m_nic_non_prefetch_size;
-
     eapis::x64::unique_map<vcpu_runstate_info_t> m_runstate_info;
     eapis::x64::unique_map<vcpu_time_info_t> m_time_info;
     eapis::x64::unique_map<shared_info_t> m_shared_info;
@@ -324,6 +367,11 @@ private:
 
     std::unique_ptr<hyperkernel::intel_x64::evtchn_op> m_evtchn_op;
     std::unique_ptr<hyperkernel::intel_x64::gnttab_op> m_gnttab_op;
+
+    std::vector<struct mtrr_range> m_mtrr;
+
+    // Default MTRR type is UC and MTRRs are enabled
+    uint64_t m_mtrr_def{(1UL << 11) | 0};
 
 public:
 

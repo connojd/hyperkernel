@@ -243,6 +243,9 @@ vcpu::write_domU_guest_state(domain *domain)
     guest_gs_base::set(domain->gdt()->base(gs_index));
     guest_tr_base::set(domain->gdt()->base(tr_index));
 
+    // PAT set to WB
+    guest_ia32_pat::set(0x0606060606060606);
+
     guest_rflags::set(2);
     vmcs_link_pointer::set(0xFFFFFFFFFFFFFFFF);
 

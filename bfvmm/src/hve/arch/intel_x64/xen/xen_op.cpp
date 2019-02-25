@@ -168,6 +168,23 @@ xen_op_handler::xen_op_handler(
     // through the eapis::intel_x64::timer::tsc_freq_MHz
     vcpu->pass_through_msr_access(::intel_x64::msrs::platform_info::addr);
 
+    EMULATE_RDMSR(0x0FE, rdmsr_mtrr_cap);
+    EMULATE_RDMSR(0x2FF, rdmsr_mtrr_def);
+    EMULATE_WRMSR(0x2FF, wrmsr_mtrr_def);
+
+    // TODO: the number of ranges == number of e820 entries
+    EMULATE_RDMSR(0x200, rdmsr_mtrr_physbase);
+    EMULATE_RDMSR(0x201, rdmsr_mtrr_physmask);
+
+    EMULATE_RDMSR(0x202, rdmsr_mtrr_physbase);
+    EMULATE_RDMSR(0x203, rdmsr_mtrr_physmask);
+
+    EMULATE_RDMSR(0x204, rdmsr_mtrr_physbase);
+    EMULATE_RDMSR(0x205, rdmsr_mtrr_physmask);
+
+    EMULATE_RDMSR(0x206, rdmsr_mtrr_physbase);
+    EMULATE_RDMSR(0x207, rdmsr_mtrr_physmask);
+
     EMULATE_RDMSR(0x34, rdmsr_zero_handler);
     EMULATE_RDMSR(0x64E, rdmsr_zero_handler);
 
@@ -1346,6 +1363,72 @@ xen_op_handler::wrmsr_pass_through_handler(
 }
 
 bool
+xen_op_handler::rdmsr_mtrr_cap(
+    gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::rdmsr_handler::info_t &info)
+{
+    bfignored(vcpu);
+
+    ::x64::msrs::ia32_mtrrcap::vcnt::set(info.val, m_mtrr.size());
+    ::x64::msrs::ia32_mtrrcap::fixed_range_mtrr::disable(info.val);
+    ::x64::msrs::ia32_mtrrcap::wc::enable(info.val);
+    ::x64::msrs::ia32_mtrrcap::smrr::disable(info.val);
+
+    return true;
+}
+
+bool
+xen_op_handler::rdmsr_mtrr_def(
+    gsl::not_null<vcpu_t *>vcpu, eapis::intel_x64::rdmsr_handler::info_t &info)
+{
+    bfignored(vcpu);
+
+    info.val = m_mtrr_def;
+    return true;
+}
+
+bool
+xen_op_handler::rdmsr_mtrr_physbase(
+    gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::rdmsr_handler::info_t &info)
+{
+    bfignored(vcpu);
+
+    const auto msr_base = 0x200;
+    expects((info.msr - msr_base) <= 6);
+    expects(((info.msr - msr_base) & 1) == 0);
+
+    const auto i = (info.msr - msr_base) >> 1;
+    info.val = m_mtrr[i].base | m_mtrr[i].type;
+
+    return true;
+}
+
+bool
+xen_op_handler::rdmsr_mtrr_physmask(
+    gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::rdmsr_handler::info_t &info)
+{
+    bfignored(vcpu);
+
+    const auto msr_base = 0x200;
+    expects((info.msr - msr_base) <= 7);
+    expects(((info.msr - msr_base) & 1) == 1);
+
+    const auto i = (info.msr - msr_base) >> 1;
+    info.val = size_to_physmask(m_mtrr[i].size);
+
+    return true;
+}
+
+bool
+xen_op_handler::wrmsr_mtrr_def(
+    gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::wrmsr_handler::info_t &info)
+{
+    bfignored(vcpu);
+
+    m_mtrr_def = info.val;
+    return true;
+}
+
+bool
 xen_op_handler::wrmsr_store_handler(
     gsl::not_null<vcpu_t *> vcpu, eapis::intel_x64::wrmsr_handler::info_t &info)
 {
@@ -1573,7 +1656,7 @@ xen_op_handler::cpuid_leaf1_handler(
     info.rdx &= ~::intel_x64::cpuid::feature_information::edx::vme::mask;
     info.rdx &= ~::intel_x64::cpuid::feature_information::edx::de::mask;
     info.rdx &= ~::intel_x64::cpuid::feature_information::edx::mce::mask;
-    info.rdx &= ~::intel_x64::cpuid::feature_information::edx::mtrr::mask;
+//    info.rdx &= ~::intel_x64::cpuid::feature_information::edx::mtrr::mask;
     info.rdx &= ~::intel_x64::cpuid::feature_information::edx::mca::mask;
     info.rdx &= ~::intel_x64::cpuid::feature_information::edx::ds::mask;
     info.rdx &= ~::intel_x64::cpuid::feature_information::edx::acpi::mask;
@@ -1928,6 +2011,8 @@ xen_op_handler::XENMEM_memory_map_handler(
             e820_view[map->nr_entries].addr = entry.addr;
             e820_view[map->nr_entries].size = entry.size;
             e820_view[map->nr_entries].type = entry.type;
+
+            m_mtrr.emplace_back(mtrr_range(entry));
             map->nr_entries++;
         }
 
