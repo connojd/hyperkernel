@@ -219,14 +219,14 @@ void iommu::enable()
     }
 
     bfdebug_info(0, "DMA remapping enabled");
-//   ::intel_x64::vtd::iommu::gsts_reg::dump(0, gsts);
 }
 
+// TODO get this working
 void iommu::disable()
 {
     uint32_t gsts = this->read32(0x1C);
-    uint32_t gcmd = (gsts & 0x96FFFFFFU) | (0UL << 31);
-    this->write32(0x18, gcmd);
+    uint32_t gcmd = (gsts & 0x96FFFFFFU);
+    this->write32(0x18, gcmd & ~0x80000000U);
 
     ::intel_x64::barrier::mb();
     while ((this->read32(0x1C) | (1UL << 31)) != 0) {

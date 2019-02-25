@@ -53,7 +53,7 @@ domain::domain(domainid_type domainid) :
         bfn::call_once(init_iommu, [&]() {
             static page_ptr<uint8_t> dmar_copy = make_page<uint8_t>();
 
-            // dbgp, dbg2, dmar, and bgrt are on this page
+            // dbgp, dbg2, and bgrt are on this page too, oh well
             strncpy((char *)(dmar_copy.get()), (const char *)dmar_page_4k, 4096);
             uint32_t *dmar = reinterpret_cast<uint32_t *>(dmar_copy.get() + 0x6C8U);
             *dmar = 0;
