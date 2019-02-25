@@ -77,6 +77,7 @@ uint64_t _vmcall(uint64_t r1, uint64_t r2, uint64_t r3, uint64_t r4) NOEXCEPT;
 #define __enum_domain_op__set_pt_uart 0x141
 #define __enum_domain_op__dump_uart 0x142
 #define __enum_domain_op__ndvm_share_page 0x143
+#define __enum_domain_op__remap_to_ndvm_page 0x144
 
 #define MAP_RO 1
 #define MAP_RW 4

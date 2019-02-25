@@ -39,6 +39,7 @@ vcpuid_t g_vcpuid;
 domainid_t g_domainid;
 
 auto ctl = std::make_unique<ioctl>();
+char *ndvm_page;
 
 // -----------------------------------------------------------------------------
 // vCPU Thread
@@ -91,6 +92,36 @@ uart_thread()
         auto size = __domain_op__dump_uart(g_domainid, buffer.data());
         std::cout.write(buffer.data(), gsl::narrow_cast<int>(size));
         std::this_thread::sleep_for(milliseconds(100));
+    }
+}
+
+#include <malloc.h>
+extern "C" uint64_t _vmcall(uint64_t r1, uint64_t r2, uint64_t r3, uint64_t r4);
+
+void read_thread()
+{
+    using namespace std::chrono;
+
+    // We have to give the NDVM time to boot into userspace
+    std::this_thread::sleep_for(seconds(2));
+
+    ndvm_page = (char *)aligned_alloc(4096, 4096);
+    if (!ndvm_page) {
+	    std::cerr << "_aligned_malloc failed\n";
+    }
+
+    _vmcall(__enum_domain_op,
+	    __enum_domain_op__remap_to_ndvm_page,
+	    bfrcast(uint64_t, ndvm_page),
+	    0ULL);
+
+    while (1) {
+	while (*ndvm_page == 0) {
+            std::this_thread::sleep_for(microseconds(1000));
+	}
+	*ndvm_page = 0;
+	*(ndvm_page + 1) = 1;
+	printf("%s", ndvm_page + 2);
     }
 }
 
@@ -152,6 +183,7 @@ attach_to_vm(const args_type &args)
     }
 
     std::thread t(vcpu_thread, g_vcpuid);
+    std::thread r(read_thread);
     std::thread u;
 
     attach_to_vm_verbose();
