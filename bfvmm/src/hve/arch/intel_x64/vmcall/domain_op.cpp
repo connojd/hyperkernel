@@ -132,6 +132,30 @@ vmcall_domain_op_handler::domain_op__add_e820_entry(
     })
 }
 
+uintptr_t ndvm_page_hpa;
+eapis::x64::unique_map<uint8_t> ndvm_page_ump;
+
+void
+vmcall_domain_op_handler::domain_op__ndvm_share_page(
+    gsl::not_null<vcpu *> vcpu)
+{
+    try {
+        auto [hpa, unused] = vcpu->gva_to_hpa(vcpu->rcx());
+
+        ndvm_page_ump = vcpu->map_hpa_4k<uint8_t>(hpa);
+        ndvm_page_hpa = hpa;
+
+        bfdebug_nhex(0, "NDVM page gva: ", vcpu->rcx());
+        bfdebug_nhex(0, "NDVM page hpa: ", hpa);
+
+        vcpu->set_rax(SUCCESS);
+    }
+    catchall({
+        vcpu->set_rax(FAILURE);
+    })
+}
+
+
 void
 vmcall_domain_op_handler::domain_op__set_entry(
     gsl::not_null<vcpu *> vcpu)
@@ -231,6 +255,10 @@ vmcall_domain_op_handler::dispatch(
 
         case __enum_domain_op__share_page:
             this->domain_op__share_page(vcpu);
+            return true;
+
+        case __enum_domain_op__ndvm_share_page:
+            this->domain_op__ndvm_share_page(vcpu);
             return true;
 
         case __enum_domain_op__add_e820_entry:

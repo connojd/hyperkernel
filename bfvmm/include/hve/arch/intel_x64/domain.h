@@ -52,6 +52,9 @@
 namespace hyperkernel::intel_x64
 {
 
+extern eapis::x64::unique_map<uint8_t> ndvm_page_ump;
+extern uintptr_t ndvm_page_hpa;
+
 struct e820_entry_t {
     uint64_t addr;
     uint64_t size;
