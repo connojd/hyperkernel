@@ -39,7 +39,7 @@ vcpuid_t g_vcpuid;
 domainid_t g_domainid;
 
 auto ctl = std::make_unique<ioctl>();
-char *ndvm_page;
+char *shm;
 
 // -----------------------------------------------------------------------------
 // vCPU Thread
@@ -105,23 +105,22 @@ void read_thread()
     // We have to give the NDVM time to boot into userspace
     std::this_thread::sleep_for(seconds(2));
 
-    ndvm_page = (char *)aligned_alloc(4096, 4096);
-    if (!ndvm_page) {
+    shm = (char *)aligned_alloc(4096, 4096);
+    if (!shm) {
 	    std::cerr << "_aligned_malloc failed\n";
     }
 
     _vmcall(__enum_domain_op,
 	    __enum_domain_op__remap_to_ndvm_page,
-	    bfrcast(uint64_t, ndvm_page),
+	    bfrcast(uint64_t, shm),
 	    0ULL);
 
     while (1) {
-	while (*ndvm_page == 0) {
+	while (*shm == 0) {
             std::this_thread::sleep_for(microseconds(1000));
 	}
-	*ndvm_page = 0;
-	*(ndvm_page + 1) = 1;
-	printf("%s", ndvm_page + 2);
+	printf("%s", shm + 2);
+	*shm = 0;
     }
 }
 

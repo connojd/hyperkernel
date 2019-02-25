@@ -66,6 +66,7 @@ private:
     void domain_op__destroy_domain(gsl::not_null<vcpu *> vcpu);
     void domain_op__share_page(gsl::not_null<vcpu *> vcpu);
     void domain_op__ndvm_share_page(gsl::not_null<vcpu *> vcpu);
+    void domain_op__remap_to_ndvm_page(gsl::not_null<vcpu *> vcpu);
     void domain_op__add_e820_entry(gsl::not_null<vcpu *> vcpu);
     void domain_op__set_entry(gsl::not_null<vcpu *> vcpu);
     void domain_op__set_uart(gsl::not_null<vcpu *> vcpu);
