@@ -95,7 +95,6 @@ uart_thread()
     }
 }
 
-#include <malloc.h>
 extern "C" uint64_t _vmcall(uint64_t r1, uint64_t r2, uint64_t r3, uint64_t r4);
 
 void read_thread()
@@ -118,10 +117,11 @@ void read_thread()
 	    0ULL);
 
     while (1) {
-	while (*shm == 0) {
+	while (*(shm + 1) == 0) {
             std::this_thread::sleep_for(microseconds(1000));
 	}
 	printf("%s", shm + 2);
+	*(shm + 1) = 0;
 	*shm = 0;
     }
 }
