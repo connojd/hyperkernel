@@ -254,7 +254,7 @@ xen_op_handler::xen_op_handler(
         ::handler_delegate_t::create<xen_op_handler, &xen_op_handler::handle_hlt>(this)
     );
 
-    if (vcpu->is_ndvm()) {
+    if (vcpu->dom()->is_ndvm()) {
         EMULATE_IO_INSTRUCTION(0xCF8, io_cf8_in, io_cf8_out);
         EMULATE_IO_INSTRUCTION(0xCFB, io_cfb_in, io_cfb_out);
         EMULATE_IO_INSTRUCTION(0xCFC, io_cfc_in, io_cfc_out);

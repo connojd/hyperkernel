@@ -330,6 +330,12 @@ public:
     global_state()
     { return &m_vcpu_global_state; }
 
+    void set_ndvm_status(uint64_t is_ndvm)
+    { m_is_ndvm = is_ndvm; }
+
+    bool is_ndvm()
+    { return m_is_ndvm != 0; }
+
 private:
 
     void setup_dom0();
@@ -370,6 +376,7 @@ private:
     uart m_uart_3E8{0x3E8};
     uart m_uart_2E8{0x2E8};
     std::unique_ptr<uart> m_pt_uart;
+    uint64_t m_is_ndvm{};
 
 public:
 

@@ -278,7 +278,7 @@ vmcall_domain_op_handler::domain_op__set_ndvm_status(
     gsl::not_null<vcpu *> vcpu)
 {
     try {
-        vcpu->set_ndvm_status(vcpu->rcx());
+        get_domain(vcpu->rcx())->set_ndvm_status(vcpu->rdx());
         vcpu->set_rax(SUCCESS);
     }
     catchall({

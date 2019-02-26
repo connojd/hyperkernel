@@ -208,13 +208,13 @@ __domain_op__set_pt_uart(domainid_t foreign_domainid, uint64_t uart)
 }
 
 static inline status_t
-__domain_op__set_ndvm_status(uint64_t is_ndvm)
+__domain_op__set_ndvm_status(domainid_t domid, uint64_t is_ndvm)
 {
     status_t ret = _vmcall(
         __enum_domain_op,
         __enum_domain_op__set_ndvm_status,
-        is_ndvm,
-        0
+        domid,
+        is_ndvm
     );
 
     return ret == 0 ? SUCCESS : FAILURE;

@@ -329,12 +329,6 @@ public:
     ///
     void halt(const std::string &str = {}) override;
 
-    void set_ndvm_status(uint64_t is_ndvm)
-    { m_is_ndvm = is_ndvm; }
-
-    bool is_ndvm()
-    { return m_is_ndvm != 0; }
-
 private:
 
     domain *m_domain{};
@@ -354,7 +348,6 @@ private:
     vcpu *m_parent_vcpu{};
     uint64_t m_timer_vector{};
     uint64_t m_apic_id{};
-    uint64_t m_is_ndvm{};
 };
 
 }
