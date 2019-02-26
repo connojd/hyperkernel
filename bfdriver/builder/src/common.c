@@ -368,6 +368,8 @@ common_create_from_elf(
         return CREATE_FROM_ELF_FAILED;
     }
 
+    __domain_op__set_ndvm_status(args->is_ndvm);
+
     ret = setup_e820_map(vm, args->size);
     if (ret != SUCCESS) {
         return ret;

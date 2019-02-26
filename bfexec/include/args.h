@@ -41,6 +41,7 @@ parse_args(int argc, char *argv[])
         ("cmdline", "Additional Linux command line arguments", value<std::string>(), "[text]")
         ("uart", "Give the VM an emulated UART", value<uint64_t>(), "[port #]")
         ("pt_uart", "Pass-through a UART to VM", value<uint64_t>(), "[port #]");
+        ("ndvm", "The VM is the NDVM");
 
     auto args = options.parse(argc, argv);
 

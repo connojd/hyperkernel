@@ -256,6 +256,7 @@ create_elf_vm(const args_type &args)
     ioctl_args.uart = uart;
     ioctl_args.pt_uart = pt_uart;
     ioctl_args.size = size;
+    ioctl_args.is_ndvm = args.count("ndvm");
 
     ctl->call_ioctl_create_from_elf(ioctl_args);
     create_elf_vm_verbose();

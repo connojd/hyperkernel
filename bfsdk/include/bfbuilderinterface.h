@@ -80,6 +80,7 @@ struct create_from_elf_args {
     uint64_t pt_uart;
 
     uint64_t size;
+    uint64_t is_ndvm;
     uint64_t domainid;
 };
 

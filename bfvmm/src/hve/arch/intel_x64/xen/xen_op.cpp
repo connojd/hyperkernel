@@ -226,14 +226,6 @@ xen_op_handler::xen_op_handler(
     ADD_CPUID_HANDLER(0x80000007, cpuid_pass_through_handler);      // TODO: 0 reserved bits
     ADD_CPUID_HANDLER(0x80000008, cpuid_pass_through_handler);      // TODO: 0 reserved bits
 
-    EMULATE_IO_INSTRUCTION(0xCF8, io_cf8_in, io_cf8_out);
-    //EMULATE_IO_INSTRUCTION(0xCFA, io_ones_handler, io_ignore_handler);
-    EMULATE_IO_INSTRUCTION(0xCFB, io_cfb_in, io_cfb_out);
-    EMULATE_IO_INSTRUCTION(0xCFC, io_cfc_in, io_cfc_out);
-    EMULATE_IO_INSTRUCTION(0xCFD, io_cfd_in, io_cfd_out);
-    EMULATE_IO_INSTRUCTION(0xCFE, io_cfe_in, io_cfe_out);
-    //EMULATE_IO_INSTRUCTION(0xCFF, io_ones_handler, io_ignore_handler);
-
     /// ACPI SCI interrupt trigger mode
     EMULATE_IO_INSTRUCTION(0x4D0, io_zero_handler, io_ignore_handler);
     EMULATE_IO_INSTRUCTION(0x4D1, io_zero_handler, io_ignore_handler);
@@ -262,9 +254,25 @@ xen_op_handler::xen_op_handler(
         ::handler_delegate_t::create<xen_op_handler, &xen_op_handler::handle_hlt>(this)
     );
 
-    this->pci_init_caps();
-    this->pci_init_bars();
-    this->pci_init_nic();
+    if (vcpu->is_ndvm()) {
+        EMULATE_IO_INSTRUCTION(0xCF8, io_cf8_in, io_cf8_out);
+        EMULATE_IO_INSTRUCTION(0xCFB, io_cfb_in, io_cfb_out);
+        EMULATE_IO_INSTRUCTION(0xCFC, io_cfc_in, io_cfc_out);
+        EMULATE_IO_INSTRUCTION(0xCFD, io_cfd_in, io_cfd_out);
+        EMULATE_IO_INSTRUCTION(0xCFE, io_cfe_in, io_cfe_out);
+
+        this->pci_init_caps();
+        this->pci_init_bars();
+        this->pci_init_nic();
+    } else {
+        EMULATE_IO_INSTRUCTION(0xCF8, io_ones_handler, io_ignore_handler);
+        EMULATE_IO_INSTRUCTION(0xCFA, io_ones_handler, io_ignore_handler);
+        EMULATE_IO_INSTRUCTION(0xCFB, io_ones_handler, io_ignore_handler);
+        EMULATE_IO_INSTRUCTION(0xCFC, io_ones_handler, io_ignore_handler);
+        EMULATE_IO_INSTRUCTION(0xCFD, io_ones_handler, io_ignore_handler);
+        EMULATE_IO_INSTRUCTION(0xCFE, io_ones_handler, io_ignore_handler);
+        EMULATE_IO_INSTRUCTION(0xCFF, io_ones_handler, io_ignore_handler);
+    }
 }
 
 // Do fixups after Windows to ensure we start from a known initial state
