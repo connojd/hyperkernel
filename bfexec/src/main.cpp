@@ -110,6 +110,8 @@ void read_thread()
 	    std::cerr << "_aligned_malloc failed\n";
     }
 
+    memset(shm, 0, 4096);
+
     _vmcall(__enum_domain_op,
 	    __enum_domain_op__remap_to_ndvm_page,
 	    bfrcast(uint64_t, shm),

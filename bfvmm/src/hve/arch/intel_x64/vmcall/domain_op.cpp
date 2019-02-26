@@ -162,12 +162,28 @@ vmcall_domain_op_handler::domain_op__remap_to_ndvm_page(
     try {
         expects(ndvm_page_hpa != 0);
 
-        auto [gpa, unused] = vcpu->gva_to_gpa(vcpu->rcx());
-        m_vcpu->dom()->unmap(gpa);
-        m_vcpu->map_4k_rw(gpa, ndvm_page_hpa);
+        const auto [gpa, unused] = vcpu->gva_to_gpa(vcpu->rcx());
+        const auto gpa_2m = bfn::upper(gpa, 21);
+        const auto gpa_4k = bfn::upper(gpa, 12);
+        expects(gpa_4k == gpa);
 
-        bfdebug_nhex(0, "Dom0 page remapped: ", gpa);
-        bfdebug_subnhex(0, "to ndvm page hpa: ", ndvm_page_hpa);
+        vcpu->dom()->unmap(gpa_2m);
+
+        for (auto p = gpa_2m; p < gpa_4k; p += 4096) {
+            vcpu->dom()->map_4k_rwe(p, p);
+        }
+
+        vcpu->dom()->map_4k_rw(gpa_4k, (uintptr_t)ndvm_page_hpa);
+
+        for (auto p = gpa_4k + 4096; p < gpa_2m + (1UL << 21); p += 4096) {
+            vcpu->dom()->map_4k_rwe(p, p);
+        }
+
+        bfdebug_nhex(0, "Dom0 shm gpa_2m: ", gpa_2m);
+        bfdebug_nhex(0, "Dom0 shm gpa_4k: ", gpa);
+        bfdebug_subnhex(0, "remapped to hpa: ", ndvm_page_hpa);
+
+        ::intel_x64::vmx::invept_global();
 
         vcpu->set_rax(SUCCESS);
     }
