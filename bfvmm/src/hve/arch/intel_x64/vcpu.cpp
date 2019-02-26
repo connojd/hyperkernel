@@ -124,7 +124,9 @@ vcpu::vcpu(
         this->write_dom0_guest_state(domain);
     }
     else {
-        vtd::ndvm_vcpu_id = id;
+        if (this->dom()->is_ndvm()) {
+            vtd::ndvm_vcpu_id = id;
+        }
         this->write_domU_guest_state(domain);
     }
 

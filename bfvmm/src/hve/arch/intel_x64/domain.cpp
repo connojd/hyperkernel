@@ -75,10 +75,14 @@ domain::domain(domainid_type domainid) :
     }
     else {
         this->setup_domU();
-        g_iommu->set_domU_eptp(m_ept_map.eptp());
-        g_iommu->init_domU_mappings();
-        g_iommu->enable();
     }
+}
+
+void domain::enable_dma_remapping()
+{
+    g_iommu->set_domU_eptp(m_ept_map.eptp());
+    g_iommu->init_domU_mappings();
+    g_iommu->enable();
 }
 
 void

@@ -55,8 +55,11 @@ external_interrupt_handler::handle(
     bfignored(vcpu);
 
     if(info.vector == vtd::visr_vector) {
-        bfdebug_info(0, "Injecting NIC interrupt -> NDVM");
-        m_vcpu->queue_external_interrupt(vtd::ndvm_vector);
+        auto ndvm_vcpu = reinterpret_cast<hyperkernel::intel_x64::vcpu *>(
+                get_vcpu(vtd::ndvm_vcpu_id).get());
+
+        bool inject_now = m_vcpu->dom()->is_ndvm();
+        ndvm_vcpu->queue_external_interrupt(vtd::ndvm_vector, inject_now);
         this->send_eoi();
 
         return true;

@@ -85,6 +85,8 @@ public:
 
 public:
 
+    void enable_dma_remapping();
+
     /// Map 1g GPA to HPA (Read-Only)
     ///
     /// Maps a 1g guest physical address to a 1g host physical address

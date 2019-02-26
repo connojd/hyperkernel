@@ -159,6 +159,9 @@ void
 vmcall_domain_op_handler::domain_op__remap_to_ndvm_page(
     gsl::not_null<vcpu *> vcpu)
 {
+    using namespace vmcs_n;
+    using namespace vmcs_n::secondary_processor_based_vm_execution_controls;
+
     try {
         expects(ndvm_page_hpa != 0);
 
@@ -167,23 +170,32 @@ vmcall_domain_op_handler::domain_op__remap_to_ndvm_page(
         const auto gpa_4k = bfn::upper(gpa, 12);
         expects(gpa_4k == gpa);
 
-        vcpu->dom()->unmap(gpa_2m);
+        if (vcpu->domid() == 0) {
+            enable_ept::disable();
+            vcpu->dom()->unmap(gpa_2m);
 
-        for (auto p = gpa_2m; p < gpa_4k; p += 4096) {
-            vcpu->dom()->map_4k_rwe(p, p);
+            for (auto p = gpa_2m; p < gpa_4k; p += 4096) {
+                vcpu->dom()->map_4k_rwe(p, p);
+            }
+
+            vcpu->dom()->map_4k_rw(gpa_4k, ndvm_page_hpa);
+
+            for (auto p = gpa_4k + 4096; p < gpa_2m + (1UL << 21); p += 4096) {
+                vcpu->dom()->map_4k_rwe(p, p);
+            }
+
+            ::intel_x64::vmx::invept_global();
+            enable_ept::enable();
+
+//            bfdebug_nhex(0, "Dom0 shm gpa_2m: ", gpa_2m);
+//            bfdebug_nhex(0, "Dom0 shm gpa_4k: ", gpa);
+//            bfdebug_subnhex(0, "remapped to hpa: ", ndvm_page_hpa);
+
+        } else {
+            vcpu->dom()->unmap(gpa_4k);
+            vcpu->dom()->map_4k_rw(gpa_4k, ndvm_page_hpa);
+            ::intel_x64::vmx::invept_global();
         }
-
-        vcpu->dom()->map_4k_rw(gpa_4k, (uintptr_t)ndvm_page_hpa);
-
-        for (auto p = gpa_4k + 4096; p < gpa_2m + (1UL << 21); p += 4096) {
-            vcpu->dom()->map_4k_rwe(p, p);
-        }
-
-        bfdebug_nhex(0, "Dom0 shm gpa_2m: ", gpa_2m);
-        bfdebug_nhex(0, "Dom0 shm gpa_4k: ", gpa);
-        bfdebug_subnhex(0, "remapped to hpa: ", ndvm_page_hpa);
-
-        ::intel_x64::vmx::invept_global();
 
         vcpu->set_rax(SUCCESS);
     }
@@ -278,7 +290,13 @@ vmcall_domain_op_handler::domain_op__set_ndvm_status(
     gsl::not_null<vcpu *> vcpu)
 {
     try {
-        get_domain(vcpu->rcx())->set_ndvm_status(vcpu->rdx());
+        auto dom = get_domain(vcpu->rcx());
+        dom->set_ndvm_status(vcpu->rdx());
+
+        if (dom->is_ndvm()) {
+            dom->enable_dma_remapping();
+        }
+
         vcpu->set_rax(SUCCESS);
     }
     catchall({
