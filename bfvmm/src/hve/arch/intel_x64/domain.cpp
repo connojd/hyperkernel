@@ -194,7 +194,7 @@ domain::setup_acpi()
     std::strncpy(m_mcfg->oemid, OEMID, sizeof(m_mcfg->oemid));
     std::strncpy(m_mcfg->oemtableid, OEMTABLEID, sizeof(m_mcfg->oemtableid));
     m_mcfg->oemrevision = OEMREVISION;
-    std::strncpy(m_mcfg->creatorid, "AIS", sizeof(4));
+    std::strncpy(m_mcfg->creatorid, "AIS", 4);
     m_mcfg->creatorrevision = 0;
 
     m_mcfg->entry[0].base = 0xF8000000;
