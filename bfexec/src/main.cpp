@@ -97,9 +97,13 @@ uart_thread()
 
 extern "C" uint64_t _vmcall(uint64_t r1, uint64_t r2, uint64_t r3, uint64_t r4);
 
-void read_thread()
+void read_thread(bool is_ndvm)
 {
     using namespace std::chrono;
+
+    if (is_ndvm == false) {
+        return;
+    }
 
     // We have to give the NDVM time to boot into userspace
     std::this_thread::sleep_for(seconds(2));
@@ -184,7 +188,7 @@ attach_to_vm(const args_type &args)
     }
 
     std::thread t(vcpu_thread, g_vcpuid);
-    std::thread r(read_thread);
+    std::thread r(read_thread, args.count("ndvm") != 0);
     std::thread u;
 
     attach_to_vm_verbose();
