@@ -96,12 +96,13 @@ uart_thread()
 }
 
 extern "C" uint64_t _vmcall(uint64_t r1, uint64_t r2, uint64_t r3, uint64_t r4);
+void _mfence();
 
 void read_thread(bool is_ndvm)
 {
     using namespace std::chrono;
 
-    if (is_ndvm == false) {
+    if (!is_ndvm) {
         return;
     }
 
@@ -125,8 +126,8 @@ void read_thread(bool is_ndvm)
             std::this_thread::sleep_for(microseconds(1000));
 	}
 	printf("%s", shm + 2);
-	*(shm + 1) = 0;
 	*shm = 0;
+	*(shm + 1) = 0;
     }
 }
 

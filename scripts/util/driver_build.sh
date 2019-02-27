@@ -45,18 +45,30 @@ CYGWIN_NT-6.1*)
     cd $1/bfdriver/builder/src/platform/windows/
     SOURCE_ROOT_DIR=`cygpath -w -m $2`
     >&2 eval "'$msbuild' /p:SOURCE_ROOT_DIR=$SOURCE_ROOT_DIR /m:3 /p:Configuration=Release /p:Platform=x64 /p:TargetVersion=Windows7 builder.sln"
+
+    cd $1/bfdriver/visr/src/platform/windows/
+    SOURCE_ROOT_DIR=`cygpath -w -m $2`
+    >&2 eval "'$msbuild' /p:SOURCE_ROOT_DIR=$SOURCE_ROOT_DIR /m:3 /p:Configuration=Release /p:Platform=x64 /p:TargetVersion=Windows7 visr.sln"
     ;;
 CYGWIN_NT-6.3*)
     find_msbuild
     cd $1/bfdriver/builder/src/platform/windows/
     SOURCE_ROOT_DIR=`cygpath -w -m $2`
     >&2 eval "'$msbuild' /p:SOURCE_ROOT_DIR=$SOURCE_ROOT_DIR /m:3 /p:Configuration=Release /p:Platform=x64 /p:TargetVersion=WindowsV6.3 builder.sln"
+
+    cd $1/bfdriver/visr/src/platform/windows/
+    SOURCE_ROOT_DIR=`cygpath -w -m $2`
+    >&2 eval "'$msbuild' /p:SOURCE_ROOT_DIR=$SOURCE_ROOT_DIR /m:3 /p:Configuration=Release /p:Platform=x64 /p:TargetVersion=Windows7 visr.sln"
     ;;
 CYGWIN_NT-10.0*)
     find_msbuild
     cd $1/bfdriver/builder/src/platform/windows/
     SOURCE_ROOT_DIR=`cygpath -w -m $2`
     >&2 eval "'$msbuild' /p:SOURCE_ROOT_DIR=$SOURCE_ROOT_DIR /m:3 /p:Configuration=Release /p:Platform=x64 /p:TargetVersion=Windows10 builder.sln"
+
+    cd $1/bfdriver/visr/src/platform/windows/
+    SOURCE_ROOT_DIR=`cygpath -w -m $2`
+    >&2 eval "'$msbuild' /p:SOURCE_ROOT_DIR=$SOURCE_ROOT_DIR /m:3 /p:Configuration=Release /p:Platform=x64 /p:TargetVersion=Windows7 visr.sln"
     ;;
 Linux)
     cd $1/bfdriver/builder/src/platform/linux
