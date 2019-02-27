@@ -84,6 +84,13 @@ inline bool domU_owned_cf8(uint32_t cf8)
 inline bool cf8_exists(uint32_t cf8)
 { return cf8_read_reg(cf8, 0) != 0xFFFFFFFF; }
 
+inline uint32_t secondary_bus(uint32_t bus, uint32_t dev, uint32_t fun)
+{
+    auto cf8 = bdf_to_cf8(bus, dev, fun);
+    auto reg = cf8_read_reg(cf8, 6);
+    return (reg & 0xFF00) >> 8;
+}
+
 enum pci_header_t {
     pci_hdr_normal               = 0x00,
     pci_hdr_pci_bridge           = 0x01,

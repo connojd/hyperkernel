@@ -22,6 +22,7 @@
 
 #include <hve/arch/intel_x64/domain.h>
 #include <hve/arch/intel_x64/iommu.h>
+#include <intrinsics.h>
 
 using namespace eapis::intel_x64;
 
@@ -31,8 +32,34 @@ using namespace eapis::intel_x64;
 
 bfn::once_flag init_iommu;
 
-uintptr_t dmar_page_4k = 0xCA6C6000;
-uintptr_t dmar_page_2m = 0xCA600000;
+void *g_dmar = NULL;
+
+static inline const char *find_dmar()
+{
+    if (g_rsdp == 0) {
+        return NULL;
+    }
+
+    char *xsdt = (char *)(*(uint64_t *)(g_rsdp + 24));
+    uint32_t len = *(uint32_t *)(xsdt + 4);
+    uint32_t num = (len - 36) / 8; // 36 == header length
+
+    for (auto i = 0UL; i < num; i++) {
+        const uint64_t *base = (const uint64_t *)(xsdt + 36);
+        const char *hdr = (const char *)base[i];
+
+        char buf[5];
+
+        memset(buf, 0, 5);
+        memcpy(buf, hdr, 4);
+
+        if (!strncmp(buf, "DMAR", 4)) {
+            return hdr;
+        }
+    }
+
+    return NULL;
+}
 
 namespace hyperkernel::intel_x64
 {
@@ -51,26 +78,38 @@ domain::domain(domainid_type domainid) :
     if (domainid == 0) {
         this->setup_dom0();
         bfn::call_once(init_iommu, [&]() {
-            static page_ptr<uint8_t> dmar_copy = make_page<uint8_t>();
 
-            // dbgp, dbg2, and bgrt are on this page too, oh well
-            strncpy((char *)(dmar_copy.get()), (const char *)dmar_page_4k, 4096);
-            uint32_t *dmar = reinterpret_cast<uint32_t *>(dmar_copy.get() + 0x6C8U);
-            *dmar = 0;
+            const char *dmar = find_dmar();
+            if (!dmar) {
+                bfalert_nhex(0, "DMAR not found; RSDP @", g_rsdp);
+            } else {
 
-            // Remap DMAR page to the redacted version
-            //
-            this->unmap(dmar_page_2m);
-            for (auto p = dmar_page_2m; p < dmar_page_4k; p += 4096) {
-                this->map_4k_rw(p, p);
+                g_dmar = (void *)dmar;
+
+                const uintptr_t dmar_4k = (const uintptr_t)bfn::upper(dmar, 12);
+                const uintptr_t dmar_2m = (const uintptr_t)bfn::upper(dmar, 21);
+
+                static page_ptr<char> dmar_copy = make_page<char>();
+                memcpy(dmar_copy.get(), (const char *)dmar_4k, 4096);
+                memset(dmar_copy.get() + (uintptr_t)(dmar - dmar_4k), 0, 4);
+
+                // Remap DMAR page to the redacted version
+                //
+                this->unmap(dmar_2m);
+                for (auto p = dmar_2m; p < dmar_4k; p += 4096) {
+                    this->map_4k_rw(p, p);
+                }
+
+                this->map_4k_rw(dmar_4k, (uintptr_t)(dmar_copy.get()));
+                for (auto p = dmar_4k + 4096; p < dmar_2m + (1UL << 21); p += 4096) {
+                    this->map_4k_rw(p, p);
+                }
+
+                g_iommu->set_dom0_eptp(m_ept_map.eptp());
+                g_iommu->init_dom0_mappings();
+
+                //::intel_x64::vmx::invept_global();// This causes a lockup on win10 -- why?
             }
-            this->map_4k_rw(dmar_page_4k, (uintptr_t)(dmar_copy.get()));
-            for (auto p = dmar_page_4k + 4096; p < dmar_page_2m + (1UL << 21); p += 4096) {
-                this->map_4k_rw(p, p);
-            }
-
-            g_iommu->set_dom0_eptp(m_ept_map.eptp());
-            g_iommu->init_dom0_mappings();
         });
     }
     else {

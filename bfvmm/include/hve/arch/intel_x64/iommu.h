@@ -58,16 +58,6 @@ public:
 
     using entry_t = struct { uint64_t data[2]; } __attribute__((packed));
 
-    /// This is found in the register base address field
-    /// of DRHD[1] on the gigabyte board. DRHD[0] is at
-    /// the previous page, but only scopes the graphics
-    /// card.
-    ///
-    /// Obviously this will potentially change from system to
-    /// system, so it should be read generically out of the DMAR
-    ///
-    static constexpr uintptr_t hpa = 0xFED91000UL;
-
     /// Only 4K pages allowed
     ///
     static constexpr uintptr_t page_size = 4096UL;
@@ -109,14 +99,15 @@ public:
 
 private:
 
-    iommu() noexcept;
-    uint8_t *m_hva;
+    iommu();
     eapis::x64::unique_map<uint8_t> m_reg_map;
     uintptr_t m_dom0_eptp{0};
     uintptr_t m_domU_eptp{0};
 
     page_ptr<entry_t> m_root;
     std::vector<page_ptr<entry_t>> m_ctxt;
+    uint8_t *m_hva{};
+    uintptr_t m_hpa{};
 
 public:
 

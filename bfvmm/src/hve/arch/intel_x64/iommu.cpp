@@ -28,18 +28,102 @@
 using namespace eapis::intel_x64;
 using namespace bfvmm::x64;
 
+extern void *g_dmar;
+
 namespace hyperkernel::intel_x64
 {
 
-iommu::iommu() noexcept : m_root{make_page<entry_t>()}
+iommu::iommu() : m_root{make_page<entry_t>()}
 {
+    if (!g_dmar) {
+        throw std::runtime_error("DMAR pointer is NULL");
+    }
+
+    const auto dmar = (const char *)g_dmar;
+    const auto size = *(uint32_t *)(dmar + 4);
+    const auto haw = *(uint8_t *)(dmar + 36) + 1;
+    const auto flags = *(uint8_t *)(dmar + 37);
+
+    const char *rs = dmar + (uintptr_t)48;
+    const char *end = dmar + (uintptr_t)size;
+
+    while (rs < end) {
+        const auto rs_type = *(uint16_t *)rs;
+        const auto rs_size = *(uint16_t *)(rs + 2);
+
+        if (rs_type != 0) {
+
+            // Actually we should never get here if the table is
+            // well formed; the remapping structures are sorted by
+            // type, with DRHD being the first
+
+            expects(rs_type == 0);
+            rs += (uintptr_t)rs_size;
+            continue;
+        }
+
+        const auto rs_flag = *(uint8_t *)(rs + 4);
+        const auto rs_base = *(uint64_t *)(rs + 8);
+
+        // Once we hit a DRHD with INCLUDE_PCI_ALL set, that
+        // means we've processed every other DRHD. Each previous
+        // DRHD did not scope the device of interest, so it is
+        // included in this catch-all entry per section 8.3 of the spec
+
+        if ((rs_flag & 0x1) == 1) {
+            m_hpa = rs_base;
+            break;
+        }
+
+        // Process each device scope entry to check if
+        // it scopes the device of interest
+
+        const char *dse = rs + (uintptr_t)16;
+        while (dse < (rs + rs_size)) {
+            const auto dse_size = *(dse + (uintptr_t)1);
+
+            if (*dse != 0x1) {
+                dse += (uintptr_t)dse_size;
+                continue;
+            }
+
+            auto num = (dse_size - 6) / 2; // number of path pairs
+            auto i = 0;
+            expects(i < num);
+
+            uint16_t *path = (uint16_t *)(dse + (uintptr_t)6);
+            uint32_t bus = *(dse + (uintptr_t)5);
+            uint32_t dev = path[i] & 0xFF;
+            uint32_t fun = (path[i] & 0xFF00) >> 8;
+
+            for (i += 1; i < num; i++) {
+                bus = secondary_bus(bus, dev, fun);
+                dev = path[i] & 0xFF;
+                fun = (path[i] & 0xFF00) >> 8;
+            }
+
+            if (domU_owned_cf8(bdf_to_cf8(bus, dev, fun))) {
+                m_hpa = rs_base;
+                goto hpa_found;
+            }
+
+            dse += (uintptr_t)dse_size;
+        }
+
+        rs += rs_size;
+    }
+
+hpa_found:
+
+    bfdebug_nhex(0, "DRHD base:", m_hpa);
+
     /// Map in registers
     ///
     auto hva = g_mm->alloc_map(iommu::page_size);
 
     g_cr3->map_4k(
             hva,
-            iommu::hpa,
+            m_hpa,
             cr3::mmap::attr_type::read_write,
             cr3::mmap::memory_type::uncacheable);
 
@@ -140,13 +224,8 @@ void iommu::enable()
     expects(m_dom0_eptp != 0);
     expects(m_domU_eptp != 0);
 
-    // Update the hva from the VMM's cr3.
-    // Any access to this member between now and
-    // VMX-root will fault.
-    //
     m_hva = m_reg_map.get();
 
-//    auto cap = this->read64(0x8);
     auto ecap = this->read64(0x10);
     auto gsts = this->read32(0x1C);
     auto rtar = this->read64(0x20);
