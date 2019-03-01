@@ -100,35 +100,35 @@ void _mfence();
 
 void read_thread(bool is_ndvm)
 {
-    using namespace std::chrono;
-
-    if (!is_ndvm) {
-        return;
-    }
-
-    // We have to give the NDVM time to boot into userspace
-    std::this_thread::sleep_for(seconds(2));
-
-    shm = (char *)aligned_alloc(4096, 4096);
-    if (!shm) {
-	    std::cerr << "_aligned_malloc failed\n";
-    }
-
-    memset(shm, 0, 4096);
-
-    _vmcall(__enum_domain_op,
-	    __enum_domain_op__remap_to_ndvm_page,
-	    bfrcast(uint64_t, shm),
-	    0ULL);
-
-    while (1) {
-	while (*(shm + 1) == 0) {
-            std::this_thread::sleep_for(microseconds(1000));
-	}
-	printf("%s", shm + 2);
-	*shm = 0;
-	*(shm + 1) = 0;
-    }
+//    using namespace std::chrono;
+//
+//    if (!is_ndvm) {
+//        return;
+//    }
+//
+//    // We have to give the NDVM time to boot into userspace
+//    std::this_thread::sleep_for(seconds(2));
+//
+//    shm = (char *)aligned_alloc(4096, 4096);
+//    if (!shm) {
+//	    std::cerr << "_aligned_malloc failed\n";
+//    }
+//
+//    memset(shm, 0, 4096);
+//
+//    _vmcall(__enum_domain_op,
+//	    __enum_domain_op__remap_to_ndvm_page,
+//	    bfrcast(uint64_t, shm),
+//	    0ULL);
+//
+//    while (1) {
+//	while (*(shm + 1) == 0) {
+//            std::this_thread::sleep_for(microseconds(1000));
+//	}
+//	printf("%s", shm + 2);
+//	*shm = 0;
+//	*(shm + 1) = 0;
+//    }
 }
 
 // -----------------------------------------------------------------------------
