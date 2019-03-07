@@ -20,9 +20,25 @@
 
 #include <hve/arch/intel_x64/vcpu.h>
 #include <hve/arch/intel_x64/vmcall/domain_op.h>
+#include <bfvmm/memory_manager/arch/x64/cr3.h>
 
 namespace hyperkernel::intel_x64
 {
+
+eapis::x64::unique_map<uint32_t> g_xapic_map{nullptr};
+
+void vmcall_domain_op_handler::signal_shootdown()
+{
+    uint32_t val = (3UL << 18) | // all excl. self
+                   (1UL << 14) | // Level assert
+                   (4UL << 8)  | // NMI delivery mode
+                   2;            // NMI vector
+
+    uint32_t *icr = (uint32_t *)((uintptr_t)g_xapic_map.get() + 0x300);
+    *icr = val;
+
+    ::intel_x64::barrier::mb();
+}
 
 vmcall_domain_op_handler::vmcall_domain_op_handler(
     gsl::not_null<vcpu *> vcpu
@@ -34,6 +50,24 @@ vmcall_domain_op_handler::vmcall_domain_op_handler(
     vcpu->add_vmcall_handler(
         vmcall_handler_delegate(vmcall_domain_op_handler, dispatch)
     );
+
+    if (!g_xapic_map) {
+        auto msr = ::intel_x64::msrs::ia32_apic_base::get();
+        auto hpa = ::intel_x64::msrs::ia32_apic_base::apic_base::get(msr);
+        expects(hpa == 0xFEE00000);
+
+        auto hva = g_mm->alloc_map(4096);
+
+        g_cr3->map_4k(hva,
+                      hpa,
+                      bfvmm::x64::cr3::mmap::attr_type::read_write,
+                      bfvmm::x64::cr3::mmap::memory_type::uncacheable);
+
+        g_xapic_map = eapis::x64::unique_map<uint32_t>(
+            static_cast<uint32_t *>(hva),
+            eapis::x64::unmapper(hva, 4096)
+        );
+    }
 }
 
 void
@@ -155,6 +189,11 @@ vmcall_domain_op_handler::domain_op__ndvm_share_page(
     })
 }
 
+bool shootdown_wait()
+{
+    return !shootdown_ready[0] || !shootdown_ready[1] || !shootdown_ready[2];
+}
+
 void
 vmcall_domain_op_handler::domain_op__remap_to_ndvm_page(
     gsl::not_null<vcpu *> vcpu)
@@ -168,10 +207,29 @@ vmcall_domain_op_handler::domain_op__remap_to_ndvm_page(
         const auto [gpa, unused] = vcpu->gva_to_gpa(vcpu->rcx());
         const auto gpa_2m = bfn::upper(gpa, 21);
         const auto gpa_4k = bfn::upper(gpa, 12);
+
         expects(gpa_4k == gpa);
 
+        // This is setup for a one-time shootdown, which should be fine for
+        // now because it is only needed when the read thread in the NDVM is
+        // running
+        //
+        // In general this function isn't correct; we are abusing the fact
+        // that Windows doesn't use NMIs like Linux does, therefore an NMI
+        // signal can be disambiguated between shootdown vs. non-shootdown
+        //
         if (vcpu->domid() == 0) {
-            enable_ept::disable();
+            ept_ready = false;
+            shootdown = true;
+            ::intel_x64::barrier::mb();
+
+            this->signal_shootdown();
+            while (shootdown_wait()) {
+                ::intel_x64::pause();
+            }
+
+            // At this point everybody is in the VMM waiting, so it is
+            // safe to modify the map
             vcpu->dom()->unmap(gpa_2m);
 
             for (auto p = gpa_2m; p < gpa_4k; p += 4096) {
@@ -185,11 +243,9 @@ vmcall_domain_op_handler::domain_op__remap_to_ndvm_page(
             }
 
             ::intel_x64::vmx::invept_global();
-            enable_ept::enable();
-
-//            bfdebug_nhex(0, "Dom0 shm gpa_2m: ", gpa_2m);
-//            bfdebug_nhex(0, "Dom0 shm gpa_4k: ", gpa);
-//            bfdebug_subnhex(0, "remapped to hpa: ", ndvm_page_hpa);
+            invalid_eptp = vcpu->dom()->ept().eptp();
+            ::intel_x64::barrier::mb();
+            ept_ready = true;
 
         } else {
             vcpu->dom()->unmap(gpa_4k);
@@ -197,6 +253,7 @@ vmcall_domain_op_handler::domain_op__remap_to_ndvm_page(
             ::intel_x64::vmx::invept_global();
         }
 
+        shootdown = false;
         vcpu->set_rax(SUCCESS);
     }
     catchall({

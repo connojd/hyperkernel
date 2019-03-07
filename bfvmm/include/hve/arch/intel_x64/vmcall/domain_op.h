@@ -75,6 +75,7 @@ private:
     void domain_op__dump_uart(gsl::not_null<vcpu *> vcpu);
 
     bool dispatch(gsl::not_null<vcpu *> vcpu);
+    void signal_shootdown();
 
 private:
 

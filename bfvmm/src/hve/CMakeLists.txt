@@ -32,6 +32,7 @@ if(${BUILD_TARGET_ARCH} STREQUAL "x86_64")
         arch/intel_x64/lapic.cpp
         arch/intel_x64/uart.cpp
         arch/intel_x64/vcpu.cpp
+        arch/intel_x64/nmi.asm
     )
 
 elseif(${BUILD_TARGET_ARCH} STREQUAL "aarch64")

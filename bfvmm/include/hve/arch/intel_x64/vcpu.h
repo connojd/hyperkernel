@@ -20,6 +20,7 @@
 #define VCPU_INTEL_X64_HYPERKERNEL_H
 
 #include <queue>
+#include <array>
 
 #include "vmexit/external_interrupt.h"
 #include "vmexit/vmcall.h"
@@ -39,6 +40,12 @@
 //------------------------------------------------------------------------------
 // Definition
 //------------------------------------------------------------------------------
+
+// TLB shootdown variables
+extern bool shootdown;
+extern bool ept_ready;
+extern uintptr_t invalid_eptp;
+extern std::array<bool, 3> shootdown_ready;
 
 namespace hyperkernel::intel_x64
 {
@@ -249,6 +256,9 @@ public:
     ///
     VIRTUAL bool is_killed() const;
 
+    uint32_t phys_xapic_id() const
+    { return m_apic_id; }
+
     //--------------------------------------------------------------------------
     // LAPIC
     //--------------------------------------------------------------------------
@@ -328,6 +338,9 @@ public:
     /// @param str the reason for the halt
     ///
     void halt(const std::string &str = {}) override;
+
+    void handle_shootdown();
+    bool handle_nmi_exit(gsl::not_null<bfvmm::intel_x64::vcpu *> vcpu);
 
 private:
 

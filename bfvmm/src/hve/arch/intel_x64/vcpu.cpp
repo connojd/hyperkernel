@@ -23,6 +23,11 @@
 #include <hve/arch/intel_x64/iommu.h>
 #include <hve/arch/intel_x64/vcpu.h>
 
+bool shootdown = false;
+bool ept_ready = false;
+uintptr_t invalid_eptp = 0;
+std::array<bool, 3> shootdown_ready;
+
 namespace vtd::visr_device {
     void enable(
         gsl::not_null<eapis::intel_x64::vcpu *> vcpu,
@@ -86,6 +91,8 @@ hk_ept_violation_handler(
     return true;
 }
 
+extern "C" void _nmi(void) noexcept;
+
 //------------------------------------------------------------------------------
 // Implementation
 //------------------------------------------------------------------------------
@@ -130,8 +137,14 @@ vcpu::vcpu(
         this->write_domU_guest_state(domain);
     }
 
-    using namespace ::intel_x64::msrs;
+    this->set_nmi_handler(_nmi);
 
+    using namespace vmcs_n::exit_reason;
+    this->add_handler(basic_exit_reason::exception_or_non_maskable_interrupt,
+        ::handler_delegate_t::create<vcpu, &vcpu::handle_nmi_exit>(this)
+    );
+
+//    using namespace ::intel_x64::msrs;
 //    auto msr = ia32_apic_base::get();
 //    expects(ia32_apic_base::state::get(msr) == ia32_apic_base::state::xapic);
 //
@@ -199,6 +212,7 @@ vcpu::write_domU_guest_state(domain *domain)
     cr4 |= cr4::vmx_enable_bit::mask;
 
     guest_cr0::set(cr0);
+    guest_cr0::dump(0);
     guest_cr4::set(cr4);
 
     vm_entry_controls::ia_32e_mode_guest::disable();
@@ -291,8 +305,6 @@ vcpu::write_domU_guest_state(domain *domain)
     this->add_default_ept_execute_violation_handler(
         ::handler_delegate_t::create<hk_ept_violation_handler>()
     );
-
-//    vtd::dma_remapping::map_bus(2, 2, domain->ept());
 }
 
 //------------------------------------------------------------------------------
@@ -448,6 +460,48 @@ vcpu::halt(const std::string &str)
     else {
         ::x64::pm::stop();
     }
+}
+
+// VM-exit entry point
+bool
+vcpu::handle_nmi_exit(gsl::not_null<bfvmm::intel_x64::vcpu *> vcpu)
+{
+    bfignored(vcpu);
+    bfdebug_info(0, "NMI exit handler");
+
+    if (shootdown) {
+        this->handle_shootdown();
+        return true;
+    }
+
+    return false;
+}
+
+// IDT entry point
+extern "C" void hk_nmi_handler(void *vcpu) noexcept
+{
+    auto hkv = (hyperkernel::intel_x64::vcpu *)vcpu;
+    bfdebug_info(0, "NMI idt handler");
+
+    if (shootdown) {
+        hkv->handle_shootdown();
+        return;
+    }
+
+    _handle_nmi();
+}
+
+void
+vcpu::handle_shootdown()
+{
+    shootdown_ready.at(this->id()) = true;
+
+    while (!ept_ready) {
+        ::intel_x64::pause();
+    }
+
+    bfdebug_nhex(0, "TLB shootdown:", invalid_eptp);
+    ::intel_x64::vmx::invept_global();
 }
 
 }
