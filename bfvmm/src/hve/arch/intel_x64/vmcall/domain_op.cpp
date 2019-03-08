@@ -179,8 +179,8 @@ vmcall_domain_op_handler::domain_op__ndvm_share_page(
         ndvm_page_ump = vcpu->map_hpa_4k<uint8_t>(hpa);
         ndvm_page_hpa = hpa;
 
-        bfdebug_nhex(0, "NDVM page gva: ", vcpu->rcx());
-        bfdebug_nhex(0, "NDVM page hpa: ", hpa);
+        //bfdebug_nhex(0, "NDVM page gva: ", vcpu->rcx());
+        //bfdebug_nhex(0, "NDVM page hpa: ", hpa);
 
         vcpu->set_rax(SUCCESS);
     }
@@ -232,7 +232,7 @@ vmcall_domain_op_handler::domain_op__remap_to_ndvm_page(
         // In general this function isn't correct; we are abusing the fact
         // that Windows only uses NMIs for watchdogs and reboots. So any NMI
         // signal is a shootdown signal.
-        //
+
         if (vcpu->domid() == 0) {
             ept_ready = false;
             shootdown_on = true;
@@ -245,8 +245,9 @@ vmcall_domain_op_handler::domain_op__remap_to_ndvm_page(
 
             shootdown_reset();
 
-            // At this point everybody is in the VMM waiting, so it is
-            // safe to modify the map
+            // At this point everybody is in the VMM waiting on
+            // !ept_ready, so it is safe to modify the map
+
             vcpu->dom()->unmap(gpa_2m);
 
             for (auto p = gpa_2m; p < gpa_4k; p += 4096) {

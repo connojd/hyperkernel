@@ -311,7 +311,7 @@ xen_op_handler::pci_init_caps()
     auto reg = ptr >> 2U;
     auto prev = 0xD;
 
-    printf("NIC: Capability pointer: %x\n", reg);
+//    printf("NIC: Capability pointer: %x\n", reg);
 
     while (reg != 0) {
         constexpr auto id_msi = 0x05;
@@ -343,14 +343,14 @@ xen_op_handler::pci_init_caps()
 
     ensures(m_msi_cap != 0);
 
-    printf("NIC: Capability found: MSI at byte 0x%x, reg 0x%x\n",
-           m_msi_cap << 2,
-           m_msi_cap);
+//    printf("NIC: Capability found: MSI at byte 0x%x, reg 0x%x\n",
+//           m_msi_cap << 2,
+//           m_msi_cap);
 
     if (m_msix_cap != 0) {
-        printf("NIC: Capability found: MSI-x at byte 0x%x, reg 0x%x\n",
-               m_msix_cap << 2,
-               m_msix_cap);
+//        printf("NIC: Capability found: MSI-x at byte 0x%x, reg 0x%x\n",
+//               m_msix_cap << 2,
+//               m_msix_cap);
     }
 }
 
@@ -367,9 +367,9 @@ xen_op_handler::pci_init_bars()
 
     for (const auto &bar : m_nic_bar_list) {
         if (bar.bar_type == pci_bar_io) {
-            bfdebug_info(0, "NIC: io bar:");
-            bfdebug_subnhex(0, "addr", bar.addr);
-            bfdebug_subnhex(0, "size", bar.size);
+//            bfdebug_info(0, "NIC: io bar:");
+//            bfdebug_subnhex(0, "addr", bar.addr);
+//            bfdebug_subnhex(0, "size", bar.size);
 
             for (auto p = 0; p < bar.size; p++) {
                 m_vcpu->pass_through_io_accesses(bar.addr + p);
@@ -378,11 +378,11 @@ xen_op_handler::pci_init_bars()
             continue;
         }
 
-        bfdebug_info(0, "NIC: mm bar:");
-        bfdebug_subnhex(0, "addr", bar.addr);
-        bfdebug_subnhex(0, "size", bar.size);
-        bfdebug_subbool(0, "64-bit", bar.mm_type == 2);
-        bfdebug_subbool(0, "prefetchable", bar.prefetchable);
+//        bfdebug_info(0, "NIC: mm bar:");
+//        bfdebug_subnhex(0, "addr", bar.addr);
+//        bfdebug_subnhex(0, "size", bar.size);
+//        bfdebug_subbool(0, "64-bit", bar.mm_type == 2);
+//        bfdebug_subbool(0, "prefetchable", bar.prefetchable);
 
         for (auto i = 0; i < bar.size; i += ::x64::pt::page_size) {
             m_domain->map_4k_rw_uc(bar.addr + i, bar.addr + i);
@@ -778,7 +778,7 @@ xen_op_handler::pci_owned_msi_out(io_instruction_handler::info_t &info)
 
     // Pass this one through so it can be enabled/disabled
     if (pci_reg == m_msi_cap) {
-        bfdebug_nhex(0, "MSI+0", info.val);
+//        bfdebug_nhex(0, "MSI+0", info.val);
         pci_info_out(m_cf8, info);
         return true;
     }
@@ -797,9 +797,9 @@ xen_op_handler::pci_owned_msi_out(io_instruction_handler::info_t &info)
         auto msi_addr = cf8_read_reg(m_cf8, pci_reg);
         auto nic_id = (msi_addr & 0xFF000) >> 12;
 
-        bfdebug_nhex(0, "visr_id", vtd::ndvm_apic_id);
-        bfdebug_nhex(0, "phys_id", phys_id);
-        bfdebug_nhex(0, "nic_id", nic_id);
+//        bfdebug_nhex(0, "visr_id", vtd::ndvm_apic_id);
+//        bfdebug_nhex(0, "phys_id", phys_id);
+//        bfdebug_nhex(0, "nic_id", nic_id);
 
         expects((info.val & 0x8) == 0); // For now we don't support redirection hints
         expects(ia32_apic_base::state::get(msr) == ia32_apic_base::state::xapic);
@@ -825,7 +825,7 @@ xen_op_handler::pci_owned_msi_out(io_instruction_handler::info_t &info)
     if (pci_reg == m_msi_cap + 3) {
         // Save the vector linux expects
         //
-        bfdebug_nhex(0, "Received ndvm vector:", info.val & 0xFF);
+//        bfdebug_nhex(0, "Received ndvm vector:", info.val & 0xFF);
         vtd::ndvm_vector = info.val & 0xFF;
 
         // We set the vector to the one visr expects and clear all
@@ -837,10 +837,10 @@ xen_op_handler::pci_owned_msi_out(io_instruction_handler::info_t &info)
         info.val = vtd::visr_vector;
         pci_info_out(m_cf8, info);
 
-        bfdebug_nhex(0, "NIC MSI+0 hw:", cf8_read_reg(m_cf8, pci_reg - 3));
-        bfdebug_nhex(0, "NIC MSI+1 hw:", cf8_read_reg(m_cf8, pci_reg - 2));
-        bfdebug_nhex(0, "NIC MSI+2 hw:", cf8_read_reg(m_cf8, pci_reg - 1));
-        bfdebug_nhex(0, "NIC MSI+3 hw:", cf8_read_reg(m_cf8, pci_reg - 0));
+//        bfdebug_nhex(0, "NIC MSI+0 hw:", cf8_read_reg(m_cf8, pci_reg - 3));
+//        bfdebug_nhex(0, "NIC MSI+1 hw:", cf8_read_reg(m_cf8, pci_reg - 2));
+//        bfdebug_nhex(0, "NIC MSI+2 hw:", cf8_read_reg(m_cf8, pci_reg - 1));
+//        bfdebug_nhex(0, "NIC MSI+3 hw:", cf8_read_reg(m_cf8, pci_reg - 0));
 
         return true;
     }
@@ -899,18 +899,14 @@ xen_op_handler::pci_out(io_instruction_handler::info_t &info)
         case pci_hdr_normal:
         case pci_hdr_normal_multi:
             ret = this->pci_hdr_normal_out(info);
-//           printf("data: %08lx\n", info.val);
             break;
 
         case pci_hdr_pci_bridge:
         case pci_hdr_pci_bridge_multi:
             ret = this->pci_hdr_pci_bridge_out(info);
-//            printf("data: %08lx\n", info.val);
             break;
 
         case pci_hdr_nonexistant:
-            //info.val = 0xFFFFFFFFUL;
-            //printf("(nexist) ");
             ret = true;
             break;
 
@@ -2469,9 +2465,9 @@ xen_op_handler::HVMOP_get_param_handler(gsl::not_null<vcpu *> vcpu)
                 break;
 
             default:
-                bfdebug_info(0, "Unsupported HVM get_param:");
-                bfdebug_subnhex(0, "domid", arg->domid);
-                bfdebug_subnhex(0, "index", arg->index);
+                //bfdebug_info(0, "Unsupported HVM get_param:");
+                //bfdebug_subnhex(0, "domid", arg->domid);
+                //bfdebug_subnhex(0, "index", arg->index);
                 vcpu->set_rax(FAILURE);
                 return;
         }

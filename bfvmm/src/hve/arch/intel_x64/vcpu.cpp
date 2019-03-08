@@ -212,7 +212,6 @@ vcpu::write_domU_guest_state(domain *domain)
     cr4 |= cr4::vmx_enable_bit::mask;
 
     guest_cr0::set(cr0);
-    guest_cr0::dump(0);
     guest_cr4::set(cr4);
 
     vm_entry_controls::ia_32e_mode_guest::disable();
@@ -472,7 +471,7 @@ bool
 vcpu::handle_nmi_exit(gsl::not_null<bfvmm::intel_x64::vcpu *> vcpu)
 {
     bfignored(vcpu);
-    bfdebug_info(0, "NMI exit handler");
+//    bfdebug_info(0, "NMI exit handler");
 
     if (shootdown_on) {
         this->shootdown();
@@ -485,7 +484,7 @@ vcpu::handle_nmi_exit(gsl::not_null<bfvmm::intel_x64::vcpu *> vcpu)
 extern "C" void hk_nmi_handler(void *vcpu) noexcept
 {
     auto hkv = (hyperkernel::intel_x64::vcpu *)vcpu;
-    bfdebug_info(0, "NMI idt handler");
+//    bfdebug_info(0, "NMI idt handler");
 
     if (shootdown_on) {
         hkv->shootdown();
@@ -502,7 +501,7 @@ vcpu::shootdown()
         ::intel_x64::pause();
     }
 
-    bfdebug_nhex(0, "TLB shootdown:", invalid_eptp);
+//    bfdebug_nhex(0, "TLB shootdown:", invalid_eptp);
     ::intel_x64::vmx::invept_global();
 }
 
