@@ -23,8 +23,8 @@ gsl::span<uint32_t> g_virtual_pci_config {};
 
 // Initial PCI Configuration space for the emulated device
 const uint32_t device_vendor = 0xBEEFF00D;      // Non-existent PCI Vendor/Device
-const uint32_t status_command = 0x0010'0402;     // MMIO-space capable, no INTx, capabilities list present
-const uint32_t class_sub_prog_rev = 0xFF000000; // Vendor-specific class
+const uint32_t status_command = 0x0010'0402;    // MMIO-space capable, no INTx, cap. list present
+const uint32_t class_sub_prog_rev = 0xFF000000; // A BEEF device has no class
 const uint32_t bist_htype_ltimer_clsize = 0x10;
 const uint32_t bar0 = 0;
 const uint32_t bar1 = 0;
@@ -36,10 +36,10 @@ const uint32_t cis_ptr = 0;
 const uint32_t subid_subvendor = 0;
 const uint32_t option_rom_bar = 0;
 const uint32_t cap_ptr = 0x50;
-// const uint32_t lat_grant_pin_line = 0x100;   // Device one line based interrupt
 const uint32_t lat_grant_pin_line = 0x0;        // Device does not support line based interrupts
 
 const uint32_t g_msi_cap_reg = cap_ptr / sizeof(uint32_t);
+
 // The physical bus/device/function the emulated device will occupy
 uint64_t g_bus = 0;
 uint64_t g_device = 0;
@@ -60,7 +60,6 @@ handle_cfc_in(
     auto next_addr = 0x80000000U | (g_bus << 16U) | (g_device << 11U) | ((g_function + 1) << 8U);
 
     if ((emulate_addr <= cf8) && (cf8 < next_addr)) {
-        // bfdebug_nhex(0, "Read from emulated device register:", reg_number);
         auto emulated_val = g_virtual_pci_config.at(reg_number);
 
         // Pass through BARs
@@ -88,18 +87,15 @@ handle_cfc_in(
         switch (info.size_of_access) {
             case io_instruction::size_of_access::one_byte:
                 emulated_val = emulated_val & 0xFF;
-                // bfdebug_subnhex(0, "One byte in emulated from CFC:", emulated_val);
                 info.val = emulated_val;
                 break;
 
             case io_instruction::size_of_access::two_byte:
                 emulated_val = emulated_val & 0xFFFF;
-                // bfdebug_subnhex(0, "Two bytes in emulated from CFC:", emulated_val);
                 info.val = emulated_val;
                 break;
 
             default:
-                // bfdebug_subnhex(0, "Four bytes in emulated from CFC:", emulated_val);
                 info.val = emulated_val;
         }
         info.val = emulated_val;
@@ -143,7 +139,6 @@ handle_cfc_out(
         && reg_number != g_msi_cap_reg + 3
         && reg_number != g_msi_cap_reg + 4
     ) {
-        // bfdebug_nhex(0, "Write to emulated device register:", reg_number);
         auto val_written = info.val;
         auto old_val = g_virtual_pci_config.at(reg_number);
         switch (info.size_of_access) {
@@ -151,23 +146,17 @@ handle_cfc_out(
                 val_written = val_written & 0xFF;
                 g_virtual_pci_config.at(reg_number) =
                     (old_val & 0xFFFFFF00) | gsl::narrow_cast<uint32_t>(val_written);
-                // bfdebug_subnhex(0, "One byte value written to CFC", val_written);
-                // bfdebug_subnhex(0, "New register value", g_virtual_pci_config.at(reg_number));
                 break;
 
             case io_instruction::size_of_access::two_byte:
                 val_written = val_written & 0xFFFF;
                 g_virtual_pci_config.at(reg_number) =
                     (old_val & 0xFFFF0000) | gsl::narrow_cast<uint32_t>(val_written);
-                // bfdebug_subnhex(0, "Two byte value written to CFC", val_written);
-                // bfdebug_subnhex(0, "New register value", g_virtual_pci_config.at(reg_number));
                 break;
 
             default:
                 g_virtual_pci_config.at(reg_number) =
                     gsl::narrow_cast<uint32_t>(val_written);
-                // bfdebug_subnhex(0, "Four byte value written to CFC", val_written);
-                // bfdebug_subnhex(0, "New register value", g_virtual_pci_config.at(reg_number));
         }
     }
     else {
@@ -229,16 +218,13 @@ handle_cfd_in(
         switch (info.size_of_access) {
             case io_instruction::size_of_access::one_byte:
                 emulated_val = emulated_val & 0xFF;
-                // bfdebug_subnhex(0, "One byte in emulated from CFD:", emulated_val);
                 break;
 
             case io_instruction::size_of_access::two_byte:
                 emulated_val = emulated_val & 0xFFFF;
-                // bfdebug_subnhex(0, "Two byte in emulated from CFD:", emulated_val);
                 break;
 
             default:
-                // bfdebug_subnhex(0, "Four byte in emulated from CFD:", emulated_val);
                 break;
         }
         info.val = emulated_val;
@@ -325,16 +311,13 @@ handle_cfe_in(
         switch (info.size_of_access) {
             case io_instruction::size_of_access::one_byte:
                 emulated_val = emulated_val & 0xFF;
-                // bfdebug_subnhex(0, "One byte in emulated from CFE:", emulated_val);
                 break;
 
             case io_instruction::size_of_access::two_byte:
                 emulated_val = emulated_val & 0xFFFF;
-                // bfdebug_subnhex(0, "Two byte in emulated from CFE:", emulated_val);
                 break;
 
             default:
-                // bfdebug_subnhex(0, "Four byte in emulated from CFE:", emulated_val);
                 break;
         }
         info.val = emulated_val;
@@ -512,38 +495,19 @@ forward_interrupt_to_ndvm(
     bfignored(vcpu);
     bfignored(info);
 
-    //auto nic = 0x80000000U | (g_bus << 16U) | (g_device << 11U) | (g_function << 8U);
-    //auto reg0 = g_msi_cap_reg;
-    //auto reg1 = reg0 + 1;
-    //auto reg2 = reg0 + 2;
-    //auto reg3 = reg0 + 3;
+    // There is a race between when the NDVM is destroyed from the g_vcm's
+    // perspective and when an in-flight interrupt arrives to visr. There is no
+    // way to prevent this with a hard Ctrl-C from dom0, so it is possible we
+    // get here and the NDVM is already dead.
 
-    //::x64::portio::outd(0xcf8, nic | (reg0 << 2));
-    //bfdebug_subnhex(0, "NIC: msi0", ::x64::portio::ind(0xCFC));
+    try {
+        auto ndvm_vcpu = reinterpret_cast<hyperkernel::intel_x64::vcpu *>(
+                get_vcpu(vtd::ndvm_vcpu_id).get());
 
-    //::x64::portio::outd(0xcf8, nic | (reg1 << 2));
-    //bfdebug_subnhex(0, "NIC: msi1", ::x64::portio::ind(0xCFC));
-
-    //::x64::portio::outd(0xcf8, nic | (reg2 << 2));
-    //bfdebug_subnhex(0, "NIC: msi2", ::x64::portio::ind(0xCFC));
-
-    //::x64::portio::outd(0xcf8, nic | (reg3 << 2));
-    //bfdebug_subnhex(0, "NIC: msi3", ::x64::portio::ind(0xCFC));
-
-    //auto msr = ::intel_x64::msrs::ia32_apic_base::get();
-    //auto hpa = ::intel_x64::msrs::ia32_apic_base::apic_base::get(msr);
-    //auto ptr = vcpu_cast(vcpu)->map_hpa_4k<uint8_t>(hpa);
-    //auto reg = *reinterpret_cast<uint32_t *>(ptr.get() + 0x20);
-    //auto id = reg >> 24;
-
-    //bfdebug_subnhex(0, "active apic_id:", id);
-    //bfdebug_subnhex(0, "ndvm_vcpu_id:", vtd::ndvm_vcpu_id);
-    //bfdebug_subnhex(0, "vcpu_id:", vcpu->id());
-
-    auto ndvm_vcpu = reinterpret_cast<hyperkernel::intel_x64::vcpu *>(
-            get_vcpu(vtd::ndvm_vcpu_id).get());
-
-    ndvm_vcpu->queue_external_interrupt(ndvm_vector, false);
+        ndvm_vcpu->queue_external_interrupt(ndvm_vector, false);
+    } catch (std::runtime_error &e) {
+        ;
+    }
 
     return true;
 }
@@ -556,16 +520,6 @@ enable(
     uint32_t function
 )
 {
-    // Make sure there is a real PCI device at the address we want to emulate
-    // uint32_t address = 0x80000000 | bus << 16 | device << 11 | function << 8;
-    // ::x64::portio::outd(0xCF8, address);
-    // auto data = ::x64::portio::ind(0xCFC);
-    // if(data == 0xFFFFFFFF) {
-    //     bferror_info(0, "Failed to initalize Bareflank VISR device,");
-    //     bferror_nhex(0, "A real PCI device must exist at IO address:", address);
-    //     return;
-    // }
-
     g_bus = bus;
     g_device = device;
     g_function = function;
@@ -607,6 +561,7 @@ enable(
     // -------------------------------------------------------------------------
     // PCI configuration space handlers
     // -------------------------------------------------------------------------
+
     vcpu->add_io_instruction_handler(
         0xCFC,
         io_instruction_handler::handler_delegate_t::create <handle_cfc_in>(),
@@ -634,10 +589,6 @@ enable(
     // -------------------------------------------------------------------------
     // Handlers to coordinate interupt injection
     // -------------------------------------------------------------------------
-//    vcpu->emulate_cpuid(
-//        0xd00dfeed,
-//        cpuid_handler::handler_delegate_t::create<receive_vector_from_ndvm>()
-//    );
 
     vcpu->emulate_cpuid(
         0xf00dbeef,
