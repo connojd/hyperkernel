@@ -191,7 +191,22 @@ vmcall_domain_op_handler::domain_op__ndvm_share_page(
 
 bool shootdown_wait()
 {
-    return !shootdown_ready[0] || !shootdown_ready[1] || !shootdown_ready[2];
+    int wait = 0;
+
+    for (auto i = 0; i < shootdown_ready.size(); i++) {
+        wait |= !shootdown_ready[i];
+    }
+
+    return wait != 0;
+}
+
+void shootdown_reset()
+{
+    for (auto i = 0; i < shootdown_ready.size(); i++) {
+        shootdown_ready[i] = false;
+    }
+
+    shootdown_on = false;
 }
 
 void
@@ -215,18 +230,20 @@ vmcall_domain_op_handler::domain_op__remap_to_ndvm_page(
         // running
         //
         // In general this function isn't correct; we are abusing the fact
-        // that Windows doesn't use NMIs like Linux does, therefore an NMI
-        // signal can be disambiguated between shootdown vs. non-shootdown
+        // that Windows only uses NMIs for watchdogs and reboots. So any NMI
+        // signal is a shootdown signal.
         //
         if (vcpu->domid() == 0) {
             ept_ready = false;
-            shootdown = true;
+            shootdown_on = true;
             ::intel_x64::barrier::mb();
 
             this->signal_shootdown();
             while (shootdown_wait()) {
                 ::intel_x64::pause();
             }
+
+            shootdown_reset();
 
             // At this point everybody is in the VMM waiting, so it is
             // safe to modify the map
@@ -253,7 +270,6 @@ vmcall_domain_op_handler::domain_op__remap_to_ndvm_page(
             ::intel_x64::vmx::invept_global();
         }
 
-        shootdown = false;
         vcpu->set_rax(SUCCESS);
     }
     catchall({

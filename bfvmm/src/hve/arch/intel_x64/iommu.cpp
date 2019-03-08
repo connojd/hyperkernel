@@ -235,10 +235,13 @@ void iommu::enable()
 //    ::intel_x64::vtd::iommu::rtaddr_reg::dump(0, rtar);
 //    ::intel_x64::vtd::iommu::gsts_reg::dump(0, gsts);
 
-    expects(::intel_x64::vtd::iommu::gsts_reg::tes::is_disabled(gsts));
+    if (::intel_x64::vtd::iommu::gsts_reg::tes::is_disabled(gsts)) {
+        reset_nic();
+        this->disable();
+    }
+
     expects(::intel_x64::vtd::iommu::gsts_reg::qies::is_disabled(gsts));
     expects(::intel_x64::vtd::iommu::gsts_reg::ires::is_disabled(gsts));
-    expects(::intel_x64::vtd::iommu::rtaddr_reg::ttm::get(rtar) == 0);
 
     //
     // Set the root address with legacy translation mode
@@ -296,11 +299,8 @@ void iommu::enable()
     while ((this->read32(0x1C) | (1UL << 31)) == 0) {
         ::intel_x64::pause();
     }
-
-    bfdebug_info(0, "DMA remapping enabled");
 }
 
-// TODO get this working
 void iommu::disable()
 {
     uint32_t gsts = this->read32(0x1C);
@@ -308,12 +308,9 @@ void iommu::disable()
     this->write32(0x18, gcmd);
 
     ::intel_x64::barrier::mb();
-    while ((this->read32(0x1C) | (1UL << 31)) != 0) {
+    while ((this->read32(0x1C) & (1UL << 31)) != 0) {
         ::intel_x64::pause();
     }
-
-    bfdebug_info(0, "DMA remapping disabled");
-    ::intel_x64::vtd::iommu::gsts_reg::dump(0, gsts);
 }
 
 /// Register access

@@ -17,6 +17,8 @@
 // Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 #include <hve/arch/intel_x64/vcpu.h>
+#include <hve/arch/intel_x64/iommu.h>
+#include <hve/arch/intel_x64/pci.h>
 #include <hve/arch/intel_x64/vmcall/vcpu_op.h>
 
 namespace hyperkernel::intel_x64
@@ -61,6 +63,10 @@ vmcall_vcpu_op_handler::vcpu_op__kill_vcpu(
 
     try {
         auto child_vcpu = get_vcpu(vcpu->rcx());
+        if (child_vcpu->dom()->is_ndvm()) {
+            reset_nic();
+            g_iommu->disable();
+        }
         child_vcpu->kill();
 
         vcpu->set_rax(SUCCESS);

@@ -174,6 +174,22 @@ inline void bferror_dump_cf8(int level, uint32_t cf8)
 
 using probe_t = delegate<void(uint32_t)>;
 
+inline void reset_nic()
+{
+    auto nic = bdf_to_cf8(NIC_BUS, NIC_DEV, NIC_FUN);
+
+    // status_command - disable INTx
+    cf8_write_reg(nic, 0x1, 0x00100407);
+
+    // Bus-level reset of the NIC's bus
+    auto bridge = bdf_to_cf8(0, 0x1C, 0);
+    auto ctl = cf8_read_reg(bridge, 0xF);
+    auto tmp = ctl | (0x40UL << 16);
+
+    cf8_write_reg(bridge, 0xF, tmp);
+    cf8_write_reg(bridge, 0xF, ctl);
+}
+
 inline void probe_bus(uint32_t b, probe_t probe)
 {
     for (auto d = 0; d < 32; d++) {

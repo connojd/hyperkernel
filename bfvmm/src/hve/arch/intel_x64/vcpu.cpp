@@ -23,7 +23,7 @@
 #include <hve/arch/intel_x64/iommu.h>
 #include <hve/arch/intel_x64/vcpu.h>
 
-bool shootdown = false;
+bool shootdown_on = false;
 bool ept_ready = false;
 uintptr_t invalid_eptp = 0;
 std::array<bool, 3> shootdown_ready;
@@ -102,9 +102,9 @@ namespace hyperkernel::intel_x64
 
 vcpu::~vcpu()
 {
-    if (this->is_domU()) {
-        g_iommu->disable();
-    }
+//    if (this->dom()->is_ndvm()) {
+////        g_iommu->disable();
+//    }
 }
 
 vcpu::vcpu(
@@ -462,6 +462,11 @@ vcpu::halt(const std::string &str)
     }
 }
 
+// Note that the NMI handlers override the base behavior of injecting
+// the NMI into the guest. This will work for windows sans reboot, but
+// will potentially cause performance issues in linux because they deliver
+// perf interrupts in NMI mode.
+
 // VM-exit entry point
 bool
 vcpu::handle_nmi_exit(gsl::not_null<bfvmm::intel_x64::vcpu *> vcpu)
@@ -469,12 +474,11 @@ vcpu::handle_nmi_exit(gsl::not_null<bfvmm::intel_x64::vcpu *> vcpu)
     bfignored(vcpu);
     bfdebug_info(0, "NMI exit handler");
 
-    if (shootdown) {
-        this->handle_shootdown();
-        return true;
+    if (shootdown_on) {
+        this->shootdown();
     }
 
-    return false;
+    return true;
 }
 
 // IDT entry point
@@ -483,18 +487,16 @@ extern "C" void hk_nmi_handler(void *vcpu) noexcept
     auto hkv = (hyperkernel::intel_x64::vcpu *)vcpu;
     bfdebug_info(0, "NMI idt handler");
 
-    if (shootdown) {
-        hkv->handle_shootdown();
-        return;
+    if (shootdown_on) {
+        hkv->shootdown();
     }
-
-    _handle_nmi();
 }
 
 void
-vcpu::handle_shootdown()
+vcpu::shootdown()
 {
-    shootdown_ready.at(this->id()) = true;
+    expects(this->id() < shootdown_ready.size());
+    shootdown_ready[this->id()] = true;
 
     while (!ept_ready) {
         ::intel_x64::pause();

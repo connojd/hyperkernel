@@ -42,7 +42,7 @@
 //------------------------------------------------------------------------------
 
 // TLB shootdown variables
-extern bool shootdown;
+extern bool shootdown_on;
 extern bool ept_ready;
 extern uintptr_t invalid_eptp;
 extern std::array<bool, 3> shootdown_ready;
@@ -339,7 +339,7 @@ public:
     ///
     void halt(const std::string &str = {}) override;
 
-    void handle_shootdown();
+    void shootdown();
     bool handle_nmi_exit(gsl::not_null<bfvmm::intel_x64::vcpu *> vcpu);
 
 private:
