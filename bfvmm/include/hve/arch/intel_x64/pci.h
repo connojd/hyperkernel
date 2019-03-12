@@ -28,9 +28,9 @@
 namespace hyperkernel::intel_x64
 {
 
-#define NIC_BUS 0x2
-#define NIC_DEV 0x0
-#define NIC_FUN 0x0
+#define LO_NIC_BUS 0x2
+#define LO_NIC_DEV 0x0
+#define LO_NIC_FUN 0x0
 
 using namespace ::x64::portio;
 using namespace eapis::intel_x64;
@@ -76,9 +76,9 @@ inline uint32_t bdf_to_cf8(uint32_t b, uint32_t d, uint32_t f)
 
 inline bool domU_owned_cf8(uint32_t cf8)
 {
-    return cf8_to_bus(cf8) == NIC_BUS &&
-           cf8_to_dev(cf8) == NIC_DEV &&
-           cf8_to_fun(cf8) == NIC_FUN;
+    return cf8_to_bus(cf8) == LO_NIC_BUS &&
+           cf8_to_dev(cf8) == LO_NIC_DEV &&
+           cf8_to_fun(cf8) == LO_NIC_FUN;
 }
 
 inline bool cf8_exists(uint32_t cf8)
@@ -176,7 +176,7 @@ using probe_t = delegate<void(uint32_t)>;
 
 inline void reset_nic()
 {
-    auto nic = bdf_to_cf8(NIC_BUS, NIC_DEV, NIC_FUN);
+    auto nic = bdf_to_cf8(LO_NIC_BUS, LO_NIC_DEV, LO_NIC_FUN);
 
     // status_command - disable INTx
     cf8_write_reg(nic, 0x1, 0x00100407);

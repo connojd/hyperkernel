@@ -280,7 +280,7 @@ xen_op_handler::xen_op_handler(
 void
 xen_op_handler::pci_init_nic()
 {
-    auto nic = bdf_to_cf8(NIC_BUS, NIC_DEV, NIC_FUN);
+    auto nic = bdf_to_cf8(LO_NIC_BUS, LO_NIC_DEV, LO_NIC_FUN);
 
     // status_command - disable INTx
     cf8_write_reg(nic, 0x1, 0x00100407);
@@ -301,7 +301,7 @@ xen_op_handler::pci_init_nic()
 void
 xen_op_handler::pci_init_caps()
 {
-    const auto cf8 = bdf_to_cf8(NIC_BUS, NIC_DEV, NIC_FUN);
+    const auto cf8 = bdf_to_cf8(LO_NIC_BUS, LO_NIC_DEV, LO_NIC_FUN);
     if ((cf8_read_reg(cf8, 0x1) & 0x0010'0000) == 0) {
         printf("NIC: capability list empty\n");
         return;
@@ -357,7 +357,7 @@ xen_op_handler::pci_init_caps()
 void
 xen_op_handler::pci_init_bars()
 {
-    auto cf8 = bdf_to_cf8(NIC_BUS, NIC_DEV, NIC_FUN);
+    auto cf8 = bdf_to_cf8(LO_NIC_BUS, LO_NIC_DEV, LO_NIC_FUN);
 
     for (auto reg = 0x4; reg <= 0x9; reg++) {
         m_nic_bar.at(reg - 0x4) = cf8_read_reg(cf8, reg);
