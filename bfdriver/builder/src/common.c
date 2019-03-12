@@ -369,6 +369,9 @@ common_create_from_elf(
     }
 
     __domain_op__set_ndvm_status(vm->domainid, args->is_ndvm);
+    if (args->is_ndvm) {
+        __domain_op__set_ndvm_bus(vm->domainid, args->bus);
+    }
 
     ret = setup_e820_map(vm, args->size);
     if (ret != SUCCESS) {

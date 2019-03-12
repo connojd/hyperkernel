@@ -378,6 +378,25 @@ vmcall_domain_op_handler::domain_op__set_ndvm_status(
     })
 }
 
+void
+vmcall_domain_op_handler::domain_op__set_ndvm_bus(
+    gsl::not_null<vcpu *> vcpu)
+{
+    try {
+        auto dom = get_domain(vcpu->rcx());
+
+        if (dom->is_ndvm()) {
+            dom->set_ndvm_bus(vcpu->rdx());
+            dom->enable_dma_remapping();
+        }
+
+        vcpu->set_rax(SUCCESS);
+    }
+    catchall({
+        vcpu->set_rax(FAILURE);
+    })
+}
+
 bool
 vmcall_domain_op_handler::dispatch(
     gsl::not_null<vcpu *> vcpu)
@@ -409,6 +428,10 @@ vmcall_domain_op_handler::dispatch(
 
         case __enum_domain_op__set_ndvm_status:
             this->domain_op__set_ndvm_status(vcpu);
+            return true;
+
+        case __enum_domain_op__set_ndvm_bus:
+            this->domain_op__set_ndvm_bus(vcpu);
             return true;
 
         case __enum_domain_op__add_e820_entry:

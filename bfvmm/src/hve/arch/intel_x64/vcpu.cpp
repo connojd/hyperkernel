@@ -137,12 +137,13 @@ vcpu::vcpu(
         this->write_domU_guest_state(domain);
     }
 
-    this->set_nmi_handler(_nmi);
-
-    using namespace vmcs_n::exit_reason;
-    this->add_handler(basic_exit_reason::exception_or_non_maskable_interrupt,
-        ::handler_delegate_t::create<vcpu, &vcpu::handle_nmi_exit>(this)
-    );
+// NOTE: this was for TLB shootdown when we were remapping 2M -> 4K in dom0
+//    this->set_nmi_handler(_nmi);
+//
+//    using namespace vmcs_n::exit_reason;
+//    this->add_handler(basic_exit_reason::exception_or_non_maskable_interrupt,
+//        ::handler_delegate_t::create<vcpu, &vcpu::handle_nmi_exit>(this)
+//    );
 
 //    using namespace ::intel_x64::msrs;
 //    auto msr = ia32_apic_base::get();
@@ -166,27 +167,9 @@ vcpu::write_dom0_guest_state(domain *domain)
 
     // Use this function to "replace" a real PCI deivce with the visr device at
     // the given bus/device/function
-    vtd::visr_device::enable(this, 2, 0, 0);
 
-    // Use this function to hide a PCI bridge (sort-of)
-    // vtd::hidden_bridge::enable(this, 0, 0x1c, 0);
-
-    // Use this function insert the visr device at a PCI bus/device/function
-    // that is not currently occupied by a real device
-    // vtd::interrupt_remapping::enable(this, 2, 0, 0);
-
-    // Use this function to hide the NIC, by hiding a hardcoded PCI
-    // vendor/device id for a Relteck NIC on our Gigabyte motherboard
-    // vtd::hidden_nic::enable(this, 2, 0, 0);
-
-    // Use this function to map an entire PCI bus to a "view" of memory
-    // in which DMA translation will be shared with the given EPT mmap
-//    vtd::dma_remapping::map_bus(0, 1, domain->ept());
-//    vtd::dma_remapping::map_bus(1, 1, domain->ept());
-//    vtd::dma_remapping::map_bus(3, 1, domain->ept());
-//    vtd::dma_remapping::map_bus(4, 1, domain->ept());
-//    vtd::dma_remapping::map_bus(5, 1, domain->ept());
-//    vtd::dma_remapping::enable(this);
+    vtd::visr_device::enable(this, LO_NIC_BUS, LO_NIC_DEV, LO_NIC_FUN);
+    vtd::visr_device::enable(this, HI_NIC_BUS, HI_NIC_DEV, HI_NIC_FUN);
 }
 
 void

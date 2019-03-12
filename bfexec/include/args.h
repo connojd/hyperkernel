@@ -42,6 +42,7 @@ parse_args(int argc, char *argv[])
         ("uart", "Give the VM an emulated UART", value<uint64_t>(), "[port #]")
         ("pt_uart", "Pass-through a UART to VM", value<uint64_t>(), "[port #]")
         ("ndvm", "The VM is the NDVM");
+        ("bus", "The NDVMs PCI bus", value<uint64_t>(), "[bus #]");
 
     auto args = options.parse(argc, argv);
 
@@ -53,6 +54,10 @@ parse_args(int argc, char *argv[])
     if (args.count("version")) {
         std::cout << "version: N/A" << '\n';
         exit(EXIT_SUCCESS);
+    }
+
+    if (args.count("ndvm") && !args.count("bus")) {
+        throw std::runtime_error("Must specify bus for NDVM");
     }
 
     if (args.count("verbose")) {

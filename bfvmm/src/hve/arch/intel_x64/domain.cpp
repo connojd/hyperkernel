@@ -67,7 +67,8 @@ namespace hyperkernel::intel_x64
 domain::domain(domainid_type domainid) :
     hyperkernel::domain{domainid},
     m_tss{make_page<bfvmm::x64::tss>()},
-    // TODO: these must be powers of two
+    // NOTE: we make a page for each table,
+    // although each table is less than 4KB
     m_rsdp{make_page<rsdp_t>()},
     m_xsdt{make_page<xsdt_t>()},
     m_madt{make_page<madt_t>()},

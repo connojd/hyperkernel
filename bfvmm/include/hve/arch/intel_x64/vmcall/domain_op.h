@@ -72,6 +72,7 @@ private:
     void domain_op__set_uart(gsl::not_null<vcpu *> vcpu);
     void domain_op__set_pt_uart(gsl::not_null<vcpu *> vcpu);
     void domain_op__set_ndvm_status(gsl::not_null<vcpu *> vcpu);
+    void domain_op__set_ndvm_bus(gsl::not_null<vcpu *> vcpu);
     void domain_op__dump_uart(gsl::not_null<vcpu *> vcpu);
 
     bool dispatch(gsl::not_null<vcpu *> vcpu);

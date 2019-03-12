@@ -32,6 +32,10 @@ namespace hyperkernel::intel_x64
 #define LO_NIC_DEV 0x0
 #define LO_NIC_FUN 0x0
 
+#define HI_NIC_BUS 0x5
+#define HI_NIC_DEV 0x0
+#define HI_NIC_FUN 0x0
+
 using namespace ::x64::portio;
 using namespace eapis::intel_x64;
 namespace io = vmcs_n::exit_qualification::io_instruction;

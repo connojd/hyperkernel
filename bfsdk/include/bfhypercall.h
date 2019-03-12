@@ -79,6 +79,7 @@ uint64_t _vmcall(uint64_t r1, uint64_t r2, uint64_t r3, uint64_t r4) NOEXCEPT;
 #define __enum_domain_op__ndvm_share_page 0x143
 #define __enum_domain_op__remap_to_ndvm_page 0x144
 #define __enum_domain_op__set_ndvm_status 0x145
+#define __enum_domain_op__set_ndvm_bus 0x146
 
 #define MAP_RO 1
 #define MAP_RW 4
@@ -220,6 +221,18 @@ __domain_op__set_ndvm_status(domainid_t domid, uint64_t is_ndvm)
     return ret == 0 ? SUCCESS : FAILURE;
 }
 
+static inline status_t
+__domain_op__set_ndvm_bus(domainid_t domid, uint64_t bus)
+{
+    status_t ret = _vmcall(
+        __enum_domain_op,
+        __enum_domain_op__set_ndvm_bus,
+        domid,
+        bus
+    );
+
+    return ret == 0 ? SUCCESS : FAILURE;
+}
 
 static inline uint64_t
 __domain_op__dump_uart(domainid_t domainid, char *buffer)

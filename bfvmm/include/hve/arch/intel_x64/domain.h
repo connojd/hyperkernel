@@ -24,6 +24,7 @@
 
 #include "acpi.h"
 #include "uart.h"
+#include "pci.h"
 #include "../../../domain/domain.h"
 
 #include <eapis/hve/arch/intel_x64/vcpu.h>
@@ -335,6 +336,15 @@ public:
     void set_ndvm_status(uint64_t is_ndvm)
     { m_is_ndvm = is_ndvm; }
 
+    void set_ndvm_bus(uint64_t bus)
+    { m_bus = bus; }
+
+    uint64_t ndvm_bus()
+    {
+        ensures(m_bus == LO_NIC_BUS || m_bus == HI_NIC_BUS);
+        return m_bus;
+    }
+
     bool is_ndvm()
     { return m_is_ndvm != 0; }
 
@@ -379,6 +389,7 @@ private:
     uart m_uart_2E8{0x2E8};
     std::unique_ptr<uart> m_pt_uart;
     uint64_t m_is_ndvm{};
+    uint64_t m_bus{};
 
 public:
 
