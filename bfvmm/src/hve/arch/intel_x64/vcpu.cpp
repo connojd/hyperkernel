@@ -28,15 +28,6 @@ bool ept_ready = false;
 uintptr_t invalid_eptp = 0;
 std::array<bool, 3> shootdown_ready;
 
-namespace vtd::visr_device {
-    void enable(
-        gsl::not_null<eapis::intel_x64::vcpu *> vcpu,
-        uint32_t bus,
-        uint32_t device,
-        uint32_t function
-    );
-}
-
 //------------------------------------------------------------------------------
 // Fault Handlers
 //------------------------------------------------------------------------------
@@ -164,12 +155,8 @@ void
 vcpu::write_dom0_guest_state(domain *domain)
 {
     this->set_eptp(domain->ept());
-
-    // Use this function to "replace" a real PCI deivce with the visr device at
-    // the given bus/device/function
-
-    vtd::visr_device::enable(this, LO_NIC_BUS, LO_NIC_DEV, LO_NIC_FUN);
-    vtd::visr_device::enable(this, HI_NIC_BUS, HI_NIC_DEV, HI_NIC_FUN);
+    m_lo_visr = visr(this, LO_NIC_BUS, LO_NIC_DEV, LO_NIC_FUN);
+    m_hi_visr = visr(this, HI_NIC_BUS, HI_NIC_DEV, HI_NIC_FUN);
 }
 
 void

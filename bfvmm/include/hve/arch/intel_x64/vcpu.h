@@ -33,6 +33,7 @@
 
 #include "domain.h"
 #include "lapic.h"
+#include "visr.h"
 
 #include <bfvmm/vcpu/vcpu_manager.h>
 #include <eapis/hve/arch/intel_x64/vcpu.h>
@@ -361,6 +362,8 @@ private:
     vcpu *m_parent_vcpu{};
     uint64_t m_timer_vector{};
     uint64_t m_apic_id{};
+    visr m_lo_visr{};
+    visr m_hi_visr{};
 };
 
 }
