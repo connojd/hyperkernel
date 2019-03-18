@@ -236,7 +236,7 @@ void iommu::enable()
 //    ::intel_x64::vtd::iommu::gsts_reg::dump(0, gsts);
 
     if (::intel_x64::vtd::iommu::gsts_reg::tes::is_disabled(gsts)) {
-        reset_nic();
+        //reset_nic();
         this->disable();
     }
 

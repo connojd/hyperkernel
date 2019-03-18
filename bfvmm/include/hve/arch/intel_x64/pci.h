@@ -80,9 +80,12 @@ inline uint32_t bdf_to_cf8(uint32_t b, uint32_t d, uint32_t f)
 
 inline bool domU_owned_cf8(uint32_t cf8)
 {
-    return cf8_to_bus(cf8) == LO_NIC_BUS &&
+    return (cf8_to_bus(cf8) == LO_NIC_BUS &&
            cf8_to_dev(cf8) == LO_NIC_DEV &&
-           cf8_to_fun(cf8) == LO_NIC_FUN;
+           cf8_to_fun(cf8) == LO_NIC_FUN) ||
+           (cf8_to_bus(cf8) == HI_NIC_BUS &&
+           cf8_to_dev(cf8) == HI_NIC_DEV &&
+           cf8_to_fun(cf8) == HI_NIC_FUN);
 }
 
 inline bool cf8_exists(uint32_t cf8)
@@ -178,21 +181,21 @@ inline void bferror_dump_cf8(int level, uint32_t cf8)
 
 using probe_t = delegate<void(uint32_t)>;
 
-inline void reset_nic()
-{
-    auto nic = bdf_to_cf8(LO_NIC_BUS, LO_NIC_DEV, LO_NIC_FUN);
-
-    // status_command - disable INTx
-    cf8_write_reg(nic, 0x1, 0x00100407);
-
-    // Bus-level reset of the NIC's bus
-    auto bridge = bdf_to_cf8(0, 0x1C, 0);
-    auto ctl = cf8_read_reg(bridge, 0xF);
-    auto tmp = ctl | (0x40UL << 16);
-
-    cf8_write_reg(bridge, 0xF, tmp);
-    cf8_write_reg(bridge, 0xF, ctl);
-}
+//inline void reset_nic()
+//{
+//    auto nic = bdf_to_cf8(LO_NIC_BUS, LO_NIC_DEV, LO_NIC_FUN);
+//
+//    // status_command - disable INTx
+//    cf8_write_reg(nic, 0x1, 0x00100407);
+//
+//    // Bus-level reset of the NIC's bus
+//    auto bridge = bdf_to_cf8(0, 0x1C, 0);
+//    auto ctl = cf8_read_reg(bridge, 0xF);
+//    auto tmp = ctl | (0x40UL << 16);
+//
+//    cf8_write_reg(bridge, 0xF, tmp);
+//    cf8_write_reg(bridge, 0xF, ctl);
+//}
 
 inline void probe_bus(uint32_t b, probe_t probe)
 {

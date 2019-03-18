@@ -64,7 +64,7 @@ vmcall_vcpu_op_handler::vcpu_op__kill_vcpu(
     try {
         auto child_vcpu = get_vcpu(vcpu->rcx());
         if (child_vcpu->dom()->is_ndvm()) {
-            reset_nic();
+            //reset_nic();
             g_iommu->disable();
         }
         child_vcpu->kill();

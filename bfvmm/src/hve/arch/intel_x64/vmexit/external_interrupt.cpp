@@ -54,14 +54,8 @@ external_interrupt_handler::handle(
 {
     bfignored(vcpu);
 
-    if(info.vector == vtd::visr_vector) {
-        auto ndvm_vcpu = reinterpret_cast<hyperkernel::intel_x64::vcpu *>(
-                get_vcpu(vtd::ndvm_vcpu_id).get());
-
-        bool inject_now = m_vcpu->dom()->is_ndvm();
-        ndvm_vcpu->queue_external_interrupt(vtd::ndvm_vector, inject_now);
+    if (g_visr->deliver(vcpu_cast(vcpu), info.vector)) {
         this->send_eoi();
-
         return true;
     }
 

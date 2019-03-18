@@ -352,12 +352,20 @@ private:
 
     vcpu_info_t *m_vcpu_info;
     uint64_t m_hypercall_page_gpa{};
+
+    // The guest-programmed cf8
     uint32_t m_cf8{};
+
+    // The NIC's CF8 value
+    uint32_t m_nic{};
+
     uint32_t m_msi_addr{};
     uint32_t m_msi_cap{};
     uint32_t m_msix_cap{};
     uint32_t m_msix_cap_prev{};
     uint32_t m_msix_cap_next{};
+    uint32_t m_phys_vec{};
+    uint32_t m_virt_vec{};
 
     eapis::x64::unique_map<vcpu_runstate_info_t> m_runstate_info;
     eapis::x64::unique_map<vcpu_time_info_t> m_time_info;

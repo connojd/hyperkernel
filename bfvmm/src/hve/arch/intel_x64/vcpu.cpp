@@ -155,8 +155,7 @@ void
 vcpu::write_dom0_guest_state(domain *domain)
 {
     this->set_eptp(domain->ept());
-    m_lo_visr = visr(this, LO_NIC_BUS, LO_NIC_DEV, LO_NIC_FUN);
-    m_hi_visr = visr(this, HI_NIC_BUS, HI_NIC_DEV, HI_NIC_FUN);
+    g_visr->enable(this);
 }
 
 void

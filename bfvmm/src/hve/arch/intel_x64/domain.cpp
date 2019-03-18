@@ -22,6 +22,7 @@
 
 #include <hve/arch/intel_x64/domain.h>
 #include <hve/arch/intel_x64/iommu.h>
+#include <hve/arch/intel_x64/visr.h>
 #include <intrinsics.h>
 
 using namespace eapis::intel_x64;
@@ -31,6 +32,7 @@ using namespace eapis::intel_x64;
 // -----------------------------------------------------------------------------
 
 bfn::once_flag init_iommu;
+bfn::once_flag init_visr;
 
 void *g_dmar = NULL;
 
@@ -78,6 +80,12 @@ domain::domain(domainid_type domainid) :
 {
     if (domainid == 0) {
         this->setup_dom0();
+
+        bfn::call_once(init_visr, [&]() {
+            g_visr->add_dev(LO_NIC_BUS, LO_NIC_DEV, LO_NIC_FUN);
+            g_visr->add_dev(HI_NIC_BUS, HI_NIC_DEV, HI_NIC_FUN);
+        });
+
         bfn::call_once(init_iommu, [&]() {
 
             const char *dmar = find_dmar();
