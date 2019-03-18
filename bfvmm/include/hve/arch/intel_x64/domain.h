@@ -337,10 +337,14 @@ public:
     { m_is_ndvm = is_ndvm; }
 
     void set_ndvm_bus(uint64_t bus)
-    { m_bus = bus; }
+    {
+        bfdebug_nhex(0, "domain: set NDVM bus:", bus);
+        m_bus = bus;
+    }
 
     uint64_t ndvm_bus()
     {
+        bfdebug_nhex(0, "domain: get NDVM bus:", m_bus);
         ensures(m_bus == LO_NIC_BUS || m_bus == HI_NIC_BUS);
         return m_bus;
     }

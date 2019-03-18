@@ -253,10 +253,10 @@ uart::reg0_out_handler(
     std::lock_guard lock(m_mutex);
 
     if (this->dlab()) {
-        m_baud_rate_l = gsl::narrow<data_type>(info.val);
+        m_baud_rate_l = gsl::narrow_cast<data_type>(info.val);
     }
     else {
-        this->write(gsl::narrow<char>(info.val));
+        this->write(gsl::narrow_cast<const char>(info.val));
     }
 
     return true;
@@ -270,7 +270,7 @@ uart::reg1_out_handler(
     std::lock_guard lock(m_mutex);
 
     if (this->dlab()) {
-        m_baud_rate_h = gsl::narrow<data_type>(info.val);
+        m_baud_rate_h = gsl::narrow_cast<data_type>(info.val);
     }
     else {
         if (info.val != 0) {
@@ -298,7 +298,7 @@ uart::reg3_out_handler(
     bfignored(vcpu);
     std::lock_guard lock(m_mutex);
 
-    m_line_control_register = gsl::narrow<data_type>(info.val);
+    m_line_control_register = gsl::narrow_cast<data_type>(info.val);
     return true;
 }
 

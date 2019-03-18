@@ -56,16 +56,13 @@ static constexpr uint32_t sts_cmd = 0x0010'0402;
 static constexpr uint32_t class_sub_prog_rev = 0xFF'00'00'00;
 static constexpr uint32_t bist_hdr_ltimer_clsz = 0x00'00'00'10;
 static constexpr uint32_t capptr = 0x50;
+static constexpr uint32_t maxlat_mingnt_pin_line = 0x00'00'00'FF;
 static constexpr uint32_t msi_base = capptr / sizeof(uint32_t);
 
 /// Normal PCI dev
 ///
 struct EXPORT_HYPERKERNEL_HVE pci_dev
 {
-    pci_dev(uint32_t bus, uint32_t dev, uint32_t fun) :
-        m_cf8{bdf_to_cf8(bus, dev, fun)}
-    { }
-
     uint32_t bus() const { return cf8_to_bus(m_cf8); }
     uint32_t dev() const { return cf8_to_dev(m_cf8); }
     uint32_t fun() const { return cf8_to_fun(m_cf8); }
@@ -81,16 +78,15 @@ struct EXPORT_HYPERKERNEL_HVE pci_dev
     void set_vcpuid(uint64_t id) { m_vcpuid = id; }
 
     bool is_bar(uint32_t reg) const { return reg >= 4 && reg <= 9; }
-    bool is_msi(uint32_t reg) const { return reg >= msi_base && reg <= msi_base + 4; }
+    bool is_msi(uint32_t reg) const { return reg >= msi_base + 1 && reg <= msi_base + 4; }
     bool is_used() const { return m_used; }
 
+    pci_dev() = default;
     ~pci_dev() = default;
     pci_dev(pci_dev &&v) = default;
     pci_dev(const pci_dev &v) = delete;
     pci_dev &operator=(pci_dev &&v) = default;
     pci_dev &operator=(const pci_dev &v) = delete;
-
-private:
 
     uint32_t m_cf8{};
     uint32_t m_phys_vec{};
@@ -176,7 +172,8 @@ public:
 private:
 
     std::mutex m_mutex;
-    std::unordered_map<uint32_t, struct pci_dev> m_pci_devs{};
+    struct pci_dev m_lo_dev;
+    struct pci_dev m_hi_dev;
 
 public:
 

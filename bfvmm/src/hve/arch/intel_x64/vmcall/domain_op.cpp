@@ -386,6 +386,7 @@ vmcall_domain_op_handler::domain_op__set_ndvm_bus(
         auto dom = get_domain(vcpu->rcx());
 
         if (dom->is_ndvm()) {
+            bfdebug_nhex(0, "domain_op: NDVM bus:", vcpu->rdx());
             dom->set_ndvm_bus(vcpu->rdx());
             dom->enable_dma_remapping();
         }

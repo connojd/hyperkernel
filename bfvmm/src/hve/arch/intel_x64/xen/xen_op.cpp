@@ -314,7 +314,7 @@ xen_op_handler::pci_init_caps()
     auto reg = ptr >> 2U;
     auto prev = 0xD;
 
-//    printf("NIC: Capability pointer: %x\n", reg);
+    printf("NIC: Capability pointer: %x\n", reg);
 
     while (reg != 0) {
         constexpr auto id_msi = 0x05;
@@ -346,14 +346,14 @@ xen_op_handler::pci_init_caps()
 
     ensures(m_msi_cap != 0);
 
-//    printf("NIC: Capability found: MSI at byte 0x%x, reg 0x%x\n",
-//           m_msi_cap << 2,
-//           m_msi_cap);
+    printf("NIC: Capability found: MSI at byte 0x%x, reg 0x%x\n",
+           m_msi_cap << 2,
+           m_msi_cap);
 
     if (m_msix_cap != 0) {
-//        printf("NIC: Capability found: MSI-x at byte 0x%x, reg 0x%x\n",
-//               m_msix_cap << 2,
-//               m_msix_cap);
+        printf("NIC: Capability found: MSI-x at byte 0x%x, reg 0x%x\n",
+               m_msix_cap << 2,
+               m_msix_cap);
     }
 }
 
@@ -368,9 +368,9 @@ xen_op_handler::pci_init_bars()
 
     for (const auto &bar : m_nic_bar_list) {
         if (bar.bar_type == pci_bar_io) {
-//            bfdebug_info(0, "NIC: io bar:");
-//            bfdebug_subnhex(0, "addr", bar.addr);
-//            bfdebug_subnhex(0, "size", bar.size);
+            bfdebug_info(0, "NIC: io bar:");
+            bfdebug_subnhex(0, "addr", bar.addr);
+            bfdebug_subnhex(0, "size", bar.size);
 
             for (auto p = 0; p < bar.size; p++) {
                 m_vcpu->pass_through_io_accesses(bar.addr + p);
@@ -379,11 +379,11 @@ xen_op_handler::pci_init_bars()
             continue;
         }
 
-//        bfdebug_info(0, "NIC: mm bar:");
-//        bfdebug_subnhex(0, "addr", bar.addr);
-//        bfdebug_subnhex(0, "size", bar.size);
-//        bfdebug_subbool(0, "64-bit", bar.mm_type == 2);
-//        bfdebug_subbool(0, "prefetchable", bar.prefetchable);
+        bfdebug_info(0, "NIC: mm bar:");
+        bfdebug_subnhex(0, "addr", bar.addr);
+        bfdebug_subnhex(0, "size", bar.size);
+        bfdebug_subbool(0, "64-bit", bar.mm_type == 2);
+        bfdebug_subbool(0, "prefetchable", bar.prefetchable);
 
         for (auto i = 0; i < bar.size; i += ::x64::pt::page_size) {
             m_domain->map_4k_rw_uc(bar.addr + i, bar.addr + i);
@@ -798,7 +798,7 @@ xen_op_handler::pci_owned_msi_out(io_instruction_handler::info_t &info)
         auto msi_addr = cf8_read_reg(m_cf8, pci_reg);
         auto nic_id = (msi_addr & 0xFF000) >> 12;
 
-        bfdebug_nhex(0, "visr_id", vtd::ndvm_apic_id);
+        //bfdebug_nhex(0, "visr_id", vtd::ndvm_apic_id);
         bfdebug_nhex(0, "phys_id", phys_id);
         bfdebug_nhex(0, "nic_id", nic_id);
 
