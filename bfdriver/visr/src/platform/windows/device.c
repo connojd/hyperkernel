@@ -93,11 +93,14 @@ visr_wdf_isr(
 	_In_ ULONG MessageID
 )
 {
-	UNREFERENCED_PARAMETER(Interrupt);
 	UNREFERENCED_PARAMETER(MessageID);
 
+	WDF_INTERRUPT_INFO interrupt_info;
+	WDF_INTERRUPT_INFO_INIT(&interrupt_info);
+	WdfInterruptGetInfo(Interrupt, &interrupt_info);
+
 	int cpui[4] = { 0 };
-	CpuIdEx(cpui, 0xcafebabe, 0xbadc0fee);
+	CpuIdEx(cpui, 0xcafebabe, interrupt_info.Vector);
 	return TRUE;
 }
 

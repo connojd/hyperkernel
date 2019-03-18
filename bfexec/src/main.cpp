@@ -226,7 +226,7 @@ create_elf_vm(const args_type &args)
     ioctl_args.is_ndvm = args.count("ndvm");
 
     if (ioctl_args.is_ndvm) {
-        ioctl_args.bus = args.count("bus");
+        ioctl_args.bus = args["bus"].as<uint64_t>();
     }
 
     ctl->call_ioctl_create_from_elf(ioctl_args);
