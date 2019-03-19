@@ -438,6 +438,7 @@ uint32_t visr::get_phys_vector(uint64_t vcpuid)
     if (!m_hi_dev.is_used()) {
         m_hi_dev.set_vcpuid(vcpuid);
         m_hi_dev.set_used();
+ //       bfdebug_nhex(0, "HIGH dev vcpuid:", m_hi_dev.vcpuid());
         return m_hi_dev.phys_vec();
     }
 
@@ -450,6 +451,7 @@ void visr::set_virt_vector(uint64_t vcpuid, uint32_t virt)
 
     if (m_lo_dev.vcpuid() == vcpuid) {
         m_lo_dev.set_virt_vec(virt);
+//        bfdebug_nhex(0, "LOW dev vcpuid:", m_lo_dev.vcpuid());
         return;
     }
 
@@ -458,6 +460,8 @@ void visr::set_virt_vector(uint64_t vcpuid, uint32_t virt)
         return;
     }
 
+//    bferror_nhex(0, "HIGH dev vcpuid:", m_hi_dev.vcpuid());
+//    bferror_subnhex(0, "vcpuid arg:", vcpuid);
     throw std::invalid_argument("visr: invalid vcpuid");
 }
 

@@ -319,6 +319,7 @@ private:
     // Helpers
     // -------------------------------------------------------------------------
 
+    bool owns_current_bdf() const;
     bool local_xenstore() const;
     void pci_init_caps();
     void pci_init_bars();

@@ -264,10 +264,14 @@ xen_op_handler::xen_op_handler(
         m_nic = bdf_to_cf8(vcpu->dom()->ndvm_bus(), 0, 0); // assumes NIC is only one on bus
         m_phys_vec = g_visr->get_phys_vector(m_vcpu->id());
         bfdebug_nhex(0, "NDVM acquired vector:", m_phys_vec);
+        bfdebug_nhex(0, "NDVM acquired cf8:", m_nic);
+        bfdebug_nhex(0, "NDVM acquired bus:", cf8_to_bus(m_nic));
+        bfdebug_nhex(0, "NDVM acquired dev:", cf8_to_dev(m_nic));
+        bfdebug_nhex(0, "NDVM acquired fun:", cf8_to_fun(m_nic));
 
         this->pci_init_caps();
         this->pci_init_bars();
-//        this->pci_init_nic();
+        this->pci_init_nic();
     } else {
         EMULATE_IO_INSTRUCTION(0xCF8, io_ones_handler, io_ignore_handler);
         EMULATE_IO_INSTRUCTION(0xCFA, io_ones_handler, io_ignore_handler);
@@ -281,25 +285,23 @@ xen_op_handler::xen_op_handler(
 
 // Do fixups after Windows to ensure we start from a known initial state
 //
-//void
-//xen_op_handler::pci_init_nic()
-//{
-//    auto nic = bdf_to_cf8(LO_NIC_BUS, LO_NIC_DEV, LO_NIC_FUN);
-//
-//    // status_command - disable INTx
-//    cf8_write_reg(nic, 0x1, 0x00100407);
-//
-//    // Disable MSI
-//    cf8_write_reg(nic, 0x14, 0x00807005);
-//
-//    // Bus-level reset of the NIC's bus
-//    auto bridge = bdf_to_cf8(0, 0x1C, 0);
-//    auto ctl = cf8_read_reg(bridge, 0xF);
-//    auto tmp = ctl | (0x40UL << 16);
-//
-//    cf8_write_reg(bridge, 0xF, tmp);
-//    cf8_write_reg(bridge, 0xF, ctl);
-//}
+void
+xen_op_handler::pci_init_nic()
+{
+    // status_command - disable INTx
+    cf8_write_reg(m_nic, 0x1, 0x00100407);
+
+    // Disable MSI
+    cf8_write_reg(m_nic, 0x14, 0x00807005);
+
+    // Bus-level reset of the NIC's bus
+    //auto bridge = bdf_to_cf8(0, 0x1C, 0);
+    //auto ctl = cf8_read_reg(bridge, 0xF);
+    //auto tmp = ctl | (0x40UL << 16);
+
+    //cf8_write_reg(bridge, 0xF, tmp);
+    //cf8_write_reg(bridge, 0xF, ctl);
+}
 
 
 void
@@ -314,7 +316,7 @@ xen_op_handler::pci_init_caps()
     auto reg = ptr >> 2U;
     auto prev = 0xD;
 
-    printf("NIC: Capability pointer: %x\n", reg);
+//    printf("NIC: Capability pointer: %x\n", reg);
 
     while (reg != 0) {
         constexpr auto id_msi = 0x05;
@@ -346,14 +348,14 @@ xen_op_handler::pci_init_caps()
 
     ensures(m_msi_cap != 0);
 
-    printf("NIC: Capability found: MSI at byte 0x%x, reg 0x%x\n",
-           m_msi_cap << 2,
-           m_msi_cap);
+//    printf("NIC: Capability found: MSI at byte 0x%x, reg 0x%x\n",
+//           m_msi_cap << 2,
+//           m_msi_cap);
 
     if (m_msix_cap != 0) {
-        printf("NIC: Capability found: MSI-x at byte 0x%x, reg 0x%x\n",
-               m_msix_cap << 2,
-               m_msix_cap);
+//        printf("NIC: Capability found: MSI-x at byte 0x%x, reg 0x%x\n",
+//               m_msix_cap << 2,
+//               m_msix_cap);
     }
 }
 
@@ -368,9 +370,9 @@ xen_op_handler::pci_init_bars()
 
     for (const auto &bar : m_nic_bar_list) {
         if (bar.bar_type == pci_bar_io) {
-            bfdebug_info(0, "NIC: io bar:");
-            bfdebug_subnhex(0, "addr", bar.addr);
-            bfdebug_subnhex(0, "size", bar.size);
+//            bfdebug_info(0, "NIC: io bar:");
+//            bfdebug_subnhex(0, "addr", bar.addr);
+//            bfdebug_subnhex(0, "size", bar.size);
 
             for (auto p = 0; p < bar.size; p++) {
                 m_vcpu->pass_through_io_accesses(bar.addr + p);
@@ -379,11 +381,11 @@ xen_op_handler::pci_init_bars()
             continue;
         }
 
-        bfdebug_info(0, "NIC: mm bar:");
-        bfdebug_subnhex(0, "addr", bar.addr);
-        bfdebug_subnhex(0, "size", bar.size);
-        bfdebug_subbool(0, "64-bit", bar.mm_type == 2);
-        bfdebug_subbool(0, "prefetchable", bar.prefetchable);
+//        bfdebug_info(0, "NIC: mm bar:");
+//        bfdebug_subnhex(0, "addr", bar.addr);
+//        bfdebug_subnhex(0, "size", bar.size);
+//        bfdebug_subbool(0, "64-bit", bar.mm_type == 2);
+//        bfdebug_subbool(0, "prefetchable", bar.prefetchable);
 
         for (auto i = 0; i < bar.size; i += ::x64::pt::page_size) {
             m_domain->map_4k_rw_uc(bar.addr + i, bar.addr + i);
@@ -557,7 +559,7 @@ xen_op_handler::pci_host_bridge_in(io_instruction_handler::info_t &info)
 bool
 xen_op_handler::pci_hdr_normal_in(io_instruction_handler::info_t &info)
 {
-    if (domU_owned_cf8(m_cf8)) {
+    if (this->owns_current_bdf()) {
 //        printf("(owned)  ");
         return this->pci_owned_in(info);
     }
@@ -758,7 +760,7 @@ xen_op_handler::pci_hdr_pci_bridge_out(io_instruction_handler::info_t &info)
 bool
 xen_op_handler::pci_hdr_normal_out(io_instruction_handler::info_t &info)
 {
-    if (domU_owned_cf8(m_cf8)) {
+    if (this->owns_current_bdf()) {
 //        printf("(owned)  ");
         return this->pci_owned_out(info);
     }
@@ -799,8 +801,8 @@ xen_op_handler::pci_owned_msi_out(io_instruction_handler::info_t &info)
         auto nic_id = (msi_addr & 0xFF000) >> 12;
 
         //bfdebug_nhex(0, "visr_id", vtd::ndvm_apic_id);
-        bfdebug_nhex(0, "phys_id", phys_id);
-        bfdebug_nhex(0, "nic_id", nic_id);
+//        bfdebug_nhex(0, "phys_id", phys_id);
+//        bfdebug_nhex(0, "nic_id", nic_id);
 
         expects((info.val & 0x8) == 0); // For now we don't support redirection hints
         expects(ia32_apic_base::state::get(msr) == ia32_apic_base::state::xapic);
@@ -826,8 +828,10 @@ xen_op_handler::pci_owned_msi_out(io_instruction_handler::info_t &info)
     if (pci_reg == m_msi_cap + 3) {
         // Save the vector linux expects
         //
-//        bfdebug_nhex(0, "Received ndvm vector:", info.val & 0xFF);
-        g_visr->set_virt_vector(m_vcpu->id(), 0xFF);
+        bfdebug_info(0, "xen_op: setting virt vector");
+        bfdebug_subnhex(0, "vector", info.val & 0xFF);
+        bfdebug_subnhex(0, "vcpuid", m_vcpu->id());
+        g_visr->set_virt_vector(m_vcpu->id(), info.val & 0xFF);
 
         // We set the vector to the one visr expects and clear all
         // other bits. This implies the interrupt will be delivered
@@ -870,7 +874,10 @@ xen_op_handler::pci_owned_out(io_instruction_handler::info_t &info)
 
         if (info.val != m_nic_bar.at(cf8_to_reg(m_cf8) - 4)) {
             bferror_info(0, "Attempt to remap NIC bars");
-            return false;
+            bferror_subnhex(0, "new", info.val);
+            bferror_subnhex(0, "old", m_nic_bar.at(cf8_to_reg(m_cf8) - 4));
+            bferror_subnhex(0, "reg", cf8_to_reg(m_cf8) - 4);
+            //return true;
         }
 
         pci_info_out(m_cf8, info);
@@ -1943,6 +1950,12 @@ xen_op_handler::XENMEM_decrease_reservation_handler(
         vcpu->set_rax(FAILURE);
     })
 
+}
+
+bool
+xen_op_handler::owns_current_bdf() const
+{
+    return m_nic == (m_cf8 & 0xFFFFFF00UL);
 }
 
 bool
