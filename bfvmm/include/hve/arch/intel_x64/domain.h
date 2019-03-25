@@ -356,7 +356,6 @@ private:
 
     void setup_dom0();
     void setup_domU();
-
     void setup_acpi();
 
 private:

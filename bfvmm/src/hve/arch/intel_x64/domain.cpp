@@ -23,6 +23,7 @@
 #include <hve/arch/intel_x64/domain.h>
 #include <hve/arch/intel_x64/iommu.h>
 #include <hve/arch/intel_x64/visr.h>
+#include <hve/arch/intel_x64/pci.h>
 #include <intrinsics.h>
 
 using namespace eapis::intel_x64;
@@ -114,10 +115,7 @@ domain::domain(domainid_type domainid) :
                     this->map_4k_rw(p, p);
                 }
 
-                g_iommu->set_dom0_eptp(m_ept_map.eptp());
-                g_iommu->init_dom0_mappings();
-
-                //::intel_x64::vmx::invept_global();// This causes a lockup on win10 -- why?
+                g_iommu->init_dom0_mappings(m_ept_map.eptp());
             }
         });
     }
@@ -126,19 +124,10 @@ domain::domain(domainid_type domainid) :
     }
 }
 
-void domain::enable_dma_remapping()
-{
-    g_iommu->set_domU_eptp(m_ept_map.eptp());
-    g_iommu->init_domU_mappings();
-    g_iommu->enable();
-}
-
 void
 domain::setup_dom0()
 {
     ept::identity_map(m_ept_map, MAX_PHYS_ADDR);
-
-    //::intel_x64::vmx::invept_global();// This causes a lockup on win10 -- why?
 }
 
 void
@@ -163,6 +152,19 @@ domain::setup_domU()
     m_ept_map.map_4k(m_idt_virt, m_idt_phys, ept::mmap::attr_type::read_only);
 
     this->setup_acpi();
+
+    if (!this->is_ndvm()) {
+        return;
+    }
+
+    g_iommu->add_domain(this->id(), m_ept_map.eptp());
+    g_iommu->map(this->id(), this->ndvm_bus(), devfn(0, 0));
+
+    static bool iommu_enabled = false;
+    if (!iommu_enabled) {
+        g_iommu->enable();
+        iommu_enabled = true;
+    }
 }
 
 void

@@ -292,15 +292,16 @@ xen_op_handler::pci_init_nic()
     cf8_write_reg(m_nic, 0x1, 0x00100407);
 
     // Disable MSI
-    cf8_write_reg(m_nic, 0x14, 0x00807005);
+    cf8_write_reg(m_nic, m_msi_cap, 0x00807005);
+    cf8_write_reg(m_nic, m_msi_cap + 2, 0x0);
 
     // Bus-level reset of the NIC's bus
-    //auto bridge = bdf_to_cf8(0, 0x1C, 0);
-    //auto ctl = cf8_read_reg(bridge, 0xF);
-    //auto tmp = ctl | (0x40UL << 16);
-
-    //cf8_write_reg(bridge, 0xF, tmp);
-    //cf8_write_reg(bridge, 0xF, ctl);
+//    auto bridge = bdf_to_cf8(0, 0x1C, 0);
+//    auto ctl = cf8_read_reg(bridge, 0xF);
+//    auto tmp = ctl | (0x40UL << 16);
+//
+//    cf8_write_reg(bridge, 0xF, tmp);
+//    cf8_write_reg(bridge, 0xF, ctl);
 }
 
 
@@ -781,7 +782,7 @@ xen_op_handler::pci_owned_msi_out(io_instruction_handler::info_t &info)
 
     // Pass this one through so it can be enabled/disabled
     if (pci_reg == m_msi_cap) {
-//        bfdebug_nhex(0, "MSI+0", info.val);
+        bfdebug_nhex(0, "MSI+0", info.val);
         pci_info_out(m_cf8, info);
         return true;
     }
@@ -821,8 +822,9 @@ xen_op_handler::pci_owned_msi_out(io_instruction_handler::info_t &info)
 
     if (pci_reg == m_msi_cap + 2) {
         if (info.val) {
-            throw std::runtime_error("Non-zero write to upper MSI address:");
+            throw std::runtime_error("Non-zero data in upper MSI address:");
         }
+        ensures(cf8_read_reg(m_cf8, pci_reg) == 0);
     }
 
     if (pci_reg == m_msi_cap + 3) {
@@ -842,10 +844,10 @@ xen_op_handler::pci_owned_msi_out(io_instruction_handler::info_t &info)
         info.val = m_phys_vec;
         pci_info_out(m_cf8, info);
 
-//        bfdebug_nhex(0, "NIC MSI+0 hw:", cf8_read_reg(m_cf8, pci_reg - 3));
-//        bfdebug_nhex(0, "NIC MSI+1 hw:", cf8_read_reg(m_cf8, pci_reg - 2));
-//        bfdebug_nhex(0, "NIC MSI+2 hw:", cf8_read_reg(m_cf8, pci_reg - 1));
-//        bfdebug_nhex(0, "NIC MSI+3 hw:", cf8_read_reg(m_cf8, pci_reg - 0));
+        bfdebug_nhex(0, "NIC MSI+0 hw:", cf8_read_reg(m_cf8, pci_reg - 3));
+        bfdebug_nhex(0, "NIC MSI+1 hw:", cf8_read_reg(m_cf8, pci_reg - 2));
+        bfdebug_nhex(0, "NIC MSI+2 hw:", cf8_read_reg(m_cf8, pci_reg - 1));
+        bfdebug_nhex(0, "NIC MSI+3 hw:", cf8_read_reg(m_cf8, pci_reg - 0));
 
         return true;
     }

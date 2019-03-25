@@ -43,13 +43,6 @@
 // Definition
 //------------------------------------------------------------------------------
 
-namespace vtd {
-    extern uint64_t visr_vector;
-    extern uint64_t ndvm_vector;
-    extern uint64_t ndvm_apic_id;
-    extern uint64_t ndvm_vcpu_id;
-}
-
 namespace hyperkernel::intel_x64 {
 
 class EXPORT_HYPERKERNEL_HVE iommu
@@ -73,21 +66,27 @@ public:
     ///
     ~iommu() = default;
 
-    /// Initialize
+    /// Dom0 init helper
     ///
     /// @expects
     /// @ensures
     ///
-    void init_dom0_mappings();
-    void init_domU_mappings();
+    void init_dom0_mappings(uintptr_t eptp);
 
-    void set_dom0_eptp(uintptr_t eptp);
-    void set_domU_eptp(uintptr_t eptp);
+    /// Add domain
+    ///
+    void add_domain(domainid_t id, uintptr_t eptp);
 
-    void set_dom0_cte(entry_t *cte);
-    void set_domU_cte(entry_t *cte);
+    /// Map in the given bus/device/function into the given domain
+    ///
+    void map(domainid_t id, uint32_t bus, uint32_t devfn);
 
+    /// Enable DMA remapping
+    ///
     void enable();
+
+    /// Disable DMA remapping
+    ///
     void disable();
 
     /// Register access
@@ -100,14 +99,40 @@ public:
 private:
 
     iommu();
-    eapis::x64::unique_map<uint8_t> m_reg_map;
-    uintptr_t m_dom0_eptp{0};
-    uintptr_t m_domU_eptp{0};
 
-    page_ptr<entry_t> m_root;
-    std::vector<page_ptr<entry_t>> m_ctxt;
+    eapis::x64::unique_map<uint8_t> m_reg_map;
     uint8_t *m_hva{};
     uintptr_t m_hpa{};
+
+    page_ptr<entry_t> m_root;
+    std::vector<page_ptr<entry_t>> m_ctxt_pages;
+
+    // Store phys -> virt context page mappings
+    std::unordered_map<uintptr_t, uintptr_t> m_ctxt_map;
+
+    struct domain {
+        domainid_t id;
+        uintptr_t eptp;
+
+        explicit domain(domainid_t id, uintptr_t eptp)
+        {
+            // arbitrary limit to prevent overflow in iommu::map
+            expects(id < 128);
+            expects(eptp != 0);
+
+            this->id = id;
+            this->eptp = eptp;
+        }
+
+        domain(domain &&) noexcept = delete;
+        domain &operator=(domain &&) noexcept = delete;
+
+        domain(const domain &) = delete;
+        domain &operator=(const domain &) = delete;
+    };
+
+    std::unordered_map<domainid_t, std::unique_ptr<struct domain>> m_domains;
+    uintptr_t domain_eptp(domainid_t id) const { return m_domains.at(id)->eptp; }
 
 public:
 

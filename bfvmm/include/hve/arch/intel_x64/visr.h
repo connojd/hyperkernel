@@ -22,6 +22,7 @@
 #include <array>
 #include <mutex>
 #include <cstdint>
+#include <bfhypercall.h>
 
 // -----------------------------------------------------------------------------
 // Exports
@@ -91,7 +92,7 @@ struct EXPORT_HYPERKERNEL_HVE pci_dev
     uint32_t m_cf8{};
     uint32_t m_phys_vec{};
     uint32_t m_virt_vec{};
-    uint64_t m_vcpuid{};
+    uint64_t m_vcpuid{INVALID_VCPUID};
     bool m_used{};
     std::array<uint32_t, 64> m_cfg{};
 };

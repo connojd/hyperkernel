@@ -139,91 +139,79 @@ iommu *iommu::instance() noexcept
     return &self;
 }
 
-void iommu::set_dom0_eptp(uintptr_t eptp)
-{ m_dom0_eptp = eptp; }
-
-void iommu::set_domU_eptp(uintptr_t eptp)
-{ m_domU_eptp = eptp; }
-
-void iommu::set_dom0_cte(iommu::entry_t *cte)
+void iommu::add_domain(domainid_t domid, uintptr_t eptp)
 {
-//    // TODO check TT against dev tlb support
-
-    cte->data[0] = m_dom0_eptp | 1U;  // present, points to dom0 ept
-    cte->data[1] = (1ULL << 8U) | 2U; // DID 1, 4-level EPT
+    m_domains.emplace(domid, std::make_unique<struct domain>(domid, eptp));
 }
 
-void iommu::set_domU_cte(iommu::entry_t *cte)
+void iommu::map(domainid_t domid, uint32_t bus, uint32_t devfn)
 {
-//    // TODO check TT against dev tlb support
+    expects(bus < 256);
+    expects(devfn < 256);
 
-    cte->data[0] = m_domU_eptp | 1U;  // present, points to domU ept
-    cte->data[1] = (2ULL << 8U) | 2U; // DID 2, 4-level EPT
+    entry_t *rte = &m_root.get()[bus];
+
+    if (rte->data[0] == 0) {
+        auto ctxt = make_page<entry_t>();
+        auto virt = ctxt.get();
+        auto phys = g_mm->virtptr_to_physint(virt);
+
+        // Enable passthrough of the bus
+        rte->data[0] = phys | 1U;
+
+        // Save a mapping for the context page
+        m_ctxt_map.emplace(phys, reinterpret_cast<uintptr_t>(virt));
+
+        // Move the context page to its owner
+        m_ctxt_pages.push_back(std::move(ctxt));
+    }
+    ensures(rte->data[0] != 0);
+
+    // Lookup the hva of the context page
+    entry_t *hva = reinterpret_cast<entry_t *>(m_ctxt_map.at(rte->data[0] & ~0xFFFULL));
+    entry_t *cte = &hva[devfn];
+
+    // Make devfn present, point to domain's eptp
+    cte->data[0] = domain_eptp(domid) | 1U;
+
+    // Set domid and 4-level EPT translation; domid 0 is reserved by the VT-d
+    // spec, so add one to every id first.
+    cte->data[1] = ((domid + 1) << 8) | 2U;
 }
 
-static constexpr uint32_t devfn(uint32_t dev, uint32_t fn)
-{ return (dev << 3) | fn; }
-
-// Called once from {dom0, vcpu0}
-//
-void iommu::init_dom0_mappings()
+void iommu::init_dom0_mappings(uintptr_t eptp)
 {
-    //TODO turn this into a probe fn
-    m_ctxt.push_back(make_page<entry_t>());
-    m_ctxt.push_back(make_page<entry_t>());
-    m_ctxt.push_back(make_page<entry_t>());
+    this->add_domain(0, eptp);
 
-    // Setup root entries
-    entry_t *rte = m_root.get();
-    rte[0].data[0] = g_mm->virtptr_to_physint(m_ctxt[0].get()) | 1U;
-    rte[1].data[0] = g_mm->virtptr_to_physint(m_ctxt[1].get()) | 1U;
+    // Bus 0
+    this->map(0, 0, devfn(0x00, 0x00)); // Host bridge
+    this->map(0, 0, devfn(0x02, 0x00)); // VGA
+    this->map(0, 0, devfn(0x08, 0x00)); // Gaussian model
+    this->map(0, 0, devfn(0x14, 0x00)); // USB
+    this->map(0, 0, devfn(0x16, 0x00)); // Comms
+    this->map(0, 0, devfn(0x17, 0x00)); // SATA
+    this->map(0, 0, devfn(0x1B, 0x00)); // PCI Bridge to bus 1
+    this->map(0, 0, devfn(0x1C, 0x00)); // PCI Bridge to bus 2
+    this->map(0, 0, devfn(0x1C, 0x05)); // PCI Bridge to bus 3
+    this->map(0, 0, devfn(0x1C, 0x06)); // PCI Bridge to bus 4
+    this->map(0, 0, devfn(0x1C, 0x07)); // PCI Bridge to bus 5
+    this->map(0, 0, devfn(0x1D, 0x00)); // PCI Bridge to bus 6
+    this->map(0, 0, devfn(0x1D, 0x01)); // PCI Bridge to bus 7
+    this->map(0, 0, devfn(0x1D, 0x02)); // PCI Bridge to bus 8
+    this->map(0, 0, devfn(0x1D, 0x03)); // PCI Bridge to bus 9
+    this->map(0, 0, devfn(0x1F, 0x00)); // ISA bridge
+    this->map(0, 0, devfn(0x1F, 0x02)); // Memory controller
+    this->map(0, 0, devfn(0x1F, 0x03)); // Audio controller
+    this->map(0, 0, devfn(0x1F, 0x04)); // SMBus controller
 
-    // Bus 0 for gigabyte board
-    entry_t *cte = m_ctxt[0].get();
-    this->set_dom0_cte(&cte[devfn(0x00, 0)]); // Host bridge
-    this->set_dom0_cte(&cte[devfn(0x02, 0)]); // VGA
-    this->set_dom0_cte(&cte[devfn(0x08, 0)]); // Gaussian model
-    this->set_dom0_cte(&cte[devfn(0x14, 0)]); // USB
-    this->set_dom0_cte(&cte[devfn(0x16, 0)]); // Comms
-    this->set_dom0_cte(&cte[devfn(0x17, 0)]); // SATA
-    this->set_dom0_cte(&cte[devfn(0x1B, 0)]); // PCI Bridge to bus 1
-    this->set_dom0_cte(&cte[devfn(0x1C, 0)]); // PCI Bridge to bus 2
-    this->set_dom0_cte(&cte[devfn(0x1C, 5)]); // PCI Bridge to bus 3
-    this->set_dom0_cte(&cte[devfn(0x1C, 6)]); // PCI Bridge to bus 4
-    this->set_dom0_cte(&cte[devfn(0x1C, 7)]); // PCI Bridge to bus 5
-    this->set_dom0_cte(&cte[devfn(0x1D, 0)]); // PCI Bridge to bus 6
-    this->set_dom0_cte(&cte[devfn(0x1D, 1)]); // PCI Bridge to bus 7
-    this->set_dom0_cte(&cte[devfn(0x1D, 2)]); // PCI Bridge to bus 8
-    this->set_dom0_cte(&cte[devfn(0x1D, 3)]); // PCI Bridge to bus 9
-    this->set_dom0_cte(&cte[devfn(0x1F, 0)]); // ISA bridge
-    this->set_dom0_cte(&cte[devfn(0x1F, 2)]); // Memory controller
-    this->set_dom0_cte(&cte[devfn(0x1F, 3)]); // Audio controller
-    this->set_dom0_cte(&cte[devfn(0x1F, 4)]); // SMBus controller
-
-    // Bus 1 for GB board
-    cte = m_ctxt[1].get();
-    this->set_dom0_cte(&cte[devfn(0x00, 0)]); // NVMe controller
-
-    ::x64::cache::wbinvd();
-}
-
-void iommu::init_domU_mappings()
-{
-    entry_t *rte = m_root.get();
-    rte[2].data[0] = g_mm->virtptr_to_physint(m_ctxt[2].get()) | 1U;
-
-    // Bus 2 for GB board
-    entry_t *cte = m_ctxt[2].get();
-    this->set_domU_cte(&cte[devfn(0x00, 0)]); // Ethernet controller
+    // Bus 1
+    this->map(0, 1, devfn(0x00, 0x00));
 
     ::x64::cache::wbinvd();
 }
 
 void iommu::enable()
 {
-    expects(m_dom0_eptp != 0);
-    expects(m_domU_eptp != 0);
-
     m_hva = m_reg_map.get();
 
     auto ecap = this->read64(0x10);
@@ -235,11 +223,12 @@ void iommu::enable()
 //    ::intel_x64::vtd::iommu::rtaddr_reg::dump(0, rtar);
 //    ::intel_x64::vtd::iommu::gsts_reg::dump(0, gsts);
 
-    if (::intel_x64::vtd::iommu::gsts_reg::tes::is_disabled(gsts)) {
-        //reset_nic();
-        this->disable();
-    }
+//    if (::intel_x64::vtd::iommu::gsts_reg::tes::is_disabled(gsts)) {
+//        //reset_nic();
+//        this->disable();
+//    }
 
+    expects(::intel_x64::vtd::iommu::gsts_reg::tes::is_disabled(gsts));
     expects(::intel_x64::vtd::iommu::gsts_reg::qies::is_disabled(gsts));
     expects(::intel_x64::vtd::iommu::gsts_reg::ires::is_disabled(gsts));
 

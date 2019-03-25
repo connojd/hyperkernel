@@ -51,23 +51,23 @@ vmcall_domain_op_handler::vmcall_domain_op_handler(
         vmcall_handler_delegate(vmcall_domain_op_handler, dispatch)
     );
 
-    if (!g_xapic_map) {
-        auto msr = ::intel_x64::msrs::ia32_apic_base::get();
-        auto hpa = ::intel_x64::msrs::ia32_apic_base::apic_base::get(msr);
-        expects(hpa == 0xFEE00000);
-
-        auto hva = g_mm->alloc_map(4096);
-
-        g_cr3->map_4k(hva,
-                      hpa,
-                      bfvmm::x64::cr3::mmap::attr_type::read_write,
-                      bfvmm::x64::cr3::mmap::memory_type::uncacheable);
-
-        g_xapic_map = eapis::x64::unique_map<uint32_t>(
-            static_cast<uint32_t *>(hva),
-            eapis::x64::unmapper(hva, 4096)
-        );
-    }
+//    if (!g_xapic_map) {
+//        auto msr = ::intel_x64::msrs::ia32_apic_base::get();
+//        auto hpa = ::intel_x64::msrs::ia32_apic_base::apic_base::get(msr);
+//        expects(hpa == 0xFEE00000);
+//
+//        auto hva = g_mm->alloc_map(4096);
+//
+//        g_cr3->map_4k(hva,
+//                      hpa,
+//                      bfvmm::x64::cr3::mmap::attr_type::read_write,
+//                      bfvmm::x64::cr3::mmap::memory_type::uncacheable);
+//
+//        g_xapic_map = eapis::x64::unique_map<uint32_t>(
+//            static_cast<uint32_t *>(hva),
+//            eapis::x64::unmapper(hva, 4096)
+//        );
+//    }
 }
 
 void
@@ -189,25 +189,25 @@ vmcall_domain_op_handler::domain_op__ndvm_share_page(
     })
 }
 
-bool shootdown_wait()
-{
-    int wait = 0;
-
-    for (auto i = 0; i < shootdown_ready.size(); i++) {
-        wait |= !shootdown_ready[i];
-    }
-
-    return wait != 0;
-}
-
-void shootdown_reset()
-{
-    for (auto i = 0; i < shootdown_ready.size(); i++) {
-        shootdown_ready[i] = false;
-    }
-
-    shootdown_on = false;
-}
+//bool shootdown_wait()
+//{
+//    int wait = 0;
+//
+//    for (auto i = 0; i < shootdown_ready.size(); i++) {
+//        wait |= !shootdown_ready[i];
+//    }
+//
+//    return wait != 0;
+//}
+//
+//void shootdown_reset()
+//{
+//    for (auto i = 0; i < shootdown_ready.size(); i++) {
+//        shootdown_ready[i] = false;
+//    }
+//
+//    shootdown_on = false;
+//}
 
 void
 vmcall_domain_op_handler::domain_op__remap_to_ndvm_page(
@@ -216,66 +216,66 @@ vmcall_domain_op_handler::domain_op__remap_to_ndvm_page(
     using namespace vmcs_n;
     using namespace vmcs_n::secondary_processor_based_vm_execution_controls;
 
-    try {
-        expects(ndvm_page_hpa != 0);
-
-        const auto [gpa, unused] = vcpu->gva_to_gpa(vcpu->rcx());
-        const auto gpa_2m = bfn::upper(gpa, 21);
-        const auto gpa_4k = bfn::upper(gpa, 12);
-
-        expects(gpa_4k == gpa);
-
-        // This is setup for a one-time shootdown, which should be fine for
-        // now because it is only needed when the read thread in the NDVM is
-        // running
-        //
-        // In general this function isn't correct; we are abusing the fact
-        // that Windows only uses NMIs for watchdogs and reboots. So any NMI
-        // signal is a shootdown signal.
-
-        if (vcpu->domid() == 0) {
-            ept_ready = false;
-            shootdown_on = true;
-            ::intel_x64::barrier::mb();
-
-            this->signal_shootdown();
-            while (shootdown_wait()) {
-                ::intel_x64::pause();
-            }
-
-            shootdown_reset();
-
-            // At this point everybody is in the VMM waiting on
-            // !ept_ready, so it is safe to modify the map
-
-            vcpu->dom()->unmap(gpa_2m);
-
-            for (auto p = gpa_2m; p < gpa_4k; p += 4096) {
-                vcpu->dom()->map_4k_rwe(p, p);
-            }
-
-            vcpu->dom()->map_4k_rw(gpa_4k, ndvm_page_hpa);
-
-            for (auto p = gpa_4k + 4096; p < gpa_2m + (1UL << 21); p += 4096) {
-                vcpu->dom()->map_4k_rwe(p, p);
-            }
-
-            ::intel_x64::vmx::invept_global();
-            invalid_eptp = vcpu->dom()->ept().eptp();
-            ::intel_x64::barrier::mb();
-            ept_ready = true;
-
-        } else {
-            vcpu->dom()->unmap(gpa_4k);
-            vcpu->dom()->map_4k_rw(gpa_4k, ndvm_page_hpa);
-            ::intel_x64::vmx::invept_global();
-        }
-
-        vcpu->set_rax(SUCCESS);
-    }
-    catchall({
+//    try {
+//        expects(ndvm_page_hpa != 0);
+//
+//        const auto [gpa, unused] = vcpu->gva_to_gpa(vcpu->rcx());
+//        const auto gpa_2m = bfn::upper(gpa, 21);
+//        const auto gpa_4k = bfn::upper(gpa, 12);
+//
+//        expects(gpa_4k == gpa);
+//
+//        // This is setup for a one-time shootdown, which should be fine for
+//        // now because it is only needed when the read thread in the NDVM is
+//        // running
+//        //
+//        // In general this function isn't correct; we are abusing the fact
+//        // that Windows only uses NMIs for watchdogs and reboots. So any NMI
+//        // signal is a shootdown signal.
+//
+//        if (vcpu->domid() == 0) {
+//            ept_ready = false;
+//            shootdown_on = true;
+//            ::intel_x64::barrier::mb();
+//
+//            this->signal_shootdown();
+//            while (shootdown_wait()) {
+//                ::intel_x64::pause();
+//            }
+//
+//            shootdown_reset();
+//
+//            // At this point everybody is in the VMM waiting on
+//            // !ept_ready, so it is safe to modify the map
+//
+//            vcpu->dom()->unmap(gpa_2m);
+//
+//            for (auto p = gpa_2m; p < gpa_4k; p += 4096) {
+//                vcpu->dom()->map_4k_rwe(p, p);
+//            }
+//
+//            vcpu->dom()->map_4k_rw(gpa_4k, ndvm_page_hpa);
+//
+//            for (auto p = gpa_4k + 4096; p < gpa_2m + (1UL << 21); p += 4096) {
+//                vcpu->dom()->map_4k_rwe(p, p);
+//            }
+//
+//            ::intel_x64::vmx::invept_global();
+//            invalid_eptp = vcpu->dom()->ept().eptp();
+//            ::intel_x64::barrier::mb();
+//            ept_ready = true;
+//
+//        } else {
+//            vcpu->dom()->unmap(gpa_4k);
+//            vcpu->dom()->map_4k_rw(gpa_4k, ndvm_page_hpa);
+//            ::intel_x64::vmx::invept_global();
+//        }
+//
+//        vcpu->set_rax(SUCCESS);
+//    }
+//    catchall({
         vcpu->set_rax(FAILURE);
-    })
+//    })
 }
 
 
@@ -367,9 +367,9 @@ vmcall_domain_op_handler::domain_op__set_ndvm_status(
         auto dom = get_domain(vcpu->rcx());
         dom->set_ndvm_status(vcpu->rdx());
 
-        if (dom->is_ndvm()) {
-            dom->enable_dma_remapping();
-        }
+////        if (dom->is_ndvm()) {
+////            dom->enable_dma_remapping();
+////        }
 
         vcpu->set_rax(SUCCESS);
     }
@@ -388,7 +388,7 @@ vmcall_domain_op_handler::domain_op__set_ndvm_bus(
         if (dom->is_ndvm()) {
             bfdebug_nhex(0, "domain_op: NDVM bus:", vcpu->rdx());
             dom->set_ndvm_bus(vcpu->rdx());
-            dom->enable_dma_remapping();
+//            dom->enable_dma_remapping();
         }
 
         vcpu->set_rax(SUCCESS);

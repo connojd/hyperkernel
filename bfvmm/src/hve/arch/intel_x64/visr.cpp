@@ -126,6 +126,7 @@ bool visr::is_emulating(uint32_t cf8) const
 
     return (bus == LO_NIC_BUS && dev == LO_NIC_DEV && fun == LO_NIC_FUN) ||
            (bus == HI_NIC_BUS && dev == HI_NIC_DEV && fun == HI_NIC_FUN);
+//    return (bus == LO_NIC_BUS && dev == LO_NIC_DEV && fun == LO_NIC_FUN);
 }
 
 bool visr::handle_cfc_in(
@@ -438,10 +439,11 @@ uint32_t visr::get_phys_vector(uint64_t vcpuid)
     if (!m_hi_dev.is_used()) {
         m_hi_dev.set_vcpuid(vcpuid);
         m_hi_dev.set_used();
- //       bfdebug_nhex(0, "HIGH dev vcpuid:", m_hi_dev.vcpuid());
+        //bfdebug_nhex(0, "HIGH dev vcpuid:", m_hi_dev.vcpuid());
         return m_hi_dev.phys_vec();
     }
 
+    bferror_info(0, "get_phys_vector failed");
     return 0;
 }
 
@@ -451,7 +453,7 @@ void visr::set_virt_vector(uint64_t vcpuid, uint32_t virt)
 
     if (m_lo_dev.vcpuid() == vcpuid) {
         m_lo_dev.set_virt_vec(virt);
-//        bfdebug_nhex(0, "LOW dev vcpuid:", m_lo_dev.vcpuid());
+        //bfdebug_nhex(0, "LOW dev vcpuid:", m_lo_dev.vcpuid());
         return;
     }
 
@@ -460,8 +462,8 @@ void visr::set_virt_vector(uint64_t vcpuid, uint32_t virt)
         return;
     }
 
-//    bferror_nhex(0, "HIGH dev vcpuid:", m_hi_dev.vcpuid());
-//    bferror_subnhex(0, "vcpuid arg:", vcpuid);
+    //bferror_nhex(0, "HIGH dev vcpuid:", m_hi_dev.vcpuid());
+    //bferror_subnhex(0, "vcpuid arg:", vcpuid);
     throw std::invalid_argument("visr: invalid vcpuid");
 }
 
@@ -528,6 +530,13 @@ bool visr::forward_interrupt_to_ndvm(
     // way to prevent this with a hard Ctrl-C from dom0, so it is possible we
     // get here and the NDVM is already dead.
 
+//    bfdebug_nhex(0, "visr: forwarding vector:", info.rcx);
+//
+//    bfdebug_subnhex(0, "rax", info.rax);
+//    bfdebug_subnhex(0, "rbx", info.rbx);
+//    bfdebug_subnhex(0, "rcx", info.rcx);
+//    bfdebug_subnhex(0, "rdx", info.rdx);
+//
     try {
         const auto vec = info.rcx;
 
@@ -543,8 +552,8 @@ bool visr::forward_interrupt_to_ndvm(
             return true;
         }
 
-//      bferror_nhex(0, "visr: Trying to forward unbound vector:", vec);
-//      return false;
+        bferror_nhex(0, "visr: Trying to forward unbound vector:", vec);
+        return false;
     } catch (std::runtime_error &e) {
         ;
     }

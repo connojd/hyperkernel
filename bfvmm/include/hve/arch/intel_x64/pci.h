@@ -78,6 +78,9 @@ inline uint32_t bdf_to_cf8(uint32_t b, uint32_t d, uint32_t f)
     return (1UL << 31) | (b << 16) | (d << 11) | (f << 8);
 }
 
+inline constexpr uint32_t devfn(uint32_t dev, uint32_t fn)
+{ return (dev << 3) | fn; }
+
 inline bool domU_owned_cf8(uint32_t cf8)
 {
     return (cf8_to_bus(cf8) == LO_NIC_BUS &&
