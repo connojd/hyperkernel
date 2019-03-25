@@ -78,33 +78,21 @@ visr *visr::instance() noexcept
 
 void visr::add_dev(uint32_t bus, uint32_t dev, uint32_t fun)
 {
-    auto cf8 = bdf_to_cf8(bus, dev, fun);
+    auto pdev = std::make_unique<struct pci_dev>(bus, dev, fun);
 
-    if (bus == LO_NIC_BUS) {
-        m_lo_dev.set_reg(0x0, dev_ven);
-        m_lo_dev.set_reg(0x1, sts_cmd);
-        m_lo_dev.set_reg(0x2, class_sub_prog_rev);
-        m_lo_dev.set_reg(0x3, bist_hdr_ltimer_clsz);
-        m_lo_dev.set_reg(0xD, capptr);
-        m_lo_dev.set_reg(0xF, maxlat_mingnt_pin_line);
-        m_lo_dev.set_reg(msi_base, 0x00005);  // MSI Capability ID, end of capabilties
-        m_lo_dev.m_cf8 = cf8;
-
-        return;
+    for (auto i = 0; i < 64; i++) {
+        pdev->set_reg(i, 0);
     }
 
-    if (bus == HI_NIC_BUS) {
-        m_hi_dev.set_reg(0x0, dev_ven);
-        m_hi_dev.set_reg(0x1, sts_cmd);
-        m_hi_dev.set_reg(0x2, class_sub_prog_rev);
-        m_hi_dev.set_reg(0x3, bist_hdr_ltimer_clsz);
-        m_hi_dev.set_reg(0xD, capptr);
-        m_hi_dev.set_reg(0xF, maxlat_mingnt_pin_line);
-        m_hi_dev.set_reg(msi_base, 0x00005);  // MSI Capability ID, end of capabilties
-        m_hi_dev.m_cf8 = cf8;
+    pdev->set_reg(0x0, dev_ven);
+    pdev->set_reg(0x1, sts_cmd);
+    pdev->set_reg(0x2, class_sub_prog_rev);
+    pdev->set_reg(0x3, bist_hdr_ltimer_clsz);
+    pdev->set_reg(0xD, capptr);
+    pdev->set_reg(0xF, maxlat_mingnt_pin_line);
+    pdev->set_reg(msi_base, 0x00005);  // MSI Capability ID, end of capabilties
 
-        return;
-    }
+    m_devs[bdf_to_cf8(bus, dev, fun)] = std::move(pdev);
 }
 
 void visr::enable(gsl::not_null<vcpu *> vcpu)
@@ -120,13 +108,7 @@ void visr::enable(gsl::not_null<vcpu *> vcpu)
 
 bool visr::is_emulating(uint32_t cf8) const
 {
-    const auto bus = cf8_to_bus(cf8);
-    const auto dev = cf8_to_dev(cf8);
-    const auto fun = cf8_to_fun(cf8);
-
-    return (bus == LO_NIC_BUS && dev == LO_NIC_DEV && fun == LO_NIC_FUN) ||
-           (bus == HI_NIC_BUS && dev == HI_NIC_DEV && fun == HI_NIC_FUN);
-//    return (bus == LO_NIC_BUS && dev == LO_NIC_DEV && fun == LO_NIC_FUN);
+    return m_devs.count(cf8 & ~0xFFUL) != 0;
 }
 
 bool visr::handle_cfc_in(
@@ -143,7 +125,7 @@ bool visr::handle_cfc_in(
 
     //printf("i:cfc:%lu @ %02x:%02x:%02x:%02x - ", info.size_of_access + 1, cf8_to_bus(cf8), cf8_to_dev(cf8), cf8_to_fun(cf8), cf8_to_reg(cf8));
 
-    auto *dev = (cf8_to_bus(cf8) == LO_NIC_BUS) ? &m_lo_dev : &m_hi_dev;
+    auto *dev = m_devs[cf8 & ~0xFFUL].get();
     auto reg = cf8_to_reg(cf8);
     auto emulated_val = dev->reg(reg);
 
@@ -185,7 +167,7 @@ bool visr::handle_cfc_out(
         return true;
     }
 
-    auto *dev = (cf8_to_bus(cf8) == LO_NIC_BUS) ? &m_lo_dev : &m_hi_dev;
+    auto *dev = m_devs[cf8 & ~0xFFUL].get();
     auto reg = cf8_to_reg(cf8);
 
     if (dev->is_msi(reg) || dev->is_bar(reg)) {
@@ -229,7 +211,7 @@ bool visr::handle_cfd_in(
 
     //printf("i:cfd:%lu @ %02x:%02x:%02x:%02x - ", info.size_of_access + 1, cf8_to_bus(cf8), cf8_to_dev(cf8), cf8_to_fun(cf8), cf8_to_reg(cf8));
 
-    auto *dev = (cf8_to_bus(cf8) == LO_NIC_BUS) ? &m_lo_dev : &m_hi_dev;
+    auto *dev = m_devs[cf8 & ~0xFFUL].get();
     auto reg = cf8_to_reg(cf8);
     auto emulated_val = (dev->reg(reg)) >> 8;
 
@@ -271,7 +253,7 @@ bool visr::handle_cfd_out(
         return true;
     }
 
-    auto *dev = (cf8_to_bus(cf8) == LO_NIC_BUS) ? &m_lo_dev : &m_hi_dev;
+    auto *dev = m_devs[cf8 & ~0xFFUL].get();
     auto reg = cf8_to_reg(cf8);
 
     if (dev->is_bar(reg) || dev->is_msi(reg)) {
@@ -297,7 +279,7 @@ bool visr::handle_cfe_in(
 
     //printf("i:cfe:%lu @ %02x:%02x:%02x:%02x - ", info.size_of_access + 1, cf8_to_bus(cf8), cf8_to_dev(cf8), cf8_to_fun(cf8), cf8_to_reg(cf8));
 
-    auto *dev = (cf8_to_bus(cf8) == LO_NIC_BUS) ? &m_lo_dev : &m_hi_dev;
+    auto *dev = m_devs[cf8 & ~0xFFUL].get();
     auto reg = cf8_to_reg(cf8);
     auto emulated_val = (dev->reg(reg)) >> 16;
 
@@ -340,7 +322,7 @@ visr::handle_cfe_out(
         return true;
     }
 
-    auto *dev = (cf8_to_bus(cf8) == LO_NIC_BUS) ? &m_lo_dev : &m_hi_dev;
+    auto *dev = m_devs[cf8 & ~0xFFUL].get();
     auto reg = cf8_to_reg(cf8);
 
     if (dev->is_bar(reg) || dev->is_msi(reg)) {
@@ -367,7 +349,7 @@ visr::handle_cff_in(
 
     //printf("i:cff:%lu @ %02x:%02x:%02x:%02x - ", info.size_of_access + 1, cf8_to_bus(cf8), cf8_to_dev(cf8), cf8_to_fun(cf8), cf8_to_reg(cf8));
 
-    auto *dev = (cf8_to_bus(cf8) == LO_NIC_BUS) ? &m_lo_dev : &m_hi_dev;
+    auto *dev = m_devs[cf8 & ~0xFFUL].get();
     auto reg = cf8_to_reg(cf8);
     auto emulated_val = (dev->reg(reg)) >> 24;
 
@@ -397,7 +379,7 @@ bool visr::handle_cff_out(
         return true;
     }
 
-    auto *dev = (cf8_to_bus(cf8) == LO_NIC_BUS) ? &m_lo_dev : &m_hi_dev;
+    auto *dev = m_devs[cf8 & ~0xFFUL].get();
     auto reg = cf8_to_reg(cf8);
 
     if (dev->is_bar(reg) || dev->is_msi(reg)) {
@@ -410,82 +392,76 @@ bool visr::handle_cff_out(
 
 void visr::stash_phys_vector(uint32_t vec)
 {
+    expects(vec >= 32);
+    expects(vec <= 255);
+
     std::lock_guard<std::mutex> lock(m_mutex);
 
-    if (!m_lo_dev.phys_vec()) {
-        m_lo_dev.set_phys_vec(vec);
-        return;
-    }
-
-    if (!m_hi_dev.phys_vec()) {
-        m_hi_dev.set_phys_vec(vec);
-        return;
+    for (auto &p : m_devs) {
+        auto dev = p.second.get();
+        if (dev->phys_vec() == 0) {
+            dev->set_phys_vec(vec);
+        }
     }
 }
 
-uint32_t visr::get_phys_vector(uint64_t vcpuid)
+uint32_t visr::bind_phys_vector(uint64_t vcpuid)
 {
-    expects(m_lo_dev.phys_vec() >= 32);
-    expects(m_hi_dev.phys_vec() >= 32);
-
     std::lock_guard<std::mutex> lock(m_mutex);
 
-    if (!m_lo_dev.is_used()) {
-        m_lo_dev.set_vcpuid(vcpuid);
-        m_lo_dev.set_used();
-        return m_lo_dev.phys_vec();
+    for (auto &p : m_devs) {
+        auto dev = p.second.get();
+        if (dev->phys_vec() != 0) {
+            dev->set_vcpuid(vcpuid);
+            return dev->phys_vec();
+        }
     }
 
-    if (!m_hi_dev.is_used()) {
-        m_hi_dev.set_vcpuid(vcpuid);
-        m_hi_dev.set_used();
-        //bfdebug_nhex(0, "HIGH dev vcpuid:", m_hi_dev.vcpuid());
-        return m_hi_dev.phys_vec();
-    }
-
-    bferror_info(0, "get_phys_vector failed");
+    bferror_info(0, "bind_phys_vector failed");
     return 0;
 }
 
-void visr::set_virt_vector(uint64_t vcpuid, uint32_t virt)
+void visr::bind_virt_vector(uint64_t vcpuid, uint32_t virt)
 {
     std::lock_guard<std::mutex> lock(m_mutex);
 
-    if (m_lo_dev.vcpuid() == vcpuid) {
-        m_lo_dev.set_virt_vec(virt);
-        //bfdebug_nhex(0, "LOW dev vcpuid:", m_lo_dev.vcpuid());
-        return;
+    for (auto &p : m_devs) {
+        auto dev = p.second.get();
+        if (dev->vcpuid() == vcpuid) {
+            dev->set_virt_vec(virt);
+            m_vector_map[dev->phys_vec()] = dev;
+            return;
+        }
     }
 
-    if (m_hi_dev.vcpuid() == vcpuid) {
-        m_hi_dev.set_virt_vec(virt);
-        return;
-    }
-
-    //bferror_nhex(0, "HIGH dev vcpuid:", m_hi_dev.vcpuid());
-    //bferror_subnhex(0, "vcpuid arg:", vcpuid);
     throw std::invalid_argument("visr: invalid vcpuid");
 }
 
 bool visr::deliver(vcpu *vcpu, uint32_t vec)
 {
-    std::lock_guard<std::mutex> lock(m_mutex);
+    expects(vcpu->is_domU());
 
-    if (m_lo_dev.phys_vec() == vec) {
-        auto vcpu = get_vcpu(m_lo_dev.vcpuid()).get();
-        bool inject_now = vcpu->dom()->is_ndvm();
-        vcpu->queue_external_interrupt(m_lo_dev.virt_vec(), inject_now);
-        return true;
+    auto itr = m_vector_map.find(vec);
+    if (itr == m_vector_map.end()) {
+        // Return unmapped vectors to the host
+        return false;
     }
 
-    if (m_hi_dev.phys_vec() == vec) {
-        auto vcpu = get_vcpu(m_hi_dev.vcpuid()).get();
+    // There is a race between when the NDVM is destroyed from the g_vcm's
+    // perspective and when an in-flight interrupt arrives to visr. There is no
+    // way to prevent this with a hard Ctrl-C from dom0, so it is possible we
+    // get here and the NDVM is already dead.
+
+    try {
+        auto dev = itr->second;
+        auto ndvm = get_vcpu(dev->vcpuid()).get();
         bool inject_now = vcpu->dom()->is_ndvm();
-        vcpu->queue_external_interrupt(m_hi_dev.virt_vec(), inject_now);
-        return true;
+        vcpu->queue_external_interrupt(dev->virt_vec(), inject_now);
+    } catch (std::runtime_error &re) {
+        ;
     }
 
-    return false;
+    return true;
 }
 
 bool visr::receive_vector_from_windows(
@@ -538,22 +514,9 @@ bool visr::forward_interrupt_to_ndvm(
 //    bfdebug_subnhex(0, "rdx", info.rdx);
 //
     try {
-        const auto vec = info.rcx;
-
-        if (m_lo_dev.phys_vec() == vec) {
-            auto ndvm = get_vcpu(m_lo_dev.vcpuid()).get();
-            ndvm->queue_external_interrupt(m_lo_dev.virt_vec(), false);
-            return true;
-        }
-
-        if (m_hi_dev.phys_vec() == vec) {
-            auto ndvm = get_vcpu(m_hi_dev.vcpuid()).get();
-            ndvm->queue_external_interrupt(m_hi_dev.virt_vec(), false);
-            return true;
-        }
-
-        bferror_nhex(0, "visr: Trying to forward unbound vector:", vec);
-        return false;
+        auto dev = m_vector_map.at(info.rcx);
+        auto ndvm = get_vcpu(dev->vcpuid()).get();
+        ndvm->queue_external_interrupt(dev->virt_vec(), false);
     } catch (std::runtime_error &e) {
         ;
     }

@@ -262,7 +262,7 @@ xen_op_handler::xen_op_handler(
         EMULATE_IO_INSTRUCTION(0xCFE, io_cfe_in, io_cfe_out);
 
         m_nic = bdf_to_cf8(vcpu->dom()->ndvm_bus(), 0, 0); // assumes NIC is only one on bus
-        m_phys_vec = g_visr->get_phys_vector(m_vcpu->id());
+        m_phys_vec = g_visr->bind_phys_vector(m_vcpu->id());
         bfdebug_nhex(0, "NDVM acquired vector:", m_phys_vec);
         bfdebug_nhex(0, "NDVM acquired cf8:", m_nic);
         bfdebug_nhex(0, "NDVM acquired bus:", cf8_to_bus(m_nic));
@@ -830,10 +830,10 @@ xen_op_handler::pci_owned_msi_out(io_instruction_handler::info_t &info)
     if (pci_reg == m_msi_cap + 3) {
         // Save the vector linux expects
         //
-        bfdebug_info(0, "xen_op: setting virt vector");
+        bfdebug_info(0, "xen_op: binding virt vector");
         bfdebug_subnhex(0, "vector", info.val & 0xFF);
         bfdebug_subnhex(0, "vcpuid", m_vcpu->id());
-        g_visr->set_virt_vector(m_vcpu->id(), info.val & 0xFF);
+        g_visr->bind_virt_vector(m_vcpu->id(), info.val & 0xFF);
 
         // We set the vector to the one visr expects and clear all
         // other bits. This implies the interrupt will be delivered

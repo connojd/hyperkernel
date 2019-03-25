@@ -64,9 +64,9 @@ static constexpr uint32_t msi_base = capptr / sizeof(uint32_t);
 ///
 struct EXPORT_HYPERKERNEL_HVE pci_dev
 {
-    uint32_t bus() const { return cf8_to_bus(m_cf8); }
-    uint32_t dev() const { return cf8_to_dev(m_cf8); }
-    uint32_t fun() const { return cf8_to_fun(m_cf8); }
+    uint32_t bus() const { return m_bus; }
+    uint32_t dev() const { return m_dev; }
+    uint32_t fun() const { return m_fun; }
     uint32_t phys_vec() const { return m_phys_vec; }
     uint32_t virt_vec() const { return m_virt_vec; }
     uint32_t reg(uint32_t reg) const { return m_cfg.at(reg); }
@@ -75,26 +75,33 @@ struct EXPORT_HYPERKERNEL_HVE pci_dev
     void set_reg(uint32_t reg, uint32_t val) { m_cfg.at(reg) = val; }
     void set_phys_vec(uint32_t vec) { m_phys_vec = vec; }
     void set_virt_vec(uint32_t vec) { m_virt_vec = vec; }
-    void set_used() { m_used = true; }
     void set_vcpuid(uint64_t id) { m_vcpuid = id; }
 
     bool is_bar(uint32_t reg) const { return reg >= 4 && reg <= 9; }
     bool is_msi(uint32_t reg) const { return reg >= msi_base + 1 && reg <= msi_base + 4; }
-    bool is_used() const { return m_used; }
 
-    pci_dev() = default;
+    explicit pci_dev(uint32_t b, uint32_t d, uint32_t f) :
+        m_bus{b},
+        m_dev{d},
+        m_fun{f},
+        m_cfg_ump{std::make_unique<uint32_t[]>(64)},
+        m_cfg{gsl::make_span<uint32_t>(m_cfg_ump.get(), 64)}
+    { }
+
     ~pci_dev() = default;
     pci_dev(pci_dev &&v) = default;
     pci_dev(const pci_dev &v) = delete;
     pci_dev &operator=(pci_dev &&v) = default;
     pci_dev &operator=(const pci_dev &v) = delete;
 
-    uint32_t m_cf8{};
+    uint32_t m_bus{};
+    uint32_t m_dev{};
+    uint32_t m_fun{};
     uint32_t m_phys_vec{};
     uint32_t m_virt_vec{};
     uint64_t m_vcpuid{INVALID_VCPUID};
-    bool m_used{};
-    std::array<uint32_t, 64> m_cfg{};
+    std::unique_ptr<uint32_t[]> m_cfg_ump{};
+    gsl::span<uint32_t> m_cfg{};
 };
 
 /// VISR
@@ -139,7 +146,7 @@ public:
     /// @param vcpuid the id of the vcpu acquiring the vector
     /// @return a physical vector available to the vcpu
     ///
-    uint32_t get_phys_vector(uint64_t vcpuid);
+    uint32_t bind_phys_vector(uint64_t vcpuid);
 
     /// Map the virtual vector to the given vcpu. This is the last
     /// step required before the physical interrupt can be injected
@@ -148,7 +155,7 @@ public:
     /// @param vcpuid the id of the vcpu acquiring the vector
     /// @param vec the vector the guest vcpu is expecting
     ///
-    void set_virt_vector(uint64_t vcpuid, uint32_t vec);
+    void bind_virt_vector(uint64_t vcpuid, uint32_t vec);
 
     /// Is visr emulating the device @cf8?
     ///
@@ -173,16 +180,16 @@ public:
 private:
 
     std::mutex m_mutex;
-    struct pci_dev m_lo_dev;
-    struct pci_dev m_hi_dev;
+    std::unordered_map<uint32_t, std::unique_ptr<struct pci_dev>> m_devs;
+    std::unordered_map<uint64_t, struct pci_dev *> m_vector_map;
 
 public:
 
     /// @cond
 
-    visr(visr &&) noexcept = delete;
-    visr &operator=(visr &&) noexcept = delete;
+    visr(visr &&) = delete;
     visr(const visr &) = delete;
+    visr &operator=(visr &&) = delete;
     visr &operator=(const visr &) = delete;
 
     /// @endcond
