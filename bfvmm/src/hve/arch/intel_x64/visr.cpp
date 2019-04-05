@@ -401,6 +401,8 @@ void visr::stash_phys_vector(uint32_t vec)
         auto dev = p.second.get();
         if (dev->phys_vec() == 0) {
             dev->set_phys_vec(vec);
+            bfdebug_nhex(0, "Stashed vector", vec);
+            break;
         }
     }
 }
@@ -411,7 +413,7 @@ uint32_t visr::bind_phys_vector(uint64_t vcpuid)
 
     for (auto &p : m_devs) {
         auto dev = p.second.get();
-        if (dev->phys_vec() != 0) {
+        if (dev->phys_vec() != 0 && dev->vcpuid() == INVALID_VCPUID) {
             dev->set_vcpuid(vcpuid);
             return dev->phys_vec();
         }
@@ -456,7 +458,7 @@ bool visr::deliver(vcpu *vcpu, uint32_t vec)
         auto dev = itr->second;
         auto ndvm = get_vcpu(dev->vcpuid()).get();
         bool inject_now = vcpu->dom()->is_ndvm();
-        vcpu->queue_external_interrupt(dev->virt_vec(), inject_now);
+        ndvm->queue_external_interrupt(dev->virt_vec(), inject_now);
     } catch (std::runtime_error &re) {
         ;
     }
@@ -506,7 +508,6 @@ bool visr::forward_interrupt_to_ndvm(
     // way to prevent this with a hard Ctrl-C from dom0, so it is possible we
     // get here and the NDVM is already dead.
 
-//    bfdebug_nhex(0, "visr: forwarding vector:", info.rcx);
 //
 //    bfdebug_subnhex(0, "rax", info.rax);
 //    bfdebug_subnhex(0, "rbx", info.rbx);
@@ -514,8 +515,10 @@ bool visr::forward_interrupt_to_ndvm(
 //    bfdebug_subnhex(0, "rdx", info.rdx);
 //
     try {
+//        bfdebug_nhex(0, "visr: forwarding vector:", info.rcx);
         auto dev = m_vector_map.at(info.rcx);
         auto ndvm = get_vcpu(dev->vcpuid()).get();
+        expects(ndvm->dom()->is_ndvm());
         ndvm->queue_external_interrupt(dev->virt_vec(), false);
     } catch (std::runtime_error &e) {
         ;

@@ -152,19 +152,6 @@ domain::setup_domU()
     m_ept_map.map_4k(m_idt_virt, m_idt_phys, ept::mmap::attr_type::read_only);
 
     this->setup_acpi();
-
-    if (!this->is_ndvm()) {
-        return;
-    }
-
-    g_iommu->add_domain(this->id(), m_ept_map.eptp());
-    g_iommu->map(this->id(), this->ndvm_bus(), devfn(0, 0));
-
-    static bool iommu_enabled = false;
-    if (!iommu_enabled) {
-        g_iommu->enable();
-        iommu_enabled = true;
-    }
 }
 
 void

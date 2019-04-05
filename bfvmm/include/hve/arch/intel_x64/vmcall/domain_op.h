@@ -66,14 +66,25 @@ private:
     void domain_op__destroy_domain(gsl::not_null<vcpu *> vcpu);
     void domain_op__share_page(gsl::not_null<vcpu *> vcpu);
     void domain_op__ndvm_share_page(gsl::not_null<vcpu *> vcpu);
-    void domain_op__remap_to_ndvm_page(gsl::not_null<vcpu *> vcpu);
+    void domain_op__filter_page(gsl::not_null<vcpu *> vcpu);
     void domain_op__add_e820_entry(gsl::not_null<vcpu *> vcpu);
     void domain_op__set_entry(gsl::not_null<vcpu *> vcpu);
     void domain_op__set_uart(gsl::not_null<vcpu *> vcpu);
     void domain_op__set_pt_uart(gsl::not_null<vcpu *> vcpu);
     void domain_op__set_ndvm_status(gsl::not_null<vcpu *> vcpu);
     void domain_op__set_ndvm_bus(gsl::not_null<vcpu *> vcpu);
+    void domain_op__access_ndvm_page(gsl::not_null<vcpu *> vcpu);
     void domain_op__dump_uart(gsl::not_null<vcpu *> vcpu);
+    void domain_op__filter_done(gsl::not_null<vcpu *> vcpu);
+    void domain_op__may_filter(gsl::not_null<vcpu *> vcpu);
+
+    void domain_op__map_read_queue(gsl::not_null<vcpu *> vcpu);
+    void domain_op__map_write_queue(gsl::not_null<vcpu *> vcpu);
+
+    void domain_op__set_read_queue(gsl::not_null<vcpu *> vcpu);
+    void domain_op__set_write_queue(gsl::not_null<vcpu *> vcpu);
+
+    void domain_op__lock_acquired(gsl::not_null<vcpu *> vcpu);
 
     bool dispatch(gsl::not_null<vcpu *> vcpu);
     void signal_shootdown();

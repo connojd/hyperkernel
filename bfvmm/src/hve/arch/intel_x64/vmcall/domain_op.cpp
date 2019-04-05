@@ -19,11 +19,26 @@
 #include <iostream>
 
 #include <hve/arch/intel_x64/vcpu.h>
+#include <hve/arch/intel_x64/iommu.h>
 #include <hve/arch/intel_x64/vmcall/domain_op.h>
 #include <bfvmm/memory_manager/arch/x64/cr3.h>
 
 namespace hyperkernel::intel_x64
 {
+
+uintptr_t write_queue_fva{};
+uintptr_t write_mutex_fva{};
+uintptr_t write_queue_nva{};
+uintptr_t write_mutex_nva{};
+uintptr_t write_queue_hpa{};
+uintptr_t write_mutex_hpa{};
+
+uintptr_t read_queue_fva{};
+uintptr_t read_mutex_fva{};
+uintptr_t read_queue_nva{};
+uintptr_t read_mutex_nva{};
+uintptr_t read_queue_hpa{};
+uintptr_t read_mutex_hpa{};
 
 eapis::x64::unique_map<uint32_t> g_xapic_map{nullptr};
 
@@ -166,28 +181,33 @@ vmcall_domain_op_handler::domain_op__add_e820_entry(
     })
 }
 
-uintptr_t ndvm_page_hpa{0};
-eapis::x64::unique_map<uint8_t> ndvm_page_ump;
+std::unordered_map<uintptr_t, uintptr_t> ndvm_data;
 
 void
 vmcall_domain_op_handler::domain_op__ndvm_share_page(
     gsl::not_null<vcpu *> vcpu)
 {
     try {
-        auto [hpa, unused] = vcpu->gva_to_hpa(vcpu->rcx());
-
-        ndvm_page_ump = vcpu->map_hpa_4k<uint8_t>(hpa);
-        ndvm_page_hpa = hpa;
-
-        //bfdebug_nhex(0, "NDVM page gva: ", vcpu->rcx());
-        //bfdebug_nhex(0, "NDVM page hpa: ", hpa);
+//        auto [hpa, unused] = vcpu->gva_to_hpa(vcpu->rcx());
+//        ndvm_data[vcpu->rcx()] = hpa;
+//
+//        bfdebug_nhex(0, "share page gva: ", vcpu->rcx());
+//        bfdebug_nhex(0, "share page hpa: ", hpa);
 
         vcpu->set_rax(SUCCESS);
     }
     catchall({
+        bfdebug_info(0, "sharing page...failed");
         vcpu->set_rax(FAILURE);
     })
 }
+
+//void
+//vmcall_domain_op_handler::domain_op__ndvm_rm_page(
+//    gsl::not_null<vcpu *> vcpu)
+//{
+//    ndvm_data.erase(vcpu->rcx());
+//}
 
 //bool shootdown_wait()
 //{
@@ -209,15 +229,146 @@ vmcall_domain_op_handler::domain_op__ndvm_share_page(
 //    shootdown_on = false;
 //}
 
+uintptr_t access_hpa = 0;
+bool filter_ready alignas(64) = false;
+bool filter_done alignas(64) = false;
+
 void
-vmcall_domain_op_handler::domain_op__remap_to_ndvm_page(
+vmcall_domain_op_handler::domain_op__access_ndvm_page(
     gsl::not_null<vcpu *> vcpu)
 {
-    using namespace vmcs_n;
-    using namespace vmcs_n::secondary_processor_based_vm_execution_controls;
+    access_hpa = vcpu->gva_to_hpa(vcpu->rcx()).first;
+    ensures(access_hpa != 0);
+    filter_done = false;
+    ::intel_x64::barrier::wmb();
+    filter_ready = true;
+
+    ::x64::cache::clflush(&filter_ready);
+
+//    bfdebug_info(0, "access wait");
+
+    while (!filter_done) {
+        ::intel_x64::pause();
+    }
+
+//    bfdebug_info(0, "access resume");
+}
+
+static uintptr_t filter_gpa = 0;
+static uintptr_t filter_hpa = 0;
+
+void
+vmcall_domain_op_handler::domain_op__filter_done(
+    gsl::not_null<vcpu *> vcpu)
+{
+    vcpu->dom()->unmap(filter_gpa);
+    vcpu->dom()->map_4k_rw(filter_gpa, filter_hpa);
+    ::intel_x64::vmx::invept_global();
+
+    access_hpa = 0;
+//    bfdebug_info(0, "filter done");
+//
+    ::intel_x64::barrier::wmb();
+    filter_done = true;
+    ::x64::cache::clflush(&filter_done);
+
+    filter_ready = false;
+    ::x64::cache::clflush(&filter_ready);
+
+    return;
+}
+
+void
+vmcall_domain_op_handler::domain_op__filter_page(
+    gsl::not_null<vcpu *> vcpu)
+{
+    filter_gpa = vcpu->gva_to_gpa(vcpu->rcx()).first;
+    filter_hpa = vcpu->gpa_to_hpa(filter_gpa).first;
+
+    ensures(filter_gpa);
+    ensures(filter_hpa);
+
+    expects(access_hpa != 0);
+
+    vcpu->dom()->unmap(filter_gpa);
+    vcpu->dom()->map_4k_rw(filter_gpa, access_hpa);
+    ::intel_x64::vmx::invept_global();
+}
+
+void
+vmcall_domain_op_handler::domain_op__map_write_queue(gsl::not_null<vcpu *> vcpu)
+{
+    write_queue_nva = vcpu->rcx();
+    write_mutex_nva = vcpu->rdx();
+
+    write_queue_hpa = vcpu->gva_to_hpa(write_queue_nva).first;
+    write_mutex_hpa = vcpu->gva_to_hpa(write_mutex_nva).first;
+
+    vcpu->set_rax(SUCCESS);
+}
+
+void
+vmcall_domain_op_handler::domain_op__map_read_queue(gsl::not_null<vcpu *> vcpu)
+{
+    read_queue_nva = vcpu->rcx();
+    read_mutex_nva = vcpu->rdx();
+
+    read_queue_hpa = vcpu->gva_to_hpa(read_queue_nva).first;
+    read_mutex_hpa = vcpu->gva_to_hpa(read_mutex_nva).first;
+
+    vcpu->set_rax(SUCCESS);
+}
+
+void
+vmcall_domain_op_handler::domain_op__set_write_queue(gsl::not_null<vcpu *> vcpu)
+{
+    expects(write_queue_hpa);
+    expects(write_mutex_hpa);
+
+    write_queue_fva = vcpu->rcx();
+    write_mutex_fva = vcpu->rdx();
+
+    const auto [queue_gpa, ign0] = vcpu->gva_to_gpa(write_queue_fva);
+    const auto [mutex_gpa, ign1] = vcpu->gva_to_gpa(write_mutex_fva);
+
+    vcpu->dom()->unmap(queue_gpa);
+    vcpu->dom()->unmap(mutex_gpa);
+
+    vcpu->dom()->map_4k_rw(queue_gpa, write_queue_hpa);
+    vcpu->dom()->map_4k_rw(mutex_gpa, write_mutex_hpa);
+
+    ::intel_x64::vmx::invept_global();
+}
+
+void
+vmcall_domain_op_handler::domain_op__set_read_queue(gsl::not_null<vcpu *> vcpu)
+{
+    expects(read_queue_hpa);
+    expects(read_mutex_hpa);
+
+    read_queue_fva = vcpu->rcx();
+    read_mutex_fva = vcpu->rdx();
+
+    const auto [queue_gpa, ign0] = vcpu->gva_to_gpa(read_queue_fva);
+    const auto [mutex_gpa, ign1] = vcpu->gva_to_gpa(read_mutex_fva);
+
+    vcpu->dom()->unmap(queue_gpa);
+    vcpu->dom()->unmap(mutex_gpa);
+
+    vcpu->dom()->map_4k_rw(queue_gpa, read_queue_hpa);
+    vcpu->dom()->map_4k_rw(mutex_gpa, read_mutex_hpa);
+
+    ::intel_x64::vmx::invept_global();
+}
+
+void
+vmcall_domain_op_handler::domain_op__lock_acquired(gsl::not_null<vcpu *> vcpu)
+{
+    bfdebug_nhex(0, "lock acquired", vcpu->id());
+}
+
 
 //    try {
-//        expects(ndvm_page_hpa != 0);
 //
 //        const auto [gpa, unused] = vcpu->gva_to_gpa(vcpu->rcx());
 //        const auto gpa_2m = bfn::upper(gpa, 21);
@@ -274,9 +425,9 @@ vmcall_domain_op_handler::domain_op__remap_to_ndvm_page(
 //        vcpu->set_rax(SUCCESS);
 //    }
 //    catchall({
-        vcpu->set_rax(FAILURE);
+//        vcpu->set_rax(FAILURE);
 //    })
-}
+//}
 
 
 void
@@ -388,7 +539,15 @@ vmcall_domain_op_handler::domain_op__set_ndvm_bus(
         if (dom->is_ndvm()) {
             bfdebug_nhex(0, "domain_op: NDVM bus:", vcpu->rdx());
             dom->set_ndvm_bus(vcpu->rdx());
-//            dom->enable_dma_remapping();
+
+            g_iommu->add_domain(dom->id(), dom->ept().eptp());
+            g_iommu->map(dom->id(), dom->ndvm_bus(), devfn(0, 0));
+
+            static bool iommu_enabled = false;
+            if (!iommu_enabled) {
+                g_iommu->enable();
+                iommu_enabled = true;
+            }
         }
 
         vcpu->set_rax(SUCCESS);
@@ -423,8 +582,32 @@ vmcall_domain_op_handler::dispatch(
             this->domain_op__ndvm_share_page(vcpu);
             return true;
 
-        case __enum_domain_op__remap_to_ndvm_page:
-            this->domain_op__remap_to_ndvm_page(vcpu);
+        case __enum_domain_op__access_ndvm_page:
+            this->domain_op__access_ndvm_page(vcpu);
+            return true;
+
+        case __enum_domain_op__filter_page:
+            this->domain_op__filter_page(vcpu);
+            return true;
+
+        case __enum_domain_op__filter_done:
+            this->domain_op__filter_done(vcpu);
+            return true;
+
+        case __enum_domain_op__map_write_queue:
+            this->domain_op__map_write_queue(vcpu);
+            return true;
+
+        case __enum_domain_op__map_read_queue:
+            this->domain_op__map_read_queue(vcpu);
+            return true;
+
+        case __enum_domain_op__set_write_queue:
+            this->domain_op__set_write_queue(vcpu);
+            return true;
+
+        case __enum_domain_op__set_read_queue:
+            this->domain_op__set_read_queue(vcpu);
             return true;
 
         case __enum_domain_op__set_ndvm_status:
@@ -453,6 +636,10 @@ vmcall_domain_op_handler::dispatch(
 
         case __enum_domain_op__dump_uart:
             this->domain_op__dump_uart(vcpu);
+            return true;
+
+        case __enum_domain_op__lock_acquired:
+            this->domain_op__lock_acquired(vcpu);
             return true;
 
         default:

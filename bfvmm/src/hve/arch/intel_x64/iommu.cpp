@@ -141,6 +141,10 @@ iommu *iommu::instance() noexcept
 
 void iommu::add_domain(domainid_t domid, uintptr_t eptp)
 {
+    bfdebug_info(0, "Adding domain:");
+    bfdebug_subnhex(0, "id", domid);
+    bfdebug_subnhex(0, "eptp", eptp);
+
     m_domains.emplace(domid, std::make_unique<struct domain>(domid, eptp));
 }
 
@@ -148,6 +152,10 @@ void iommu::map(domainid_t domid, uint32_t bus, uint32_t devfn)
 {
     expects(bus < 256);
     expects(devfn < 256);
+
+//    bfdebug_info(0, "IOMMU map:");
+//    bfdebug_subnhex(0, "bus", bus);
+//    bfdebug_subnhex(0, "devfn", devfn);
 
     entry_t *rte = &m_root.get()[bus];
 
@@ -177,6 +185,8 @@ void iommu::map(domainid_t domid, uint32_t bus, uint32_t devfn)
     // Set domid and 4-level EPT translation; domid 0 is reserved by the VT-d
     // spec, so add one to every id first.
     cte->data[1] = ((domid + 1) << 8) | 2U;
+
+    ::x64::cache::wbinvd();
 }
 
 void iommu::init_dom0_mappings(uintptr_t eptp)
