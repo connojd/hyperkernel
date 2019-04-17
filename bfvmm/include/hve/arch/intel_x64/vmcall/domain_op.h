@@ -85,6 +85,9 @@ private:
     void domain_op__set_write_queue(gsl::not_null<vcpu *> vcpu);
 
     void domain_op__lock_acquired(gsl::not_null<vcpu *> vcpu);
+    void domain_op__sos(gsl::not_null<vcpu *> vcpu);
+    void domain_op__headtail(gsl::not_null<vcpu *> vcpu);
+    void domain_op__dump_hdr(gsl::not_null<vcpu *> vcpu);
 
     bool dispatch(gsl::not_null<vcpu *> vcpu);
     void signal_shootdown();

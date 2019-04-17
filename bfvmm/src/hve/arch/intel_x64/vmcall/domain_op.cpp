@@ -182,15 +182,19 @@ vmcall_domain_op_handler::domain_op__add_e820_entry(
 }
 
 std::unordered_map<uintptr_t, uintptr_t> ndvm_data;
+uintptr_t ndvm_hpa;
 
 void
 vmcall_domain_op_handler::domain_op__ndvm_share_page(
     gsl::not_null<vcpu *> vcpu)
 {
     try {
-//        auto [hpa, unused] = vcpu->gva_to_hpa(vcpu->rcx());
-//        ndvm_data[vcpu->rcx()] = hpa;
-//
+        auto [hpa, unused] = vcpu->gva_to_hpa(vcpu->rcx());
+        //ndvm_data[vcpu->rcx()] = hpa;
+        ndvm_hpa = hpa;
+
+        // Invalidate mapping when channel closed
+
 //        bfdebug_nhex(0, "share page gva: ", vcpu->rcx());
 //        bfdebug_nhex(0, "share page hpa: ", hpa);
 
@@ -282,17 +286,16 @@ void
 vmcall_domain_op_handler::domain_op__filter_page(
     gsl::not_null<vcpu *> vcpu)
 {
-    filter_gpa = vcpu->gva_to_gpa(vcpu->rcx()).first;
-    filter_hpa = vcpu->gpa_to_hpa(filter_gpa).first;
+    expects(ndvm_hpa);
 
-    ensures(filter_gpa);
-    ensures(filter_hpa);
+    auto gpa = vcpu->gva_to_gpa(vcpu->rcx()).first;
+    auto hpa = ndvm_hpa;
 
-    expects(access_hpa != 0);
+    vcpu->dom()->unmap(gpa);
+    vcpu->dom()->map_4k_rw(gpa, hpa);
 
-    vcpu->dom()->unmap(filter_gpa);
-    vcpu->dom()->map_4k_rw(filter_gpa, access_hpa);
     ::intel_x64::vmx::invept_global();
+    ::intel_x64::vmx::invvpid_all_contexts();
 }
 
 void
@@ -338,6 +341,7 @@ vmcall_domain_op_handler::domain_op__set_write_queue(gsl::not_null<vcpu *> vcpu)
     vcpu->dom()->map_4k_rw(mutex_gpa, write_mutex_hpa);
 
     ::intel_x64::vmx::invept_global();
+    ::intel_x64::vmx::invvpid_all_contexts();
 }
 
 void
@@ -359,12 +363,30 @@ vmcall_domain_op_handler::domain_op__set_read_queue(gsl::not_null<vcpu *> vcpu)
     vcpu->dom()->map_4k_rw(mutex_gpa, read_mutex_hpa);
 
     ::intel_x64::vmx::invept_global();
+    ::intel_x64::vmx::invvpid_all_contexts();
+}
+
+void
+vmcall_domain_op_handler::domain_op__dump_hdr(gsl::not_null<vcpu *> vcpu)
+{
+    auto map = vcpu->map_gva_4k<char>(vcpu->rcx(), 4096);
+
+    uint64_t *head = (uint64_t *)map.get();
+    uint64_t *tail = (uint64_t *)(map.get() + 8);
+
+    printf("[%lx, dh]: %lu t: %lu\n", vcpu->id(), *head, *tail);
 }
 
 void
 vmcall_domain_op_handler::domain_op__lock_acquired(gsl::not_null<vcpu *> vcpu)
 {
     bfdebug_nhex(0, "lock acquired", vcpu->id());
+}
+
+void
+vmcall_domain_op_handler::domain_op__headtail(gsl::not_null<vcpu *> vcpu)
+{
+    printf("[%lx, ht]: h: %lu t: %lu\n", vcpu->id(), vcpu->rcx(), vcpu->rdx());
 }
 
 
@@ -557,6 +579,19 @@ vmcall_domain_op_handler::domain_op__set_ndvm_bus(
     })
 }
 
+void
+vmcall_domain_op_handler::domain_op__sos(
+    gsl::not_null<vcpu *> vcpu)
+{
+    try {
+        bfdebug_nhex(0, "sos:", vcpu->rcx());
+        vcpu->set_rax(SUCCESS);
+    }
+    catchall({
+        vcpu->set_rax(FAILURE);
+    })
+}
+
 bool
 vmcall_domain_op_handler::dispatch(
     gsl::not_null<vcpu *> vcpu)
@@ -640,6 +675,18 @@ vmcall_domain_op_handler::dispatch(
 
         case __enum_domain_op__lock_acquired:
             this->domain_op__lock_acquired(vcpu);
+            return true;
+
+        case __enum_domain_op__sos:
+            this->domain_op__sos(vcpu);
+            return true;
+
+        case __enum_domain_op__headtail:
+            this->domain_op__headtail(vcpu);
+            return true;
+
+        case __enum_domain_op__dump_hdr:
+            this->domain_op__dump_hdr(vcpu);
             return true;
 
         default:

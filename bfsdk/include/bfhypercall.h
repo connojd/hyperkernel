@@ -91,6 +91,9 @@ uint64_t _vmcall(uint64_t r1, uint64_t r2, uint64_t r3, uint64_t r4) NOEXCEPT;
 #define __enum_domain_op__set_read_mutex 0x14E
 
 #define __enum_domain_op__lock_acquired 0x14F
+#define __enum_domain_op__sos 0x150
+#define __enum_domain_op__headtail 0x151
+#define __enum_domain_op__dump_hdr 0x152
 
 #define MAP_RO 1
 #define MAP_RW 4
